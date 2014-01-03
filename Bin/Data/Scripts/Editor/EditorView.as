@@ -290,22 +290,22 @@ void UpdateView(float timeStep)
         if (input.keyDown[KEY_LSHIFT])
             speedMultiplier = cameraShiftSpeedMultiplier;
 
-        if (input.keyDown['W'] || input.keyDown[KEY_UP])
+        if (Binding("camera_forward").Down())
         {
             cameraNode.TranslateRelative(Vector3(0, 0, cameraBaseSpeed) * timeStep * speedMultiplier);
             FadeUI();
         }
-        if (input.keyDown['S'] || input.keyDown[KEY_DOWN])
+        if (Binding("camera_back").Down())
         {
             cameraNode.TranslateRelative(Vector3(0, 0, -cameraBaseSpeed) * timeStep * speedMultiplier);
             FadeUI();
         }
-        if (input.keyDown['A'] || input.keyDown[KEY_LEFT])
+        if (Binding("camera_left").Down())
         {
             cameraNode.TranslateRelative(Vector3(-cameraBaseSpeed, 0, 0) * timeStep * speedMultiplier);
             FadeUI();
         }
-        if (input.keyDown['D'] || input.keyDown[KEY_RIGHT])
+        if (Binding("camera_right").Down())
         {
             cameraNode.TranslateRelative(Vector3(cameraBaseSpeed, 0, 0) * timeStep * speedMultiplier);
             FadeUI();
