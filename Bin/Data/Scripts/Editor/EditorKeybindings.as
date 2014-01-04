@@ -1,19 +1,18 @@
-InputBinding Binding(String key)
-{
-	InputBinding@ binding;
-	if (bindingConfigurationDefaults.Get(key, @binding))
-		return binding;
-	else
-		return emptyBinding;
-}
+InputBinding inputCameraSpeedMultiplier = InputBinding.Key(KEY_LSHIFT);
+InputBinding inputCameraForward = InputBinding().Key(KEY_UP).Key('W');
+InputBinding inputCameraBack = InputBinding().Key(KEY_DOWN).Key('S');
+InputBinding inputCameraLeft = InputBinding().Key(KEY_LEFT).Key('A');
+InputBinding inputCameraRight = InputBinding().Key(KEY_RIGHT).Key('D');
+InputBinding inputCameraUp = InputBinding().Key(KEY_PAGEUP).Key('E');
+InputBinding inputCameraDown = InputBinding().Key(KEY_PAGEDOWN).Key('Q');
+InputBinding inputCameraRotate = InputBinding().Mouse(MOUSEB_RIGHT);
+InputBinding inputCameraOrbit = InputBinding().Mouse(MOUSEB_MIDDLE);
 
-const InputBinding emptyBinding;
-
-Dictionary bindingConfigurationDefaults = {
-	{ "camera_forward", InputBinding().Key(KEY_UP).Key('W') },
-	{ "camera_back", InputBinding().Key(KEY_DOWN).Key('S') },
-	{ "camera_left", InputBinding().Key(KEY_LEFT).Key('A') },
-	{ "camera_right", InputBinding().Key(KEY_RIGHT).Key('D') }
+Dictionary bindingConfiguration = {
+	{ "camera_forward", inputCameraForward },
+	{ "camera_back", inputCameraBack },
+	{ "camera_left", inputCameraLeft },
+	{ "camera_right", inputCameraRight }
 };
 
 Dictionary mouseButtonLookup = {
@@ -109,59 +108,65 @@ Dictionary joystickHatLookup = {
     { HAT_LEFT, "LEFT" }
 };
 
-// class Binding
-// {
-// 	int qualifiers = 0;
-// 	int source = 0;
-// 	int key = 0;
+class Binding
+{
+	int qualifiers = 0;
+	int source = 0;
+	int key = 0;
 
-// 	Binding(int source_, int key_, int qualifiers_=0)
-// 	{
-// 		source = source_;
-// 		key = key_;
-// 		qualifiers = qualifiers_;
-// 	}
-// 	bool Down()
-// 	{
-// 		return input.keyDown[key];
-// 	}
-// 	bool Press()
-// 	{
-// 		return input.keyPress[key];
-// 	}
-// }
+	Binding(int source_, int key_, int qualifiers_=0)
+	{
+		source = source_;
+		key = key_;
+		qualifiers = qualifiers_;
+	}
+
+	bool Down()
+	{
+		if (source == 0)
+			return input.keyDown[key];
+		else if (source == 0)
+			return input.mouseButtonDown[key];
+		else
+			return false;
+	}
+
+	bool Press()
+	{
+		if (source == 0)
+			return input.keyPress[key];
+		else if (source == 1)
+			return input.mouseButtonPress[key];
+		else
+			return false;
+	}
+}
 
 class InputBinding
 {
-	Array<int> keyBindings;
-	Array<int> mouseBindings;
+	Array<Binding@> bindings;
 
 	InputBinding() {}
 
-	InputBinding@ Key(int binding)
+	InputBinding@ Key(int key, int qualifiers = 0)
 	{
-		keyBindings.Push(binding);
+		Binding@ binding = Binding(0,key,qualifiers);
+		bindings.Push(binding);
 		return this;
 	}
 
-	InputBinding@ Mouse(int binding)
+	InputBinding@ Mouse(int key, int qualifiers = 0)
 	{
-		mouseBindings.Push(binding);
+		Binding@ binding = Binding(1,key,qualifiers);
+		bindings.Push(binding);
 		return this;
 	}
 
 	bool Down()
 	{
-		for(uint i; i<keyBindings.length; i++)
+		for(uint i=0; i<bindings.length; i++)
 		{
-			Print(keyBindings[i]);
-			if (input.keyDown[keyBindings[i]])
-				return true;
-		}
-
-		for(uint i; i<mouseBindings.length; i++)
-		{
-			if (input.mouseButtonDown[mouseBindings[i]])
+			if (bindings[i].Down())
 				return true;
 		}
 		return false;
@@ -169,23 +174,11 @@ class InputBinding
 
 	bool Press()
 	{
-		for(uint i; i<keyBindings.length; i++)
+		for(uint i=0; i<bindings.length; i++)
 		{
-			Print(keyBindings[i]);
-			if (input.keyPress[keyBindings[i]])
+			if (bindings[i].Press())
 				return true;
 		}
-
-		for(uint i; i<mouseBindings.length; i++)
-		{
-			if (input.mouseButtonPress[mouseBindings[i]])
-				return true;
-		}
-		return false;
-	}
-
-	bool Test() const 
-	{
 		return false;
 	}
 }

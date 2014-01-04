@@ -287,45 +287,35 @@ void UpdateView(float timeStep)
     if (ui.focusElement is null && !input.keyDown[KEY_LCTRL])
     {
         float speedMultiplier = 1.0;
-        if (input.keyDown[KEY_LSHIFT])
+        if (inputCameraSpeedMultiplier.Down())
             speedMultiplier = cameraShiftSpeedMultiplier;
 
-        if (Binding("camera_forward").Down())
+        if (inputCameraForward.Down())
         {
             cameraNode.TranslateRelative(Vector3(0, 0, cameraBaseSpeed) * timeStep * speedMultiplier);
             FadeUI();
         }
-        if (Binding("camera_back").Down())
+        if (inputCameraBack.Down())
         {
             cameraNode.TranslateRelative(Vector3(0, 0, -cameraBaseSpeed) * timeStep * speedMultiplier);
             FadeUI();
         }
-        if (Binding("camera_left").Down())
+        if (inputCameraLeft.Down())
         {
             cameraNode.TranslateRelative(Vector3(-cameraBaseSpeed, 0, 0) * timeStep * speedMultiplier);
             FadeUI();
         }
-        if (Binding("camera_right").Down())
+        if (inputCameraRight.Down())
         {
             cameraNode.TranslateRelative(Vector3(cameraBaseSpeed, 0, 0) * timeStep * speedMultiplier);
             FadeUI();
         }
-        if (input.keyDown[KEY_PAGEUP])
+        if (inputCameraUp.Down())
         {
             cameraNode.Translate(Vector3(0, cameraBaseSpeed, 0) * timeStep * speedMultiplier);
             FadeUI();
         }
-        if (input.keyDown[KEY_PAGEDOWN])
-        {
-            cameraNode.Translate(Vector3(0, -cameraBaseSpeed, 0) * timeStep * speedMultiplier);
-            FadeUI();
-        }
-        if (input.keyDown['E'])
-        {
-            cameraNode.Translate(Vector3(0, cameraBaseSpeed, 0) * timeStep * speedMultiplier);
-            FadeUI();
-        }
-        if (input.keyDown['Q'])
+        if (inputCameraDown.Down())
         {
             cameraNode.Translate(Vector3(0, -cameraBaseSpeed, 0) * timeStep * speedMultiplier);
             FadeUI();
@@ -335,7 +325,7 @@ void UpdateView(float timeStep)
     }
 
     // Rotate/orbit camera
-    if (input.mouseButtonDown[MOUSEB_RIGHT] || input.mouseButtonDown[MOUSEB_MIDDLE])
+    if (inputCameraRotate.Down() || inputCameraOrbit.Down())
     {
         IntVector2 mouseMove = input.mouseMove;
         if (mouseMove.x != 0 || mouseMove.y != 0)
@@ -348,7 +338,7 @@ void UpdateView(float timeStep)
 
             Quaternion q = Quaternion(cameraPitch, cameraYaw, 0);
             cameraNode.rotation = q;
-            if (input.mouseButtonDown[MOUSEB_MIDDLE] && (selectedNodes.length > 0 || selectedComponents.length > 0))
+            if (inputCameraOrbit.Down() && (selectedNodes.length > 0 || selectedComponents.length > 0))
             {
                 Vector3 centerPoint = SelectedNodesCenterPoint();
                 Vector3 d = cameraNode.worldPosition - centerPoint;
@@ -359,7 +349,7 @@ void UpdateView(float timeStep)
             FadeUI();
         }
     }
-    if (orbiting && !input.mouseButtonDown[MOUSEB_MIDDLE])
+    if (orbiting && !inputCameraOrbit.Down())
         orbiting = false;
 
     // Move/rotate/scale object
