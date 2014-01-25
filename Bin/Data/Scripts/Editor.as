@@ -103,6 +103,8 @@ void HandleUpdate(StringHash eventType, VariantMap& eventData)
 
 void LoadConfig()
 {
+    SetDefaultKeybindings();
+    
     if (!fileSystem.FileExists(configFileName))
         return;
 

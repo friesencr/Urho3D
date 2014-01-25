@@ -68,6 +68,7 @@ void CreateUI()
     CreateAttributeInspectorWindow();
     CreateEditorSettingsDialog();
     CreateEditorPreferencesDialog();
+    CreateEditorKeybindingsDialog();
     CreateMaterialEditor();
     CreateStatsBar();
     CreateConsole();
@@ -414,6 +415,7 @@ void CreateMenuBar()
         popup.AddChild(CreateMenuItem("Material editor", @ShowMaterialEditor));
         popup.AddChild(CreateMenuItem("Editor settings", @ShowEditorSettingsDialog));
         popup.AddChild(CreateMenuItem("Editor preferences", @ShowEditorPreferencesDialog));
+        popup.AddChild(CreateMenuItem("Editor keybindings", @ShowEditorKeybindings));
         CreateChildDivider(popup);
         popup.AddChild(CreateMenuItem("Hide editor", @ToggleUI, KEY_F12, QUAL_ANY));
         FinalizedPopupMenu(popup);
@@ -1130,16 +1132,16 @@ void HandleKeyDown(StringHash eventType, VariantMap& eventData)
     else if (ui.HasModalElement())
         return;
 
-    else if (key == KEY_F1)
+    else if (inputConsole.Down())
         console.Toggle();
-    else if (key == KEY_F2)
+    else if (inputRenderingDebug.Down())
         ToggleRenderingDebug();
-    else if (key == KEY_F3)
+    else if (inputPhysicsDebug.Down())
         TogglePhysicsDebug();
-    else if (key == KEY_F4)
+    else if (inputOctreeDebug.Down())
         ToggleOctreeDebug();
 
-    else if (key == KEY_NUMPAD1 && ui.focusElement is null) // Front view
+    else if (inputCameraFrontView.Down() && ui.focusElement is null) // Front view
     {
         Vector3 pos = cameraNode.position;
         pos.z = -pos.length * viewDirection;
@@ -1150,7 +1152,7 @@ void HandleKeyDown(StringHash eventType, VariantMap& eventData)
         ReacquireCameraYawPitch();
     }
 
-    else if (key == KEY_NUMPAD3 && ui.focusElement is null) // Side view
+    else if (inputCameraSideView.Down() && ui.focusElement is null) // Side view
     {
         Vector3 pos = cameraNode.position;
         pos.x = pos.length * viewDirection;
@@ -1161,7 +1163,7 @@ void HandleKeyDown(StringHash eventType, VariantMap& eventData)
         ReacquireCameraYawPitch();
     }
 
-    else if (key == KEY_NUMPAD7 && ui.focusElement is null) // Top view
+    else if (inputCameraTopView.Down() && ui.focusElement is null) // Top view
     {
         Vector3 pos = cameraNode.position;
         pos.y = pos.length * viewDirection;
@@ -1174,29 +1176,29 @@ void HandleKeyDown(StringHash eventType, VariantMap& eventData)
 
     else if (eventData["Qualifiers"].GetInt() == QUAL_CTRL)
     {
-        if (key == '1')
+        if (inputEditModeMove.Down())
             editMode = EDIT_MOVE;
-        else if (key == '2')
+        else if (inputEditModeRotate.Down())
             editMode = EDIT_ROTATE;
-        else if (key == '3')
+        else if (inputEditModeScale.Down())
             editMode = EDIT_SCALE;
-        else if (key == '4')
+        else if (inputEditModeSelect.Down())
             editMode = EDIT_SELECT;
-        else if (key == '5')
+        else if (inputAxisMode.Down())
             axisMode = AxisMode(axisMode ^ AXIS_LOCAL);
-        else if (key == '6')
+        else if (inputPickModeDown.Down())
         {
             --pickMode;
             if (pickMode < PICK_GEOMETRIES)
                 pickMode = MAX_PICK_MODES - 1;
         }
-        else if (key == '7')
+        else if (inputPickModeUp.Down())
         {
             ++pickMode;
             if (pickMode >= MAX_PICK_MODES)
                 pickMode = PICK_GEOMETRIES;
         }
-        else if (key == 'W')
+        else if (inputFillMode.Down())
         {
             fillMode = FillMode(fillMode + 1);
             if (fillMode > FILL_POINT)
@@ -1205,7 +1207,7 @@ void HandleKeyDown(StringHash eventType, VariantMap& eventData)
             // Update camera fill mode
             camera.fillMode = fillMode;
         }
-        else if (key == KEY_SPACE)
+        else if (inputQuickMenu.Down())
         {
             if (ui.cursor.visible)
                 ToggleQuickMenu();

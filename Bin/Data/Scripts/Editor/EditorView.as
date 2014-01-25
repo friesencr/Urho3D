@@ -325,7 +325,7 @@ void UpdateView(float timeStep)
     }
 
     // Rotate/orbit camera
-    if (inputCameraRotate.Down() || inputCameraOrbit.Down())
+    if (input.mouseButtonDown[MOUSEB_RIGHT] || input.mouseButtonDown[MOUSEB_MIDDLE])
     {
         IntVector2 mouseMove = input.mouseMove;
         if (mouseMove.x != 0 || mouseMove.y != 0)
@@ -338,7 +338,7 @@ void UpdateView(float timeStep)
 
             Quaternion q = Quaternion(cameraPitch, cameraYaw, 0);
             cameraNode.rotation = q;
-            if (inputCameraOrbit.Down() && (selectedNodes.length > 0 || selectedComponents.length > 0))
+            if (input.mouseButtonDown[MOUSEB_MIDDLE] && (selectedNodes.length > 0 || selectedComponents.length > 0))
             {
                 Vector3 centerPoint = SelectedNodesCenterPoint();
                 Vector3 d = cameraNode.worldPosition - centerPoint;
@@ -356,23 +356,23 @@ void UpdateView(float timeStep)
     if (!editNodes.empty && editMode != EDIT_SELECT && ui.focusElement is null && input.keyDown[KEY_LCTRL])
     {
         Vector3 adjust(0, 0, 0);
-        if (input.keyDown[KEY_UP])
+        if (inputEditZAdd.Down())
             adjust.z = 1;
-        if (input.keyDown[KEY_DOWN])
+        if (inputEditZSub.Down())
             adjust.z = -1;
-        if (input.keyDown[KEY_LEFT])
+        if (inputEditXAdd.Down())
             adjust.x = -1;
-        if (input.keyDown[KEY_RIGHT])
+        if (inputEditXSub.Down())
             adjust.x = 1;
-        if (input.keyDown[KEY_PAGEUP])
+        if (inputEditYAdd.Down())
             adjust.y = 1;
-        if (input.keyDown[KEY_PAGEDOWN])
+        if (inputEditYSub.Down())
             adjust.y = -1;
         if (editMode == EDIT_SCALE)
         {
-            if (input.keyDown[KEY_ADD])
+            if (inputEditUniformAdd.Down())
                 adjust = Vector3(1, 1, 1);
-            if (input.keyDown[KEY_SUBTRACT])
+            if (inputEditUniformSub.Down())
                 adjust = Vector3(-1, -1, -1);
         }
 
@@ -419,23 +419,23 @@ void SteppedObjectManipulation(int key)
         return;
 
     Vector3 adjust(0, 0, 0);
-    if (key == KEY_UP)
+    if (inputEditZAdd.Down())
         adjust.z = 1;
-    if (key == KEY_DOWN)
+    if (inputEditZSub.Down())
         adjust.z = -1;
-    if (key == KEY_LEFT)
+    if (inputEditXAdd.Down())
         adjust.x = -1;
-    if (key == KEY_RIGHT)
+    if (inputEditXSub.Down())
         adjust.x = 1;
-    if (key == KEY_PAGEUP)
+    if (inputEditYAdd.Down())
         adjust.y = 1;
-    if (key == KEY_PAGEDOWN)
+    if (inputEditYSub.Down())
         adjust.y = -1;
     if (editMode == EDIT_SCALE)
     {
-        if (key == KEY_ADD)
+        if (inputEditUniformAdd.Down())
             adjust = Vector3(1, 1, 1);
-        if (key == KEY_SUBTRACT)
+        if (inputEditUniformSub.Down())
             adjust = Vector3(-1, -1, -1);
     }
 
