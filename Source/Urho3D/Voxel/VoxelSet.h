@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../../ThirdParty/STB/stb_voxel_render.h"
 
 #include "../Graphics/Material.h"
@@ -6,20 +8,44 @@
 #include "../IO/VectorBuffer.h"
 #include "../Core/Variant.h"
 #include "../Math/StringHash.h"
+#include "../Core/WorkQueue.h"
 
 #include "Voxel.h"
 #include "VoxelChunk.h"
  
-#define STBVOX_CONFIG_MODE  1
-#define STB_VOXEL_RENDER_IMPLEMENTATION
-
 namespace Urho3D {
 
+class VoxelWorkSlot {
+public:
+	char* buffer;
+	VoxelChunk* chunk;
+	Mutex slotMutex;
+	Vector<SharedPtr<WorkItem> > workItems_;
+	int DecrementWork(SharedPtr<WorkItem> workItem)
+	{
+		MutexLock lock(slotMutex);
+		workItems_.Remove(workItem);
+		return workItems_.Size();
+	}
+};
+
+class URHO3D_API VoxelChunk;
 class URHO3D_API VoxelSet : public Component
 {
 public:
     static const unsigned int MAX_VOXEL_SET_PATCH_SIZE = 64;
-    static const unsigned int BUILD_SIZE_INCREMENT=16;
+	static const unsigned int VOXEL_WORKER_SIZE_X = 32;
+	static const unsigned int VOXEL_WORKER_SIZE_Y = 16;
+	static const unsigned int VOXEL_WORKER_SIZE_Z = 32;
+	static const unsigned int VOXEL_WORKER_SIZE = VOXEL_WORKER_SIZE_X * VOXEL_WORKER_SIZE_Y * VOXEL_WORKER_SIZE_Z;
+	static const unsigned int VOXEL_CHUNK_SIZE_X = VOXEL_WORKER_SIZE_X * 2;
+	static const unsigned int VOXEL_CHUNK_SIZE_Y = VOXEL_WORKER_SIZE_Y;
+	static const unsigned int VOXEL_CHUNK_SIZE_Z = VOXEL_WORKER_SIZE_Z * 2;
+    static const unsigned int VOXEL_CHUNK_SIZE = VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Y * VOXEL_CHUNK_SIZE_Z;
+	static const unsigned int VOXEL_CHUNK_WORK_BUFFER_SIZE = VOXEL_CHUNK_SIZE * 4 * 8;
+
+	// This math only works if the workloads are broken up evenly
+	static const unsigned int VOXEL_MAX_NUM_WORKERS_PER_CHUNK = VOXEL_CHUNK_SIZE / VOXEL_WORKER_SIZE;
 
     // Construct.
     VoxelSet(Context* context);
@@ -61,21 +87,27 @@ public:
 
     void HandleSceneUpdate(StringHash eventType, VariantMap& eventData);
 
-    void SetVoxelDefinitions(Vector<VoxelDefinition> voxelDefinitions);
-
-    // Store Voxels in z, x, y order
-    void SetVoxels(PODVector<Voxel> voxels);
-
     void BuildGeometry();
+
+	VoxelDefinition* GetVoxelDefinition() const;
+	void SetVoxelDefinition(VoxelDefinition* voxelDefinition);
 
     // Builds a unit of work
     void BuildChunkWork(void* work, unsigned threadIndex=0);
 
 private:
     // Builds a voxel chunk.
-    void BuildChunk(VoxelChunk* chunk);
+    bool BuildChunk(VoxelChunk* chunk, bool async=false);
     // Upload Mesh
     void UploadMesh();
+	void DecodeWorkBuffer(VoxelWorkSlot* slot);
+	void UploadToGraphics();
+	void AllocateWorkerBuffers();
+	void FreeWorkerBuffers();
+	void HandleWorkItemCompleted(StringHash eventType, VariantMap& eventData);
+	void BuildChunkCompleted(VoxelWorkSlot* slot);
+	VoxelWorkSlot* GetFreeWorkSlot(VoxelChunk* chunk);
+
     // Material.
     SharedPtr<Material> material_;
     // Voxel chunks.
@@ -87,12 +119,13 @@ private:
     // Depth.
     unsigned int depth_;
 
-    unsigned char voxelTextureMapping_[256][6];
-    unsigned char voxelGeometries_[256];
+	SharedPtr<VoxelDefinition> voxelDefinition_;
 
-    PODVector<Voxel> voxels_;
-    Vector<stbvox_mesh_maker> mesh_makers_;
-    Vector<WorkItem> workItems_;
+	bool workmemLoaded_;
+    Vector<stbvox_mesh_maker> meshMakers_;
+    Vector<SharedPtr<WorkItem>> workItems_;
+	Vector<VoxelWorkSlot> workSlots_;
+	mutable Mutex slotGetterMutex;
 };
 
 }

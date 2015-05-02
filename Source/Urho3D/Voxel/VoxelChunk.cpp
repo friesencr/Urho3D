@@ -10,7 +10,8 @@ VoxelChunk::VoxelChunk(Context* context) :
     geometry_(new Geometry(context)),
     vertexBuffer_(new VertexBuffer(context))
 {
-    geometry_->SetVertexBuffer(0, vertexBuffer_, MASK_POSITION | MASK_NORMAL | MASK_TEXCOORD1 | MASK_TANGENT);
+    geometry_->SetVertexBuffer(0, vertexBuffer_, MASK_POSITION | MASK_NORMAL | MASK_TEXCOORD1 );
+	geometry_->SetIndexBuffer(sharedIndexBuffer);
 }
 
 Geometry* VoxelChunk::GetGeometry() const
@@ -28,4 +29,18 @@ void VoxelChunk::OnWorldBoundingBoxUpdate()
     //worldBoundingBox_ = boundingBox_.Transformed(node_->GetWorldTransform());
 }
 
+void VoxelChunk::SetSize(int x, int y, int z)
+{
+	sizeX_ = x;
+	sizeY_ = y;
+	sizeZ_ = z;
+	InitializeBuffer();
 }
+
+void VoxelChunk::InitializeBuffer()
+{
+
+}
+
+}
+

@@ -1,20 +1,22 @@
+#pragma once
+
+#include "VoxelSet.h"
 #include "../Graphics/Drawable.h"
 #include "../Graphics/Geometry.h"
 #include "../Graphics/VertexBuffer.h"
 #include "../Container/Ptr.h"
+#include "../Core//Mutex.h"
 
 namespace Urho3D {
 
 class URHO3D_API VoxelChunk : public Drawable
 {
     OBJECT(VoxelChunk);
+    friend class VoxelSet;
 
 public:
     VoxelChunk(Context* context);
     ~VoxelChunk();
-
-    void SetIndex(int x, int y, int z);
-    void SetSize(int x, int y, int z);
 
     Geometry* GetGeometry() const;
     VertexBuffer* GetVertexBuffer() const;
@@ -31,6 +33,10 @@ protected:
     virtual void OnWorldBoundingBoxUpdate();
 
 private:
+    void SetIndex(int x, int y, int z);
+    void SetSize(int x, int y, int z);
+	int DecrementWorker();
+	void InitializeBuffer();
     // Voxel chunk geometry
     SharedPtr<Geometry> geometry_;
     // Vertex data
@@ -47,6 +53,11 @@ private:
     int sizeY_;
     // Z Index
     int sizeZ_;
+	float transform_[3][3];
+	float bounds_[2][3];
+	float priority_;
+	int numQuads_;
+	static const SharedPtr<IndexBuffer> sharedIndexBuffer;
 };
 
 }
