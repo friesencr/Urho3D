@@ -59,6 +59,7 @@
 #include "../../Graphics/TextureCube.h"
 #include "../../Graphics/VertexBuffer.h"
 #include "../../Graphics/Zone.h"
+#include "../../Voxel/VoxelSet.h"
 
 #include <stdio.h>
 
@@ -3267,6 +3268,8 @@ void RegisterGraphicsLibrary(Context* context)
     DebugRenderer::RegisterObject(context);
     Octree::RegisterObject(context);
     Zone::RegisterObject(context);
+	VoxelSet::RegisterObject(context);
+	VoxelChunk::RegisterObject(context);
 }
 
 }

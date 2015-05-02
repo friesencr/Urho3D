@@ -4,13 +4,15 @@
 #include "../Scene/Scene.h"
 #include "../Scene/SceneEvents.h"
 #include "../Core/WorkQueue.h"
+#include "../Graphics/Drawable.h"
 
 #define STBVOX_CONFIG_MODE  0
 #define STBVOX_CONFIG_DISABLE_TEX2
 #define STB_VOXEL_RENDER_IMPLEMENTATION
 
-
 namespace Urho3D {
+
+extern const char* GEOMETRY_CATEGORY = "Geometry";
 
 struct VoxelWorkload {
 	SharedPtr<VoxelSet> set_;
@@ -34,6 +36,11 @@ VoxelSet::VoxelSet(Context* context) :
 		stbvox_init_mesh_maker(&meshMakers_[i]);
 }
 
+void VoxelSet::RegisterObject(Context* context)
+{
+    context->RegisterFactory<VoxelSet>(GEOMETRY_CATEGORY);
+}
+
 void VoxelSet::AllocateWorkerBuffers()
 {
 	WorkQueue* queue = GetSubsystem<WorkQueue>();
@@ -42,8 +49,6 @@ void VoxelSet::AllocateWorkerBuffers()
 	// but stall if the mesh building gets too far ahead of the vertex converter this is based on chunk size and number of cpu threads
 	int numSlots = Min(numChunks, Max(1.0, ceil((float)queue->GetNumThreads() / (float)VOXEL_MAX_NUM_WORKERS_PER_CHUNK)) * 2.0);
 	workSlots_.Resize(numSlots);
-	for (int i = 0; i < numSlots; ++i)
-		workSlots_[i].buffer = new unsigned char[VOXEL_CHUNK_WORK_BUFFER_SIZE];
 }
 
 void VoxelSet::FreeWorkerBuffers()
@@ -264,6 +269,14 @@ void VoxelSet::HandleWorkItemCompleted(StringHash eventType, VariantMap& eventDa
 	using namespace WorkItemCompleted;
 	SharedPtr<WorkItem> workItem((WorkItem*)eventData[P_ITEM].GetPtr());
 	VoxelWorkload* workload = (VoxelWorkload*)workItem->aux_;
+}
+
+
+int VoxelWorkSlot::DecrementWork(SharedPtr<WorkItem> workItem)
+{
+		MutexLock lock(slotMutex);
+		workItems_.Remove(workItem);
+		return workItems_.Size();
 }
 
 }

@@ -2,6 +2,7 @@
 
 #include "../../ThirdParty/STB/stb_voxel_render.h"
 
+#include "../Core//Context.h"
 #include "../Graphics/Material.h"
 #include "../Scene/Component.h"
 #include "../Container/Ptr.h"
@@ -17,20 +18,7 @@
  
 namespace Urho3D {
 
-class VoxelWorkSlot {
-public:
-	unsigned char* buffer;
-	VoxelChunk* chunk;
-	Mutex slotMutex;
-	Vector<SharedPtr<WorkItem> > workItems_;
-	int DecrementWork(SharedPtr<WorkItem> workItem)
-	{
-		MutexLock lock(slotMutex);
-		workItems_.Remove(workItem);
-		return workItems_.Size();
-	}
-};
-
+class VoxelWorkSlot;
 class URHO3D_API VoxelChunk;
 class URHO3D_API VoxelSet : public Component
 {
@@ -44,7 +32,9 @@ public:
 	static const unsigned int VOXEL_CHUNK_SIZE_Y = VOXEL_WORKER_SIZE_Y;
 	static const unsigned int VOXEL_CHUNK_SIZE_Z = VOXEL_WORKER_SIZE_Z * 2;
     static const unsigned int VOXEL_CHUNK_SIZE = VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Y * VOXEL_CHUNK_SIZE_Z;
-	static const unsigned int VOXEL_CHUNK_WORK_BUFFER_SIZE = VOXEL_CHUNK_SIZE * 4 * 8;
+
+	// VOXEL CONFIG MODE 0 - is 2 uints per vertex
+	static const unsigned int VOXEL_CHUNK_WORK_BUFFER_SIZE = VOXEL_CHUNK_SIZE * 4 * 4 * 2;
 
 	// This math only works if the workloads are broken up evenly
 	static const unsigned int VOXEL_MAX_NUM_WORKERS_PER_CHUNK = VOXEL_CHUNK_SIZE / VOXEL_WORKER_SIZE;
@@ -133,6 +123,15 @@ private:
 	int numChunksY;
 	int numChunksZ;
 	int numChunks;
+};
+
+class VoxelWorkSlot {
+public:
+	unsigned char buffer[VoxelSet::VOXEL_CHUNK_WORK_BUFFER_SIZE];
+	VoxelChunk* chunk;
+	Mutex slotMutex;
+	Vector<SharedPtr<WorkItem> > workItems_;
+	int DecrementWork(SharedPtr<WorkItem> workItem);
 };
 
 }

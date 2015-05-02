@@ -18,6 +18,8 @@ public:
     VoxelChunk(Context* context);
     ~VoxelChunk();
 
+    static void RegisterObject(Context* context);
+
     Geometry* GetGeometry() const;
     VertexBuffer* GetVertexBuffer() const;
 

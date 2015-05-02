@@ -5,6 +5,8 @@
 
 namespace Urho3D {
 
+extern const char* GEOMETRY_CATEGORY = "Geometry";
+
 VoxelChunk::VoxelChunk(Context* context) :
     Drawable(context, DRAWABLE_ANY),
     geometry_(new Geometry(context)),
@@ -12,6 +14,11 @@ VoxelChunk::VoxelChunk(Context* context) :
 {
     geometry_->SetVertexBuffer(0, vertexBuffer_, MASK_POSITION | MASK_NORMAL | MASK_TEXCOORD1 );
 	geometry_->SetIndexBuffer(sharedIndexBuffer);
+}
+
+void VoxelChunk::RegisterObject(Context* context)
+{
+    context->RegisterFactory<VoxelChunk>(GEOMETRY_CATEGORY);
 }
 
 Geometry* VoxelChunk::GetGeometry() const
