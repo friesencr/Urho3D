@@ -9,6 +9,8 @@
 #include "../Core/Variant.h"
 #include "../Math/StringHash.h"
 #include "../Core/WorkQueue.h"
+#include "../Graphics/VertexBuffer.h"
+#include "../Graphics/IndexBuffer.h"
 
 #include "Voxel.h"
 #include "VoxelChunk.h"
@@ -17,7 +19,7 @@ namespace Urho3D {
 
 class VoxelWorkSlot {
 public:
-	char* buffer;
+	unsigned char* buffer;
 	VoxelChunk* chunk;
 	Mutex slotMutex;
 	Vector<SharedPtr<WorkItem> > workItems_;
@@ -96,6 +98,7 @@ public:
     void BuildChunkWork(void* work, unsigned threadIndex=0);
 
 private:
+	static SharedPtr<IndexBuffer> sharedIndexBuffer_;
     // Builds a voxel chunk.
     bool BuildChunk(VoxelChunk* chunk, bool async=false);
     // Upload Mesh
@@ -126,6 +129,10 @@ private:
     Vector<SharedPtr<WorkItem>> workItems_;
 	Vector<VoxelWorkSlot> workSlots_;
 	mutable Mutex slotGetterMutex;
+	int numChunksX;
+	int numChunksY;
+	int numChunksZ;
+	int numChunks;
 };
 
 }

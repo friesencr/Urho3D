@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Math/Vector3.h"
+#include "../Core/Object.h"
 #include "../../ThirdParty/STB/stb_voxel_render.h"
 
 namespace Urho3D {
@@ -52,21 +53,7 @@ enum VoxelHeight
 	VOXEL_HEIGHT_ONE_AND_HALF,
 };
 
-struct VoxelTextureBlock {
-	unsigned char east;
-	unsigned char north;
-	unsigned char west;
-	unsigned char south;
-	unsigned char up;
-	unsigned char down;
-};
-
-union VoxelTextureMapping {
-	VoxelTextureBlock textureBlock;
-	char characterMap[6];
-};
-
-class VoxelDefinition : Object {
+class VoxelDefinition : public Object {
 public:
 	unsigned char* blockGeometry;
 	unsigned char(*blockTex1Face)[6];

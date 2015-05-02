@@ -25,7 +25,6 @@ struct VoxelWorkload {
 	int sizeZ_;
 };
 
-
 VoxelSet::VoxelSet(Context* context) :
 	Component(context)
 {
@@ -41,10 +40,10 @@ void VoxelSet::AllocateWorkerBuffers()
 
 	// the workers will build a chunk and then convert it to urho vertex buffers, while the vertex buffer is being built it will start more chunks
 	// but stall if the mesh building gets too far ahead of the vertex converter this is based on chunk size and number of cpu threads
-	int numSlots = Min(1.0, ceil((float)queue->GetNumThreads() / (float)VOXEL_MAX_NUM_WORKERS_PER_CHUNK)) * 2.0;
+	int numSlots = Min(numChunks, Max(1.0, ceil((float)queue->GetNumThreads() / (float)VOXEL_MAX_NUM_WORKERS_PER_CHUNK)) * 2.0);
 	workSlots_.Resize(numSlots);
 	for (int i = 0; i < numSlots; ++i)
-		workSlots_[i].buffer = new char[VOXEL_CHUNK_WORK_BUFFER_SIZE];
+		workSlots_[i].buffer = new unsigned char[VOXEL_CHUNK_WORK_BUFFER_SIZE];
 }
 
 void VoxelSet::FreeWorkerBuffers()
@@ -56,23 +55,46 @@ void VoxelSet::FreeWorkerBuffers()
 // Decode to vertex buffer
 void VoxelSet::DecodeWorkBuffer(VoxelWorkSlot* workSlot)
 {
-	workSlots_->numQuads_ = stbvox_get_quad_count(&mm, chunk->GetID());
-
-	for (int i = 0; i < workSlot->
-	workSlot->buffer
+	VoxelChunk* chunk = workSlot->chunk;
+	SharedPtr<VertexBuffer> vb(new VertexBuffer(context_));
+	vb->SetSize(chunk->numQuads_, MASK_POSITION, true);
 	
-	" ((stbvox_uint32)((x)+((y) << 7) + ((z) << 14) + ((ao) << 23) + ((texlerp) << 29)))
+	if (sharedIndexBuffer_.Null())
+	{
+	}
+//const unsigned VertexBuffer::elementSize[] =
+//{
+//    3 * sizeof(float), // Position
+//    3 * sizeof(float), // Normal
+//    4 * sizeof(unsigned char), // Color
+//    2 * sizeof(float), // Texcoord1
+//    2 * sizeof(float), // Texcoord2
+//    3 * sizeof(float), // Cubetexcoord1
+//    3 * sizeof(float), // Cubetexcoord2
+//    4 * sizeof(float), // Tangent
+//    4 * sizeof(float), // Blendweights
+//    4 * sizeof(unsigned char), // Blendindices
+//    4 * sizeof(float), // Instancematrix1
+//    4 * sizeof(float), // Instancematrix2
+//    4 * sizeof(float) // Instancematrix3
+//};
+	
+	union PositionData {
+		float f;
+		unsigned char c;
+	};
+	int quadSize = VertexBuffer::elementSize[0]; //+ VertexBuffer::elementSize
+	unsigned char* data = new unsigned char[chunk->numQuads_ * quadSize];
+	for (int i = 0; i < chunk->numQuads_; i+=2)
+	{
+		unsigned int d1 = workSlot->buffer[i];
+		unsigned int d2 = workSlot->buffer[i+1];
+		PositionData p;
+		p.f = *Vector3(d1 & 127u, (d1 << 14u) & 511u, (d1 >> 14u) & 127u).Data();
+		data[i * quadSize] = p.c;
+	}
+	vb->SetData(data);
 
-		"   vec3 offset;\n"
-		"   offset.x = float( (attr_vertex       ) & 127u );\n"             // a[0..6]
-		"   offset.y = float( (attr_vertex >>  7u) & 127u );\n"             // a[7..13]
-		"   offset.z = float( (attr_vertex >> 14u) & 511u );\n"             // a[14..22]
-		"   amb_occ  = float( (attr_vertex >> 23u) &  63u ) / 63.0;\n"      // a[23..28]
-		"   texlerp  = float( (attr_vertex >> 29u)        ) /  7.0;\n"      // a[29..31]
-
-		"   vnormal = normal_table[(facedata.w>>2u) & 31u];\n"
-		"   voxelspace_pos = offset * transform[0];\n"  // mesh-to-object scale
-		"   vec3 position  = voxelspace_pos + transform[1];\n"  // mesh-to-object translate
 }
 
 void BuildChunkWorkHandler(const WorkItem* workItem, unsigned threadIndex)
@@ -98,17 +120,19 @@ void VoxelSet::HandleSceneUpdate(StringHash eventType, VariantMap& eventData)
 
 void VoxelSet::BuildGeometry()
 {
-	int chunksX = ceil((float)width_ / (float)VOXEL_CHUNK_SIZE_X);
-	int chunksY = ceil((float)height_ / (float)VOXEL_CHUNK_SIZE_Y);
-	int chunksZ = ceil((float)depth_ / (float)VOXEL_CHUNK_SIZE_Z);
+	numChunksX = ceil((float)width_ / (float)VOXEL_CHUNK_SIZE_X);
+	numChunksY = ceil((float)height_ / (float)VOXEL_CHUNK_SIZE_Y);
+	numChunksZ = ceil((float)depth_ / (float)VOXEL_CHUNK_SIZE_Z);
+	numChunks = numChunksX * numChunksY * numChunksZ;
+
 	int sizeX = width_;
-	for (unsigned int x = 0; x < chunksX; ++x)
+	for (unsigned int x = 0; x < numChunksX; ++x)
 	{
 		int sizeZ = depth_;
-		for (unsigned int z = 0; z < chunksZ; ++z)
+		for (unsigned int z = 0; z < numChunksZ; ++z)
 		{
 			int sizeY = height_;
-			for (unsigned int y = 0; y < chunksY; ++y)
+			for (unsigned int y = 0; y < numChunksY; ++y)
 			{
 				SharedPtr<Node> chunkNode(node_->CreateChild("VoxelChunk_" + String(x) + "_" + String(y) + "_" + String(z)));
 				chunkNode->SetTemporary(true);
@@ -225,7 +249,7 @@ void VoxelSet::BuildChunkWork(void* data, unsigned threadIndex)
 	if (workload->workSlot_->DecrementWork(workload->workItem_) == 0)
 	{
 		VoxelChunk* chunk = slot->chunk;
-		slot->numQuads = stbvox_get_quad_count(&mm, workload->chunk_->GetID());
+		chunk->numQuads_ = stbvox_get_quad_count(&mm, workload->chunk_->GetID());
 		stbvox_set_mesh_coordinates(&mm, chunk->GetSizeX(), chunk->GetSizeZ(), chunk->GetSizeY());
 		stbvox_get_transform(&mm, chunk->transform_);
 		stbvox_get_bounds(&mm, chunk->bounds_);
