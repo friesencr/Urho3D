@@ -1,24 +1,25 @@
 #pragma once
 
-#include "../../ThirdParty/STB/stb_voxel_render.h"
-
-#include "../Core//Context.h"
-#include "../Graphics/Material.h"
-#include "../Scene/Component.h"
-#include "../Container/Ptr.h"
-#include "../IO/VectorBuffer.h"
+#include "../Core/Context.h"
 #include "../Core/Variant.h"
-#include "../Math/StringHash.h"
 #include "../Core/WorkQueue.h"
-#include "../Graphics/VertexBuffer.h"
-#include "../Graphics/IndexBuffer.h"
+#include "../Container/Ptr.h"
+#include "../Scene/Component.h"
+#include "../IO/VectorBuffer.h"
+#include "../Math/StringHash.h"
+#include "VertexBuffer.h"
+#include "IndexBuffer.h"
+#include "Material.h"
 
-#include "Voxel.h"
 #include "VoxelChunk.h"
+#include "Voxel.h"
+
+#include <STB/stb_voxel_render.h>
  
 namespace Urho3D {
 
 class VoxelWorkSlot;
+struct VoxelWorkload;
 class URHO3D_API VoxelChunk;
 class URHO3D_API VoxelSet : public Component
 {
@@ -52,30 +53,30 @@ public:
     /// Handle enabled/disabled state change.
     virtual void OnSetEnabled();
 
-    /// Set material.
-    void SetMaterial(Material* material);
-    /// Sets size of set.
-    void SetSize(unsigned int height, unsigned int width, unsigned int depth);
-    /// Set draw distance for patches.
-    void SetDrawDistance(float distance);
-    /// Set shadow draw distance for patches.
-    void SetShadowDistance(float distance);
-    /// Set view mask for patches. Is and'ed with camera's view mask to see if the object should be rendered.
-    void SetViewMask(unsigned mask);
-    /// Set light mask for patches. Is and'ed with light's and zone's light mask to see if the object should be lit.
-    void SetLightMask(unsigned mask);
-    /// Set shadow mask for patches. Is and'ed with light's light mask and zone's shadow mask to see if the object should be rendered to a shadow map.
-    void SetShadowMask(unsigned mask);
-    /// Set zone mask for patches. Is and'ed with zone's zone mask to see if the object should belong to the zone.
-    void SetZoneMask(unsigned mask);
-    /// Set maximum number of per-pixel lights for patches. Default 0 is unlimited.
-    void SetMaxLights(unsigned num);
-    /// Set shadowcaster flag for patches.
-    void SetCastShadows(bool enable);
-    /// Set occlusion flag for patches. Occlusion uses the coarsest LOD and may potentially be too aggressive, so use with caution.
-    void SetOccluder(bool enable);
-    /// Set occludee flag for patches.
-    void SetOccludee(bool enable);
+    ///// Set material.
+    //void SetMaterial(Material* material);
+    ///// Sets size of set.
+    //void SetSize(unsigned int height, unsigned int width, unsigned int depth);
+    ///// Set draw distance for patches.
+    //void SetDrawDistance(float distance);
+    ///// Set shadow draw distance for patches.
+    //void SetShadowDistance(float distance);
+    ///// Set view mask for patches. Is and'ed with camera's view mask to see if the object should be rendered.
+    //void SetViewMask(unsigned mask);
+    ///// Set light mask for patches. Is and'ed with light's and zone's light mask to see if the object should be lit.
+    //void SetLightMask(unsigned mask);
+    ///// Set shadow mask for patches. Is and'ed with light's light mask and zone's shadow mask to see if the object should be rendered to a shadow map.
+    //void SetShadowMask(unsigned mask);
+    ///// Set zone mask for patches. Is and'ed with zone's zone mask to see if the object should belong to the zone.
+    //void SetZoneMask(unsigned mask);
+    ///// Set maximum number of per-pixel lights for patches. Default 0 is unlimited.
+    //void SetMaxLights(unsigned num);
+    ///// Set shadowcaster flag for patches.
+    //void SetCastShadows(bool enable);
+    ///// Set occlusion flag for patches. Occlusion uses the coarsest LOD and may potentially be too aggressive, so use with caution.
+    //void SetOccluder(bool enable);
+    ///// Set occludee flag for patches.
+    //void SetOccludee(bool enable);
 
     void HandleSceneUpdate(StringHash eventType, VariantMap& eventData);
 
@@ -85,26 +86,29 @@ public:
 	void SetVoxelDefinition(VoxelDefinition* voxelDefinition);
 
     // Builds a unit of work
-    void BuildChunkWork(void* work, unsigned threadIndex=0);
+    void BuildChunkWork(VoxelWorkload* workload, unsigned threadIndex=0);
+	void SetDimensions(unsigned width, unsigned height, unsigned depth);
 
 private:
-	static SharedPtr<IndexBuffer> sharedIndexBuffer_;
     // Builds a voxel chunk.
     bool BuildChunk(VoxelChunk* chunk, bool async=false);
     // Upload Mesh
     void UploadMesh();
-	void DecodeWorkBuffer(VoxelWorkSlot* slot);
+	void DecodeWorkBuffer(VoxelWorkSlot* slot, VoxelChunk* chunk);
 	void UploadToGraphics();
 	void AllocateWorkerBuffers();
 	void FreeWorkerBuffers();
 	void HandleWorkItemCompleted(StringHash eventType, VariantMap& eventData);
 	void BuildChunkCompleted(VoxelWorkSlot* slot);
-	VoxelWorkSlot* GetFreeWorkSlot(VoxelChunk* chunk);
+	VoxelWorkSlot* GetFreeWorkSlot();
+	void FreeWorkSlot(VoxelWorkSlot* slot);
+	unsigned DecrementWorkSlot(VoxelWorkSlot* slot, VoxelWorkload* workItem);
+	void InitializeIndexBuffer();
 
     // Material.
     SharedPtr<Material> material_;
     // Voxel chunks.
-    Vector<WeakPtr<VoxelChunk> > chunks_;
+    Vector<VoxelChunk*> chunks_;
     // Height.
     unsigned int height_;
     // Width.
@@ -112,26 +116,37 @@ private:
     // Depth.
     unsigned int depth_;
 
+	SharedPtr<IndexBuffer> sharedIndexBuffer_;
 	SharedPtr<VoxelDefinition> voxelDefinition_;
 
-	bool workmemLoaded_;
-    Vector<stbvox_mesh_maker> meshMakers_;
-    Vector<SharedPtr<WorkItem>> workItems_;
 	Vector<VoxelWorkSlot> workSlots_;
 	mutable Mutex slotGetterMutex;
-	int numChunksX;
-	int numChunksY;
-	int numChunksZ;
-	int numChunks;
+	unsigned numChunksX;
+	unsigned numChunksY;
+	unsigned numChunksZ;
+	unsigned numChunks;
 };
 
-class VoxelWorkSlot {
-public:
-	unsigned char buffer[VoxelSet::VOXEL_CHUNK_WORK_BUFFER_SIZE];
-	VoxelChunk* chunk;
+struct VoxelWorkSlot {
 	Mutex slotMutex;
 	Vector<SharedPtr<WorkItem> > workItems_;
-	int DecrementWork(SharedPtr<WorkItem> workItem);
+	VoxelSet* set_;
+	VoxelChunk* chunk_;
+	unsigned char buffer[VoxelSet::VOXEL_CHUNK_WORK_BUFFER_SIZE];
+	int numQuads;
+	int workCounter;
+	bool free = true;
+};
+
+struct VoxelWorkload {
+	VoxelWorkSlot* workSlot_;
+	SharedPtr<WorkItem> workItem_;
+	unsigned indexX_;
+	unsigned indexY_;
+	unsigned indexZ_;
+	unsigned sizeX_;
+	unsigned sizeY_;
+	unsigned sizeZ_;
 };
 
 }

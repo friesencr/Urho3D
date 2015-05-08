@@ -2,7 +2,7 @@
 
 #include "../Math/Vector3.h"
 #include "../Core/Object.h"
-#include "../../ThirdParty/STB/stb_voxel_render.h"
+#include <STB/stb_voxel_render.h>
 
 namespace Urho3D {
 
@@ -53,16 +53,34 @@ enum VoxelHeight
 	VOXEL_HEIGHT_ONE_AND_HALF,
 };
 
-class VoxelDefinition : public Object {
-public:
-	unsigned char* blockGeometry;
-	unsigned char(*blockTex1Face)[6];
-	unsigned char(*blockTex2Face)[6];
-	unsigned char* geometry;
+class URHO3D_API VoxelDefinition : public Object {
+	OBJECT(VoxelDefinition);
 
+public:
+	VoxelDefinition(Context* context) : Object(context) { }
+	~VoxelDefinition(){}
+	PODVector<unsigned char> blocktype;
+	PODVector<unsigned char> blockGeometry;
+	PODVector<unsigned char> blockVHeight;
+	PODVector<unsigned char[6]> blockTex1Face;
+	PODVector<unsigned char[6]> blockTex2Face;
+	PODVector<unsigned char> geometry;
+
+	static unsigned char EncodeBlockTypeVHeight(VoxelHeight southWest, VoxelHeight southEast, VoxelHeight northWest, VoxelHeight northEast)
+	{
+		return STBVOX_MAKE_VHEIGHT(southWest, southEast, northWest, northEast);
+	}
 	static unsigned char EncodeGeometry(VoxelGeometryType type, VoxelRotation rot, VoxelHeight height)
 	{
 		return STBVOX_MAKE_GEOMETRY(type, rot, height);
+	}
+	static unsigned char EncodeGeometry(VoxelGeometryType type, VoxelRotation rot)
+	{
+		return STBVOX_MAKE_GEOMETRY(type, rot, 0);
+	}
+	static unsigned char EncodeGeometry(VoxelGeometryType type)
+	{
+		return STBVOX_MAKE_GEOMETRY(type, VoxelRotation::VOXEL_FACE_EAST,0);
 	}
 };
 

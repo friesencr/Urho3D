@@ -59,7 +59,8 @@
 #include "../../Graphics/TextureCube.h"
 #include "../../Graphics/VertexBuffer.h"
 #include "../../Graphics/Zone.h"
-#include "../../Voxel/VoxelSet.h"
+#include "../../Graphics/VoxelSet.h"
+#include "../../Graphics/VoxelChunk.h"
 
 #include <stdio.h>
 
