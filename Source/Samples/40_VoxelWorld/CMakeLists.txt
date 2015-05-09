@@ -21,7 +21,7 @@
 #
 
 # Define target name
-set (TARGET_NAME 39_VoxelWorld)
+set (TARGET_NAME 40_VoxelWorld)
 
 # Define source files
 define_source_files (EXTRA_H_FILES ${COMMON_SAMPLE_H_FILES})

@@ -9,6 +9,7 @@
 
 namespace Urho3D {
 
+class URHO3D_API VoxelSet;
 class URHO3D_API VoxelChunk : public Drawable
 {
     OBJECT(VoxelChunk);
@@ -83,7 +84,7 @@ private:
     float priority_;
     int numQuads_;
     unsigned lodLevel_;
-	WeakPtr<VoxelSet> owner_;
+    WeakPtr<VoxelSet> owner_;
 };
 
 }

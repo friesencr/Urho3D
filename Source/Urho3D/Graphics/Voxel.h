@@ -80,7 +80,7 @@ public:
 	}
 	static unsigned char EncodeGeometry(VoxelGeometryType type)
 	{
-		return STBVOX_MAKE_GEOMETRY(type, VoxelRotation::VOXEL_FACE_EAST,0);
+		return STBVOX_MAKE_GEOMETRY(type, VOXEL_FACE_EAST,0);
 	}
 };
 

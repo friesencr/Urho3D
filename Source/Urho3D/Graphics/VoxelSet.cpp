@@ -245,7 +245,7 @@ bool VoxelSet::BuildChunk(VoxelChunk* chunk, bool async)
 			{
 				SharedPtr<WorkItem> workItem(new WorkItem());
 				VoxelWorkload* workLoad = new VoxelWorkload();
-				workItem->priority_ = UINT_MAX;
+				workItem->priority_ = M_MAX_UNSIGNED;
 				workLoad->workSlot_ = slot;
 				workLoad->indexX_ = x;
 				workLoad->indexY_ = y;
@@ -261,7 +261,7 @@ bool VoxelSet::BuildChunk(VoxelChunk* chunk, bool async)
 			}
 		}
 	}
-	workQueue->Complete(UINT_MAX);
+	workQueue->Complete(M_MAX_UNSIGNED);
 	int a = 1;
 	chunk->numQuads_ = slot->numQuads;
 	//stbvox_mesh_maker* mm = &meshMakers_[0];
