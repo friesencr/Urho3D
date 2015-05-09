@@ -6,6 +6,7 @@
 #include "Graphics/VertexBuffer.h"
 #include "Graphics/Camera.h"
 #include "DebugRenderer.h"
+#include "../../../../../.clion10/system/cmake/generated/3940ee08/3940ee08/Debug/include/Urho3D/Graphics/GraphicsDefs.h"
 
 namespace Urho3D {
 
@@ -23,7 +24,7 @@ VoxelChunk::VoxelChunk(Context* context) :
     indexZ_(0),
     lodLevel_(0)
 {
-    geometry_->SetVertexBuffer(0, vertexBuffer_, MASK_POSITION | MASK_TEXCOORD1);
+    geometry_->SetVertexBuffer(0, vertexBuffer_, MASK_POSITION | MASK_NORMAL | MASK_TEXCOORD1);
     batches_.Resize(1);
     batches_[0].geometry_ = geometry_;
     batches_[0].geometryType_ = GEOM_STATIC_NOINSTANCING;

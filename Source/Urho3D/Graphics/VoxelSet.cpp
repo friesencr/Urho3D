@@ -6,10 +6,55 @@
 #include "../Core/WorkQueue.h"
 #include "../IO/Log.h"
 #include "../Resource/ResourceCache.h"
+#include "../../../../../.clion10/system/cmake/generated/3940ee08/3940ee08/MinSizeRel/include/Urho3D/Math/Vector3.h"
 
 #define STB_VOXEL_RENDER_IMPLEMENTATION
 #define STBVOX_CONFIG_MODE  0
 #include <STB/stb_voxel_render.h>
+
+
+#define URHO3D_RSQRT2   0.7071067811865f
+#define URHO3D_RSQRT3   0.5773502691896f
+
+static float URHO3D_default_normals[32][3] =
+{
+	{ 1,0,0 },  // east
+	{ 0,1,0 },  // north
+	{ -1,0,0 }, // west
+	{ 0,-1,0 }, // south
+	{ 0,0,1 },  // up
+	{ 0,0,-1 }, // down
+	{  URHO3D_RSQRT2,0, URHO3D_RSQRT2 }, // east & up
+	{  URHO3D_RSQRT2,0, -URHO3D_RSQRT2 }, // east & down
+
+	{  URHO3D_RSQRT2,0, URHO3D_RSQRT2 }, // east & up
+	{ 0, URHO3D_RSQRT2, URHO3D_RSQRT2 }, // north & up
+	{ -URHO3D_RSQRT2,0, URHO3D_RSQRT2 }, // west & up
+	{ 0,-URHO3D_RSQRT2, URHO3D_RSQRT2 }, // south & up
+	{  URHO3D_RSQRT3, URHO3D_RSQRT3, URHO3D_RSQRT3 }, // ne & up
+	{  URHO3D_RSQRT3, URHO3D_RSQRT3,-URHO3D_RSQRT3 }, // ne & down
+	{ 0, URHO3D_RSQRT2, URHO3D_RSQRT2 }, // north & up
+	{ 0, URHO3D_RSQRT2, -URHO3D_RSQRT2 }, // north & down
+
+	{  URHO3D_RSQRT2,0, -URHO3D_RSQRT2 }, // east & down
+	{ 0, URHO3D_RSQRT2, -URHO3D_RSQRT2 }, // north & down
+	{ -URHO3D_RSQRT2,0, -URHO3D_RSQRT2 }, // west & down
+	{ 0,-URHO3D_RSQRT2, -URHO3D_RSQRT2 }, // south & down
+	{ -URHO3D_RSQRT3, URHO3D_RSQRT3, URHO3D_RSQRT3 }, // NW & up
+	{ -URHO3D_RSQRT3, URHO3D_RSQRT3,-URHO3D_RSQRT3 }, // NW & down
+	{ -URHO3D_RSQRT2,0, URHO3D_RSQRT2 }, // west & up
+	{ -URHO3D_RSQRT2,0, -URHO3D_RSQRT2 }, // west & down
+
+	{  URHO3D_RSQRT3, URHO3D_RSQRT3,URHO3D_RSQRT3 }, // NE & up crossed
+	{ -URHO3D_RSQRT3, URHO3D_RSQRT3,URHO3D_RSQRT3 }, // NW & up crossed
+	{ -URHO3D_RSQRT3,-URHO3D_RSQRT3,URHO3D_RSQRT3 }, // SW & up crossed
+	{  URHO3D_RSQRT3,-URHO3D_RSQRT3,URHO3D_RSQRT3 }, // SE & up crossed
+	{ -URHO3D_RSQRT3,-URHO3D_RSQRT3, URHO3D_RSQRT3 }, // SW & up
+	{ -URHO3D_RSQRT3,-URHO3D_RSQRT3,-URHO3D_RSQRT3 }, // SW & up
+	{ 0,-URHO3D_RSQRT2, URHO3D_RSQRT2 }, // south & up
+	{ 0,-URHO3D_RSQRT2, -URHO3D_RSQRT2 }, // south & down
+};
+
 
 namespace Urho3D {
 
@@ -55,6 +100,8 @@ void VoxelSet::AllocateWorkerBuffers()
 	// but stall if the mesh building gets too far ahead of the vertex converter this is based on chunk size and number of cpu threads
 	unsigned numSlots = (unsigned)Min((float)numChunks, Max(1.0f, ceil((float)queue->GetNumThreads() / (float)VOXEL_MAX_NUM_WORKERS_PER_CHUNK)) * 2.0f);
 	workSlots_.Resize(numSlots);
+	for(unsigned i = 0; i < workSlots_.Size(); ++i)
+		FreeWorkSlot(&workSlots_[i]);
 }
 
 void VoxelSet::FreeWorkerBuffers()
@@ -68,12 +115,12 @@ void VoxelSet::InitializeIndexBuffer()
 	// triangulates the quads
 	for (int i = 0; i < (int)VOXEL_CHUNK_SIZE; i++)
 	{
-		data[i * 6] = i * 6;
-		data[i * 6 + 1] = i * 6 + 1;
-		data[i * 6 + 2] = i * 6 + 2;
-		data[i * 6 + 3] = i * 6 + 2;
-		data[i * 6 + 4] = i * 6 + 3;
-		data[i * 6 + 5] = i * 6;
+		data[i * 6] = i * 4;
+		data[i * 6 + 1] = i * 4 + 1;
+		data[i * 6 + 2] = i * 4 + 2;
+		data[i * 6 + 3] = i * 4 + 2;
+		data[i * 6 + 4] = i * 4 + 3;
+		data[i * 6 + 5] = i * 4;
 	}
 	sharedIndexBuffer_ = new IndexBuffer(context_);
 	sharedIndexBuffer_->SetSize(VOXEL_CHUNK_SIZE * 6, true, false);
@@ -86,14 +133,14 @@ void VoxelSet::DecodeWorkBuffer(VoxelWorkSlot* workSlot, VoxelChunk* chunk)
 	if (sharedIndexBuffer_->GetIndexSize() == 0)
 		InitializeIndexBuffer();
 
-	int vertexSize = sizeof(float) * 5; // position / uv1
+	int vertexSize = sizeof(float) * 8; // position / normal / uv1
 	int numVertices = chunk->numQuads_ * 4; // 4 verts in a quad
 	int numIndices = chunk->numQuads_ / 4 * 6;
 
 	SharedPtr<VertexBuffer> vb(chunk->GetVertexBuffer());
 	SharedArrayPtr<unsigned char> cpuData(new unsigned char[numVertices * sizeof(Vector3)]);
 	Geometry* geo = chunk->GetGeometry();
-	vb->SetSize(chunk->numQuads_ * 4, MASK_POSITION | MASK_TEXCOORD1);
+	vb->SetSize(chunk->numQuads_ * 4, MASK_POSITION | MASK_TEXCOORD1 | MASK_NORMAL);
 	float* vertexData = (float*)vb->Lock(0, vb->GetVertexCount());
 	float* positionData = (float*)cpuData.Get();
 	BoundingBox box(2.0, 3.0);
@@ -103,8 +150,20 @@ void VoxelSet::DecodeWorkBuffer(VoxelWorkSlot* workSlot, VoxelChunk* chunk)
 	{
 		unsigned int v1 = *workData++;
 		unsigned int v2 = *workData++;
+
 		Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0, (float)((v1 >> 7u) & 127u));
+		float amb_occ = (float)((v1 >> 23u) &  63u ) / 63.0;
+		unsigned char tex1 = v2 & 0xFF;
+		unsigned char tex2 = (v2 >> 8) & 0xFF;
+		unsigned char color = (v2 >> 16) & 0xFF;
+		unsigned char face_info = (v2 >> 24) & 0xFF;
+		unsigned char normal = face_info >> 2u;
+		unsigned char face_rot = face_info & 2u;
+		Vector3 normalf( URHO3D_default_normals[normal] );
+
 		box.Merge(position);
+
+		//LOGINFO(position.ToString());
 
 		*vertexData++ = position.x_;
 		*vertexData++ = position.y_;
@@ -112,6 +171,10 @@ void VoxelSet::DecodeWorkBuffer(VoxelWorkSlot* workSlot, VoxelChunk* chunk)
 		*positionData++ = position.x_;
 		*positionData++ = position.y_;
 		*positionData++ = position.z_;
+
+		*vertexData++ = normalf.x_;
+		*vertexData++ = normalf.y_;
+		*vertexData++ = normalf.z_;
 
 		if (i % 4 == 0)
 		{
@@ -140,6 +203,7 @@ void VoxelSet::DecodeWorkBuffer(VoxelWorkSlot* workSlot, VoxelChunk* chunk)
 
 	ResourceCache* cache = GetSubsystem<ResourceCache>();
 	chunk->SetMaterial(cache->GetResource<Material>("Materials/Stone.xml"));
+	chunk->SetCastShadows(true);
 	geo->SetIndexBuffer(sharedIndexBuffer_);
 	geo->SetDrawRange(TRIANGLE_LIST, 0, numIndices, false);
 	geo->SetRawVertexData(cpuData, sizeof(Vector3), MASK_POSITION);
@@ -171,6 +235,9 @@ void VoxelSet::BuildGeometry()
 	if (!(height_ > 0 && width_ > 0 && depth_ > 0 && voxelDefinition_.NotNull()))
 		return;
 
+	chunks_.Clear();
+	node_->RemoveAllChildren();
+
 	numChunksX = (int)ceil((float)width_ / (float)VOXEL_CHUNK_SIZE_X);
 	numChunksY = (int)ceil((float)height_ / (float)VOXEL_CHUNK_SIZE_Y);
 	numChunksZ = (int)ceil((float)depth_ / (float)VOXEL_CHUNK_SIZE_Z);
@@ -184,7 +251,7 @@ void VoxelSet::BuildGeometry()
 			{
 				SharedPtr<Node> chunkNode(node_->CreateChild("VoxelChunk_" + String(x) + "_" + String(y) + "_" + String(z)));
 				chunkNode->SetTemporary(true);
-				chunkNode->SetPosition(Vector3((float)(x * VOXEL_CHUNK_SIZE_X), (float)(y * VOXEL_CHUNK_SIZE_Z), (float)(z * VOXEL_CHUNK_SIZE_Z)));
+				chunkNode->SetPosition(Vector3((float)(x * VOXEL_CHUNK_SIZE_X), (float)(y * VOXEL_CHUNK_SIZE_Y), (float)(z * VOXEL_CHUNK_SIZE_Z)));
 				VoxelChunk* chunk = chunkNode->CreateComponent<VoxelChunk>();
 				chunk->SetSize(
 					Min((int)width_, x * VOXEL_CHUNK_SIZE_X + VOXEL_CHUNK_SIZE_X) - x * VOXEL_CHUNK_SIZE_X, 
@@ -275,7 +342,7 @@ bool VoxelSet::BuildChunk(VoxelChunk* chunk, bool async)
 	//	chunk->GetIndexZ() * VOXEL_CHUNK_SIZE_Z + chunk->GetSizeZ(),
 	//	chunk->GetIndexY() * VOXEL_CHUNK_SIZE_Y + chunk->GetSizeY()
 	//);
-	//stbvox_set_mesh_coordinates(mm, 
+	//stbvox_set_mesh_coordinates(mm,
 	//	chunk->GetIndexX() * VOXEL_CHUNK_SIZE_X, 
 	//	chunk->GetSizeZ() * VOXEL_CHUNK_SIZE_Z, 
 	//	chunk->GetSizeY() * VOXEL_CHUNK_SIZE_Y
@@ -298,7 +365,7 @@ void VoxelSet::BuildChunkWork(VoxelWorkload* workload, unsigned threadIndex)
 	stbvox_mesh_maker mm;
 	stbvox_init_mesh_maker(&mm);
 
-	stbvox_set_input_stride(&mm, width_+2*depth_+2, depth_+2);
+	stbvox_set_input_stride(&mm, width_*depth_, depth_);
 
 	map = stbvox_get_input_description(&mm);
 	map->blocktype = &voxelDefinition_->blocktype.Front();
@@ -312,12 +379,12 @@ void VoxelSet::BuildChunkWork(VoxelWorkload* workload, unsigned threadIndex)
 	stbvox_set_buffer(&mm, 0, 0, slot->buffer, VOXEL_CHUNK_WORK_BUFFER_SIZE);
 	stbvox_set_input_range(
 		&mm,
-		workload->indexX_ * VOXEL_WORKER_SIZE_X + 1,
-		workload->indexZ_ * VOXEL_WORKER_SIZE_Z + 1,
-		workload->indexY_ * VOXEL_WORKER_SIZE_Y + 1,
-		workload->indexX_ * VOXEL_WORKER_SIZE_X + workload->sizeX_,
-		workload->indexZ_ * VOXEL_WORKER_SIZE_Z + workload->sizeZ_,
-		workload->indexY_ * VOXEL_WORKER_SIZE_Y + workload->sizeY_
+		workload->indexX_ * VOXEL_WORKER_SIZE_X,
+		workload->indexZ_ * VOXEL_WORKER_SIZE_Z,
+		workload->indexY_ * VOXEL_WORKER_SIZE_Y,
+		workload->indexX_ * VOXEL_WORKER_SIZE_X + workload->sizeX_ - 2,
+		workload->indexZ_ * VOXEL_WORKER_SIZE_Z + workload->sizeZ_ - 2,
+		workload->indexY_ * VOXEL_WORKER_SIZE_Y + workload->sizeY_ - 2
 	);
 
 	if (stbvox_make_mesh(&mm) == 0)

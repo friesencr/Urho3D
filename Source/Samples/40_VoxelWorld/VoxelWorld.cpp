@@ -45,11 +45,16 @@
 
 #include <Urho3D/DebugNew.h>
 
+static const int h = 75;
+static const int w = 75;
+static const int d = 75;
+
 DEFINE_APPLICATION_MAIN(VoxelWorld)
 
 VoxelWorld::VoxelWorld(Context* context) :
     Sample(context)
 {
+    counter_ = 0;
 }
 
 void VoxelWorld::Start()
@@ -81,10 +86,12 @@ void VoxelWorld::CreateScene()
     // is also legal to place objects outside the volume but their visibility can then not be checked in a hierarchically
     // optimizing manner
     scene_->CreateComponent<Octree>();
-	DebugRenderer* debug = scene_->CreateComponent<DebugRenderer>();
+    DebugRenderer* debug = scene_->CreateComponent<DebugRenderer>();
 
-	Node* zoneNode = scene_->CreateChild("Zone");
-	Zone* zone = zoneNode->CreateComponent<Zone>();
+    Node* zoneNode = scene_->CreateChild("Zone");
+    Zone* zone = zoneNode->CreateComponent<Zone>();
+    zone->SetBoundingBox(BoundingBox(-10000, 10000));
+    zone->SetAmbientColor(Color(0.4, 0.4, 0.4));
 
     // Create a directional light to the world so that we can see something. The light scene node's orientation controls the
     // light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
@@ -94,33 +101,38 @@ void VoxelWorld::CreateScene()
 
     Light* light = lightNode->CreateComponent<Light>();
     light->SetLightType(LIGHT_DIRECTIONAL);
+    light->SetCastShadows(true);
 
-	//Node* planeNode = scene_->CreateChild("Plane");
- //   planeNode->SetScale(Vector3(100.0f, 1.0f, 100.0f));
- //   StaticModel* planeObject = planeNode->CreateComponent<StaticModel>();
- //   planeObject->SetModel(cache->GetResource<Model>("Models/Plane.mdl"));
- //   planeObject->SetMaterial(cache->GetResource<Material>("Materials/StoneTiled.xml"));
+    Node* planeNode = scene_->CreateChild("Plane");
+    planeNode->SetScale(Vector3(100.0f, 1.0f, 100.0f));
+    StaticModel* planeObject = planeNode->CreateComponent<StaticModel>();
+    planeObject->SetModel(cache->GetResource<Model>("Models/Plane.mdl"));
+    planeObject->SetMaterial(cache->GetResource<Material>("Materials/StoneTiled.xml"));
 
 
-	Node* voxelNode = scene_->CreateChild("VoxelNode");
-	VoxelSet* voxelSet = voxelNode->CreateComponent<VoxelSet>();
-	voxelDefinition_ = new VoxelDefinition(context_);
-	unsigned char geoSolid = VoxelDefinition::EncodeGeometry(VOXEL_TYPE_SOLID);
-	unsigned char heightNormal = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-	voxelDefinition_->blockVHeight.Push(0);
-	voxelDefinition_->blockVHeight.Push(heightNormal);
-	voxelDefinition_->blockGeometry.Push(0);
-	voxelDefinition_->blockGeometry.Push(geoSolid);
-	int voxelSize = 1000;
-	for (unsigned i = 0; i < voxelSize * voxelSize * 4; ++i)
-	{
-		voxelDefinition_->blocktype.Push(i % 2);
-	}
-	voxelSet->SetDimensions(voxelSize - 2, voxelSize - 2, 4 - 2);
-	voxelSet->SetVoxelDefinition(voxelDefinition_);
-	voxelSet->BuildGeometry();
-	
-	
+    voxelNode_ = scene_->CreateChild("VoxelNode");
+    VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
+    voxelDefinition_ = new VoxelDefinition(context_);
+    unsigned char geoSolid = VoxelDefinition::EncodeGeometry(VOXEL_TYPE_SOLID);
+    unsigned char heightNormal = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+    unsigned char heightSlope = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+    unsigned char heightRoof = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0);
+    voxelDefinition_->blockVHeight.Push(0);
+    voxelDefinition_->blockVHeight.Push(heightNormal);
+    voxelDefinition_->blockVHeight.Push(heightSlope);
+    voxelDefinition_->blockVHeight.Push(heightRoof);
+    voxelDefinition_->blockGeometry.Push(0);
+    voxelDefinition_->blockGeometry.Push(geoSolid);
+    voxelDefinition_->blockGeometry.Push(geoSolid);
+    voxelDefinition_->blockGeometry.Push(geoSolid);
+    voxelDefinition_->blocktype.Clear();
+    for (unsigned i = 0; i < h * w * d; ++i) {
+        voxelDefinition_->blocktype.Push(i + counter_ % 4);
+    }
+    voxelSet->SetVoxelDefinition(voxelDefinition_);
+    voxelSet->SetDimensions(h, w, d);
+    voxelSet->BuildGeometry();
+
 
     // Create a scene node for the camera, which we will move around
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
@@ -208,6 +220,17 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 
     // Take the frame time step, which is stored as a float
     float timeStep = eventData[P_TIMESTEP].GetFloat();
+
+
+    VoxelSet* voxelSet = voxelNode_->GetComponent<VoxelSet>();
+    if (voxelSet) {
+        voxelDefinition_->blocktype.Clear();
+        for (unsigned i = 0; i < h * w * d; ++i) {
+            voxelDefinition_->blocktype.Push(i + counter_ % 4);
+        }
+        voxelSet->BuildGeometry();
+        counter_++;
+    }
 
     // Move the camera, scale movement with time step
     MoveCamera(timeStep);

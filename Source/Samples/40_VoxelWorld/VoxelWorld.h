@@ -66,4 +66,6 @@ private:
     void HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData);
 
 	SharedPtr<VoxelDefinition> voxelDefinition_;
+    SharedPtr<Node> voxelNode_;
+    int counter_;
 };
