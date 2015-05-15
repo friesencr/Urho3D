@@ -52,7 +52,7 @@ namespace Urho3D
 
 	VoxelBuilder::VoxelBuilder(Context* context) 
 		: Object(context),
-		sharedIndexBuffer_(new IndexBuffer(context))
+		sharedIndexBuffer_(0)
 	{
 
 		//SubscribeToEvent(E_WORKITEMCOMPLETED, HANDLER(VoxelBuilder, HandleWorkItemCompleted));
@@ -92,7 +92,7 @@ namespace Urho3D
 
 	bool VoxelBuilder::ResizeIndexBuffer(unsigned numQuads)
 	{
-		if (sharedIndexBuffer_->GetIndexCount() / 6 >= numQuads)
+		if (!(sharedIndexBuffer_.Null() || sharedIndexBuffer_->GetIndexCount() / 6 < numQuads))
 			return true;
 
 		unsigned numIndices = numQuads * 6;
@@ -107,6 +107,7 @@ namespace Urho3D
 			data[i * 6 + 4] = i * 4 + 3;
 			data[i * 6 + 5] = i * 4;
 		}
+		sharedIndexBuffer_ = new IndexBuffer(context_);
 		if (!sharedIndexBuffer_->SetSize(numIndices, true, false))
 			return false;
 

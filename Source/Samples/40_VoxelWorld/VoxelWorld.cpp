@@ -96,9 +96,9 @@ void VoxelWorld::CreateScene()
     zone->SetBoundingBox(BoundingBox(-10000, 10000));
     zone->SetAmbientColor(Color(0.4, 0.4, 0.4));
 
-    // Create a directional light to the world so that we can see something. The light scene node's orientation controls the
-    // light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
-    // The light will use default settings (white light, no shadows)
+     //Create a directional light to the world so that we can see something. The light scene node's orientation controls the
+     //light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
+     //The light will use default settings (white light, no shadows)
     Node* lightNode = scene_->CreateChild("DirectionalLight");
     lightNode->SetDirection(Vector3(0.6f, -1.0f, 0.8f)); // The direction vector does not need to be normalized
 
@@ -106,11 +106,11 @@ void VoxelWorld::CreateScene()
     light->SetLightType(LIGHT_DIRECTIONAL);
     light->SetCastShadows(true);
 
-    Node* planeNode = scene_->CreateChild("Plane");
-    planeNode->SetScale(Vector3(100.0f, 1.0f, 100.0f));
-    StaticModel* planeObject = planeNode->CreateComponent<StaticModel>();
-    planeObject->SetModel(cache->GetResource<Model>("Models/Plane.mdl"));
-    planeObject->SetMaterial(cache->GetResource<Material>("Materials/StoneTiled.xml"));
+    //Node* planeNode = scene_->CreateChild("Plane");
+    //planeNode->SetScale(Vector3(100.0f, 1.0f, 100.0f));
+    //StaticModel* planeObject = planeNode->CreateComponent<StaticModel>();
+    //planeObject->SetModel(cache->GetResource<Model>("Models/Plane.mdl"));
+    //planeObject->SetMaterial(cache->GetResource<Material>("Materials/StoneTiled.xml"));
 
 
     voxelNode_ = scene_->CreateChild("VoxelNode");
@@ -140,12 +140,12 @@ void VoxelWorld::CreateScene()
     // Set an initial position for the camera scene node above the plane
     cameraNode_->SetPosition(Vector3(0.0f, 5.0f, 0.0f));
 
-    Node* spotNode = cameraNode_->CreateChild("PointLight");
-	spotNode->SetPosition(Vector3(0.0, -5.0, -5.0));
-    Light* spotLight = spotNode->CreateComponent<Light>();
-	spotLight->SetLightType(LIGHT_POINT);
-    spotLight->SetCastShadows(true);
-	spotLight->SetRange(100.0);
+ //   Node* spotNode = cameraNode_->CreateChild("PointLight");
+	//spotNode->SetPosition(Vector3(0.0, -5.0, -5.0));
+ //   Light* spotLight = spotNode->CreateComponent<Light>();
+	//spotLight->SetLightType(LIGHT_POINT);
+ //   spotLight->SetCastShadows(true);
+	//spotLight->SetRange(100.0);
 }
 
 void VoxelWorld::CreateInstructions()
@@ -242,8 +242,9 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 		{
 			for (unsigned y = 0; y < h; ++y)
 			{
-				voxelDefinition_->SetBlocktype(x, y, z, counter++ % 2);
-				
+				//voxelDefinition_->SetBlocktype(x, y, z, counter++ % 2);
+				voxelDefinition_->SetBlocktype(x, y, z, Rand() % 20 ? 0 : 1);
+			
 				//if (x == 0 || y == 0 || z == 0 || x == w - 1 || z == d - 1) // y == h - 1  )
 				//voxelDefinition_->blocktype.Push(y + counter < x || y + counter < z ? 1 : 0);
 				//else
@@ -262,9 +263,9 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 	}
 	voxelNode_->RemoveAllChildren();
 	VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
-	for (unsigned x = 0; x < 2; ++x)
+	for (unsigned x = 0; x < 4; ++x)
 	{
-		for (unsigned y = 0; y < 2; ++y)
+		for (unsigned y = 0; y < 4; ++y)
 		{
 			Node* node = voxelNode_->CreateChild();
 			node->SetPosition(Vector3(x * 64, 0, y * 64));
