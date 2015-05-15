@@ -154,6 +154,7 @@ namespace Urho3D
 			unsigned char normal = face_info >> 2u;
 			//unsigned char face_rot = face_info & 2u;
 			Vector3 normalf(URHO3D_default_normals[normal]);
+			normalf = Vector3(normalf.x_, normalf.z_, normalf.y_);
 
 			workload->box.Merge(position);
 
@@ -288,9 +289,9 @@ namespace Urho3D
 					workload->start[0] = x * VOXEL_WORKER_SIZE_X;
 					workload->start[1] = 0;
 					workload->start[2] = z * VOXEL_WORKER_SIZE_Z;
-					workload->end[0] = Min((int)chunk->GetSizeX(), (x + 1) * VOXEL_WORKER_SIZE_X);
-					workload->end[1] = Min((int)chunk->GetSizeY(), (y + 1) * VOXEL_WORKER_SIZE_Y);
-					workload->end[2] = Min((int)chunk->GetSizeZ(), (z + 1) * VOXEL_WORKER_SIZE_Z);
+					workload->end[0] = Min((int)definition->width_, (x + 1) * VOXEL_WORKER_SIZE_X);
+					workload->end[1] = Min((int)definition->height_, (y + 1) * VOXEL_WORKER_SIZE_Y);
+					workload->end[2] = Min((int)definition->depth_, (z + 1) * VOXEL_WORKER_SIZE_Z);
 					workload->threadIndex = 0;
 					workload->numQuads = 0;
 
@@ -397,6 +398,9 @@ namespace Urho3D
 		VoxelChunk* chunk = job->chunk;
 		VertexBuffer* vb = chunk->GetVertexBuffer();
 		int totalVertices = slot->numQuads * 4;
+		if (totalVertices == 0)
+			return true;
+
 		if (!vb->SetSize(totalVertices, MASK_POSITION | MASK_TEXCOORD1 | MASK_NORMAL, true))
 			return false;
 
