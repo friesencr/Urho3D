@@ -48,12 +48,14 @@ public:
     /// Set local-space bounding box.
     void SetBoundingBox(const BoundingBox& box);
 
-    int GetIndexX() const;
-    int GetIndexY() const;
-    int GetIndexZ() const;
-    int GetSizeX() const;
-    int GetSizeY() const;
-    int GetSizeZ() const;
+    unsigned char GetIndexX();
+    unsigned char GetIndexY();
+    unsigned char GetIndexZ();
+    unsigned char GetSizeX();
+    unsigned char GetSizeY();
+    unsigned char GetSizeZ();
+    void SetIndex(unsigned char x, unsigned char y, unsigned char z);
+    void SetSize(unsigned char x, unsigned char y, unsigned char z);
     unsigned GetLodLevel() const;
 
 protected:
@@ -61,28 +63,14 @@ protected:
     virtual void OnWorldBoundingBoxUpdate();
 
 private:
-    void SetIndex(int x, int y, int z);
-    void SetSize(int x, int y, int z);
     // Voxel chunk geometry
     SharedPtr<Geometry> geometry_;
     // Vertex data
     SharedPtr<VertexBuffer> vertexBuffer_;
-    // X Index
-    int indexX_;
-    // Y Index
-    int indexY_;
-    // Z Index
-    int indexZ_;
-    // X Index
-    int sizeX_;
-    // Y Index
-    int sizeY_;
-    // Z Index
-    int sizeZ_;
-    float transform_[3][3];
-    float bounds_[2][3];
+    unsigned char index_[3];
+    unsigned char size_[3];
     float priority_;
-    int numQuads_;
+    unsigned numQuads_;
     unsigned lodLevel_;
     WeakPtr<VoxelSet> owner_;
 };

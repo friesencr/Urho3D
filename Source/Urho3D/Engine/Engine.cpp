@@ -53,6 +53,7 @@
 #endif
 #include "../Core/WorkQueue.h"
 #include "../Resource/XMLFile.h"
+#include "../Graphics/VoxelBuilder.h"
 
 #if defined(EMSCRIPTEN) && defined(URHO3D_TESTING)
 #include <emscripten.h>
@@ -125,6 +126,7 @@ Engine::Engine(Context* context) :
     context_->RegisterSubsystem(new Input(context_));
     context_->RegisterSubsystem(new Audio(context_));
     context_->RegisterSubsystem(new UI(context_));
+    context_->RegisterSubsystem(new VoxelBuilder(context_));
 
     // Register object factories for libraries which are not automatically registered along with subsystem creation
     RegisterSceneLibrary(context_);

@@ -40,16 +40,19 @@
 #include <Urho3D/Graphics/VoxelSet.h>
 #include <Urho3D/Graphics/Zone.h>
 #include <Urho3D/Graphics/DebugRenderer.h>
+#include <Urho3D/Graphics/VoxelBuilder.h>
 
 #include "VoxelWorld.h"
+#
 
 #include <Urho3D/DebugNew.h>
 
-static const int h = 75;
-static const int w = 75;
-static const int d = 75;
-
 DEFINE_APPLICATION_MAIN(VoxelWorld)
+
+static const int h = 64;
+static const int w = 64;
+static const int d = 64;
+
 
 VoxelWorld::VoxelWorld(Context* context) :
     Sample(context)
@@ -111,28 +114,23 @@ void VoxelWorld::CreateScene()
 
 
     voxelNode_ = scene_->CreateChild("VoxelNode");
-    VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
+    //VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     voxelDefinition_ = new VoxelDefinition(context_);
     unsigned char geoSolid = VoxelDefinition::EncodeGeometry(VOXEL_TYPE_SOLID);
     unsigned char heightNormal = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-    unsigned char heightSlope = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-    unsigned char heightRoof = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0);
+    //unsigned char heightSlope = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+    //unsigned char heightRoof = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0);
     voxelDefinition_->blockVHeight.Push(0);
     voxelDefinition_->blockVHeight.Push(heightNormal);
-    voxelDefinition_->blockVHeight.Push(heightSlope);
-    voxelDefinition_->blockVHeight.Push(heightRoof);
+    //voxelDefinition_->blockVHeight.Push(heightSlope);
+    //voxelDefinition_->blockVHeight.Push(heightRoof);
     voxelDefinition_->blockGeometry.Push(0);
     voxelDefinition_->blockGeometry.Push(geoSolid);
-    voxelDefinition_->blockGeometry.Push(geoSolid);
-    voxelDefinition_->blockGeometry.Push(geoSolid);
+    //voxelDefinition_->blockGeometry.Push(geoSolid);
+    //voxelDefinition_->blockGeometry.Push(geoSolid);
     voxelDefinition_->blocktype.Clear();
-    for (unsigned i = 0; i < h * w * d; ++i) {
-        voxelDefinition_->blocktype.Push(i + counter_ % 4);
-    }
-    voxelSet->SetVoxelDefinition(voxelDefinition_);
-    voxelSet->SetDimensions(h, w, d);
-    voxelSet->BuildGeometry();
-
+    //voxelSet->SetDimensions(w,h,d);
+	voxelDefinition_->SetSize(w, h, d);
 
     // Create a scene node for the camera, which we will move around
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
@@ -141,6 +139,13 @@ void VoxelWorld::CreateScene()
 
     // Set an initial position for the camera scene node above the plane
     cameraNode_->SetPosition(Vector3(0.0f, 5.0f, 0.0f));
+
+    Node* spotNode = cameraNode_->CreateChild("PointLight");
+	spotNode->SetPosition(Vector3(0.0, -5.0, -5.0));
+    Light* spotLight = spotNode->CreateComponent<Light>();
+	spotLight->SetLightType(LIGHT_POINT);
+    spotLight->SetCastShadows(true);
+	spotLight->SetRange(100.0);
 }
 
 void VoxelWorld::CreateInstructions()
@@ -179,7 +184,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 20.0f;
+    const float MOVE_SPEED = 30.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
@@ -220,27 +225,63 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 
     // Take the frame time step, which is stored as a float
     float timeStep = eventData[P_TIMESTEP].GetFloat();
-
-
-    VoxelSet* voxelSet = voxelNode_->GetComponent<VoxelSet>();
-    if (voxelSet) {
-        voxelDefinition_->blocktype.Clear();
-        for (unsigned i = 0; i < h * w * d; ++i) {
-            voxelDefinition_->blocktype.Push(i + counter_ % 4);
-        }
-        voxelSet->BuildGeometry();
-        counter_++;
-    }
-
     // Move the camera, scale movement with time step
     MoveCamera(timeStep);
+
+	if (counter_ != 0)
+		return;
+
+	counter_++;
+	//voxelDefinition_->Se
+	float offset = (float)h / 2.0 + ((counter_ % 10) - 5);
+	float sphereSize = 25.0; // +((counter_ % 10) - 5);
+	int counter = counter_ % h;
+	for (unsigned x = 0; x < w; ++x)
+	{
+		for (unsigned z = 0; z < d; ++z)
+		{
+			for (unsigned y = 0; y < h; ++y)
+			{
+				voxelDefinition_->SetBlocktype(x, y, z, counter++ % 2);
+				
+				//if (x == 0 || y == 0 || z == 0 || x == w - 1 || z == d - 1) // y == h - 1  )
+				//voxelDefinition_->blocktype.Push(y + counter < x || y + counter < z ? 1 : 0);
+				//else
+				//{
+					//Vector3 v(x, y, z);
+					//v = v - Vector3(w/2.0, h/2.0, offset);
+					//v.Length() < sphereSize && v.Length() > sphereSize - 5.0 ? 1 : 0
+					//voxelDefinition_->blocktype.Push(y == 15 || y == 14 ? 1 : 0);
+				//voxelDefinition_->blocktype.Push(counter_ % h == y ? 1 : 0);
+				//voxelDefinition_->blocktype.Push(counter++ % 2);
+					//voxelDefinition_->blocktype.Push(v.Length() < sphereSize && v.Length() > sphereSize - 5.0 ? 1 : 0);
+				//}
+			}
+			counter++;
+		}
+	}
+	voxelNode_->RemoveAllChildren();
+	VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
+	for (unsigned x = 0; x < 2; ++x)
+	{
+		for (unsigned y = 0; y < 2; ++y)
+		{
+			Node* node = voxelNode_->CreateChild();
+			node->SetPosition(Vector3(x * 64, 0, y * 64));
+			VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
+			chunk->SetSize(w, h, d);
+			builder->BuildVoxelChunk(chunk, voxelDefinition_);
+		}
+	}
+	//builder->CompleteWork();
+
 }
 
 void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData)
 {
-	//DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
+	DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
 
-	//// If draw debug mode is enabled, draw navigation mesh debug geometry
+	// If draw debug mode is enabled, draw navigation mesh debug geometry
 	//PODVector<VoxelChunk*> voxelChunks;
 	//scene_->GetComponents<VoxelChunk>(voxelChunks, true);
 	//for (unsigned i = 0; i < voxelChunks.Size(); ++i)

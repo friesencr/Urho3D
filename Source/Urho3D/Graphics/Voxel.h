@@ -65,6 +65,12 @@ public:
 	PODVector<unsigned char[6]> blockTex1Face;
 	PODVector<unsigned char[6]> blockTex2Face;
 	PODVector<unsigned char> geometry;
+	unsigned height_;
+	unsigned width_;
+	unsigned depth_;
+	unsigned xStride;
+	unsigned zStride;
+	
 
 	static unsigned char EncodeBlockTypeVHeight(VoxelHeight southWest, VoxelHeight southEast, VoxelHeight northWest, VoxelHeight northEast)
 	{
@@ -82,6 +88,34 @@ public:
 	{
 		return STBVOX_MAKE_GEOMETRY(type, VOXEL_FACE_EAST,0);
 	}
+
+	unsigned char GetBlocktype(unsigned x, unsigned y, unsigned z)
+	{
+		return GetAddress(x, y, z)[0];
+	}
+
+	unsigned char* GetAddress(unsigned x, unsigned y, unsigned z)
+	{
+		return &blocktype[(y + 1) + ((z + 1) * zStride) + ((x + 1) * xStride)];
+	}
+
+	void SetSize(unsigned width, unsigned height, unsigned depth)
+	{
+		height_ = height;
+		width_ = width;
+		depth_ = depth;
+		blocktype.Resize((width+2)*(height+2)*(depth*2));
+		for (unsigned i = 0; i < blocktype.Size(); ++i)
+			blocktype[i] = 0;
+		zStride = height + 2;
+		xStride = (height + 2) * (depth + 2);
+	}
+
+	void SetBlocktype(unsigned x, unsigned y, unsigned z, unsigned char val)
+	{
+		GetAddress(x, y, z)[0] = val;
+	}
+
 };
 
 }
