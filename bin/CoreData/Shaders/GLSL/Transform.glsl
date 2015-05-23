@@ -16,6 +16,7 @@ attribute vec4 iBlendWeights;
 attribute vec4 iBlendIndices;
 attribute vec3 iCubeTexCoord;
 attribute vec4 iCubeTexCoord2;
+attribute vec4 iData;
 #ifndef GL_ES
     attribute vec4 iInstanceMatrix1;
     attribute vec4 iInstanceMatrix2;

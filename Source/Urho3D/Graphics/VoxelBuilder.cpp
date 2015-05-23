@@ -52,7 +52,8 @@ namespace Urho3D
 
 	VoxelBuilder::VoxelBuilder(Context* context) 
 		: Object(context),
-		sharedIndexBuffer_(0)
+		sharedIndexBuffer_(0),
+		compatibilityMode(false)
 	{
 
 		//SubscribeToEvent(E_WORKITEMCOMPLETED, HANDLER(VoxelBuilder, HandleWorkItemCompleted));
@@ -323,7 +324,9 @@ namespace Urho3D
 		bool success = BuildMesh(workload);
 
 		if (success)
-			DecodeWorkBuffer(workload);
+		{
+			//DecodeWorkBuffer(workload);
+		}
 		else
 		{
 			MutexLock lock(workload->slot->workMutex);

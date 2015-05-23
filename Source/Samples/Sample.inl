@@ -58,6 +58,8 @@ void Sample::Setup()
     engineParameters_["LogName"]     = GetSubsystem<FileSystem>()->GetAppPreferencesDir("urho3d", "logs") + GetTypeName() + ".log";
     engineParameters_["FullScreen"]  = false;
     engineParameters_["Headless"]    = false;
+
+    //Engine::ParseParameters(GetArguments());
 }
 
 void Sample::Start()

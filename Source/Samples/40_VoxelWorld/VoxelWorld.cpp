@@ -105,7 +105,7 @@ void VoxelWorld::CreateScene()
     Light* light = lightNode->CreateComponent<Light>();
     light->SetLightType(LIGHT_DIRECTIONAL);
     light->SetCastShadows(true);
-	light->SetBrightness(0.3);
+    light->SetBrightness(0.3);
 
     //Node* planeNode = scene_->CreateChild("Plane");
     //planeNode->SetScale(Vector3(100.0f, 1.0f, 100.0f));
@@ -131,23 +131,23 @@ void VoxelWorld::CreateScene()
     //voxelDefinition_->blockGeometry.Push(geoSolid);
     voxelDefinition_->blocktype.Clear();
     //voxelSet->SetDimensions(w,h,d);
-	voxelDefinition_->SetSize(w, h, d);
+    voxelDefinition_->SetSize(w, h, d);
 
     // Create a scene node for the camera, which we will move around
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
     cameraNode_ = scene_->CreateChild("Camera");
     Camera* camera = cameraNode_->CreateComponent<Camera>();
-	camera->SetFarClip(400);
+    camera->SetFarClip(400);
 
     // Set an initial position for the camera scene node above the plane
     cameraNode_->SetPosition(Vector3(0.0f, 5.0f, 0.0f));
 
     Node* spotNode = cameraNode_->CreateChild("PointLight");
-	spotNode->SetPosition(Vector3(0.0, -5.0, -5.0));
+    spotNode->SetPosition(Vector3(0.0, -5.0, -5.0));
     Light* spotLight = spotNode->CreateComponent<Light>();
-	spotLight->SetLightType(LIGHT_POINT);
+    spotLight->SetLightType(LIGHT_POINT);
     spotLight->SetCastShadows(true);
-	spotLight->SetRange(100.0);
+    spotLight->SetRange(100.0);
 }
 
 void VoxelWorld::CreateInstructions()
@@ -216,9 +216,9 @@ void VoxelWorld::SubscribeToEvents()
     // Subscribe HandleUpdate() function for processing update events
     SubscribeToEvent(E_UPDATE, HANDLER(VoxelWorld, HandleUpdate));
 
-	// Subscribe HandlePostRenderUpdate() function for processing the post-render update event, during which we request
-	// debug geometry
-	SubscribeToEvent(E_POSTRENDERUPDATE, HANDLER(VoxelWorld, HandlePostRenderUpdate));
+    // Subscribe HandlePostRenderUpdate() function for processing the post-render update event, during which we request
+    // debug geometry
+    SubscribeToEvent(E_POSTRENDERUPDATE, HANDLER(VoxelWorld, HandlePostRenderUpdate));
 }
 
 void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
@@ -230,93 +230,93 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
     // Move the camera, scale movement with time step
     MoveCamera(timeStep);
 
-	if (counter_ != 0)
-		return;
+    if (counter_ != 0)
+        return;
 
-	counter_++;
-	ResourceCache* cache = GetSubsystem<ResourceCache>();
-	voxelNode_->RemoveAllChildren();
-	VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
+    counter_++;
+    ResourceCache* cache = GetSubsystem<ResourceCache>();
+    voxelNode_->RemoveAllChildren();
+    VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
 
-	//float offset = (float)h / 2.0 + ((counter_ % 10) - 5);
-	//float sphereSize = 25.0; // +((counter_ % 10) - 5);
-	//int counter = counter_ % h;
-	//for (unsigned x = 0; x < w; ++x)
-	//{
-	//	for (unsigned z = 0; z < d; ++z)
-	//	{
-	//		for (unsigned y = 0; y < h; ++y)
-	//		{
-	//			//voxelDefinition_->SetBlocktype(x, y, z, Rand() % 100 ? 0 : 1);
-	//			Vector3 v(x, y, z);
-	//			v = v - Vector3(w/2.0, h/2.0, offset);
-	//			voxelDefinition_->SetBlocktype(x,y,z,v.Length() < sphereSize && v.Length() > sphereSize - 5.0 ? 1 : 0);
-	//		}
-	//		counter++;
-	//	}
-	//}
+    //float offset = (float)h / 2.0 + ((counter_ % 10) - 5);
+    //float sphereSize = 25.0; // +((counter_ % 10) - 5);
+    //int counter = counter_ % h;
+    //for (unsigned x = 0; x < w; ++x)
+    //{
+    //	for (unsigned z = 0; z < d; ++z)
+    //	{
+    //		for (unsigned y = 0; y < h; ++y)
+    //		{
+    //			//voxelDefinition_->SetBlocktype(x, y, z, Rand() % 100 ? 0 : 1);
+    //			Vector3 v(x, y, z);
+    //			v = v - Vector3(w/2.0, h/2.0, offset);
+    //			voxelDefinition_->SetBlocktype(x,y,z,v.Length() < sphereSize && v.Length() > sphereSize - 5.0 ? 1 : 0);
+    //		}
+    //		counter++;
+    //	}
+    //}
 
-	//for (unsigned x = 0; x < 8; ++x)
-	//{
-	//	for (unsigned y = 0; y < 8; ++y)
-	//	{
-	//		Node* node = voxelNode_->CreateChild();
-	//		node->SetPosition(Vector3(x * 64, 0, y * 64));
-	//		VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
-	//		builder->BuildVoxelChunk(chunk, voxelDefinition_);
-	//	}
-	//}
+    //for (unsigned x = 0; x < 8; ++x)
+    //{
+    //	for (unsigned y = 0; y < 8; ++y)
+    //	{
+    //		Node* node = voxelNode_->CreateChild();
+    //		node->SetPosition(Vector3(x * 64, 0, y * 64));
+    //		VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
+    //		builder->BuildVoxelChunk(chunk, voxelDefinition_);
+    //	}
+    //}
 
-	Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
-	SharedPtr<VoxelDefinition> definition(new VoxelDefinition(context_));
-	for (unsigned a = 0; a < heightMap->GetWidth() / 64; ++a)
-	{
-		for (unsigned b = 0; b < heightMap->GetHeight() / 64; ++b)
-		{
-			for (unsigned c = 0; c < 2; ++c)
-			{
-				Node* node = voxelNode_->CreateChild();
-				node->SetPosition(Vector3(a * 64, c*128, b * 64));
-				VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
-				definition->SetSize(64, 128, 64);
-				for (unsigned x = 0; x < w; ++x)
-				{
-					for (unsigned z = 0; z < d; ++z)
-					{
-						//for (unsigned y = 0; y < h; ++y)
-						//{
-						//	definition->SetBlocktype(x, y, z, Rand() % 20 ? 0 : 1);
-						//}
-						unsigned int y = 255 - ((heightMap->GetPixelInt(a * 64 + x, b * 64 + z) & 0x0000FF00) >> 8);
-						if (c == 0 && y <= 128)
-							definition->SetBlocktype(x, y / 2, z, 1);
-						else
-							definition->SetBlocktype(x, y / 2, z, 1);
+    Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
+    SharedPtr<VoxelDefinition> definition(new VoxelDefinition(context_));
+    for (unsigned a = 0; a < heightMap->GetWidth() / 64; ++a)
+    {
+        for (unsigned b = 0; b < heightMap->GetHeight() / 64; ++b)
+        {
+            for (unsigned c = 0; c < 2; ++c)
+            {
+                Node* node = voxelNode_->CreateChild();
+                node->SetPosition(Vector3(a * 64, c*128, b * 64));
+                VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
+                definition->SetSize(64, 128, 64);
+                for (unsigned x = 0; x < w; ++x)
+                {
+                    for (unsigned z = 0; z < d; ++z)
+                    {
+                        //for (unsigned y = 0; y < h; ++y)
+                        //{
+                        //	definition->SetBlocktype(x, y, z, Rand() % 20 ? 0 : 1);
+                        //}
+                        unsigned int y = 255 - ((heightMap->GetPixelInt(a * 64 + x, b * 64 + z) & 0x0000FF00) >> 8);
+                        if (c == 0 && y <= 128)
+                            definition->SetBlocktype(x, y / 2, z, 1);
+                        else
+                            definition->SetBlocktype(x, y / 2, z, 1);
 
-						//definition->SetBlocktype(x, y / 4, z-1, 1);
-						//definition->SetBlocktype(x, y / 4, z+1, 1);
-						//definition->SetBlocktype(x-1, y / 4, z, 1);
-						//definition->SetBlocktype(x+1, y / 4, z, 1);
-						//definition->SetBlocktype(x, (y / 4) - 1, z, 1);
-						//definition->SetBlocktype(x, (y / 4) + 1, z, 1);
-					}
-				}
-				builder->BuildVoxelChunk(chunk, definition);
-			}
-		}
-	}
+                        //definition->SetBlocktype(x, y / 4, z-1, 1);
+                        //definition->SetBlocktype(x, y / 4, z+1, 1);
+                        //definition->SetBlocktype(x-1, y / 4, z, 1);
+                        //definition->SetBlocktype(x+1, y / 4, z, 1);
+                        //definition->SetBlocktype(x, (y / 4) - 1, z, 1);
+                        //definition->SetBlocktype(x, (y / 4) + 1, z, 1);
+                    }
+                }
+                builder->BuildVoxelChunk(chunk, definition);
+            }
+        }
+    }
 }
 
 void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData)
 {
-	DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
+    DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
 
-	// If draw debug mode is enabled, draw navigation mesh debug geometry
-	//PODVector<VoxelChunk*> voxelChunks;
-	//scene_->GetComponents<VoxelChunk>(voxelChunks, true);
-	//for (unsigned i = 0; i < voxelChunks.Size(); ++i)
-	//	voxelChunks[i]->DrawDebugGeometry(debug, true);
-	//scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
+    // If draw debug mode is enabled, draw navigation mesh debug geometry
+    //PODVector<VoxelChunk*> voxelChunks;
+    //scene_->GetComponents<VoxelChunk>(voxelChunks, true);
+    //for (unsigned i = 0; i < voxelChunks.Size(); ++i)
+    //	voxelChunks[i]->DrawDebugGeometry(debug, true);
+    //scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
 }
 
 

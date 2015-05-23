@@ -41,8 +41,8 @@ struct VoxelWorkSlot
 {
 	Vector<VoxelWorkload*> workloads;
     VoxelJob* job;
-	stbvox_mesh_maker meshMakers[4];
-	unsigned char workBuffers[4][VOXEL_WORKER_BUFFER_SIZE];
+	stbvox_mesh_maker meshMakers[8];
+	unsigned char workBuffers[8][VOXEL_WORKER_BUFFER_SIZE];
 	int numQuads;
     bool failed;
 	bool free;
@@ -78,6 +78,7 @@ public:
     void BuildWorkload(VoxelWorkload* workload);
 	void CompleteWork(unsigned = M_MAX_UNSIGNED);
     void CancelJob(VoxelJob* job);
+	bool compatibilityMode;
 
 private:
 
