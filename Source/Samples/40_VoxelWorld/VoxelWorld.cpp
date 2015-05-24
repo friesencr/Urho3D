@@ -99,13 +99,13 @@ void VoxelWorld::CreateScene()
      //Create a directional light to the world so that we can see something. The light scene node's orientation controls the
      //light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
      //The light will use default settings (white light, no shadows)
-    Node* lightNode = scene_->CreateChild("DirectionalLight");
-    lightNode->SetDirection(Vector3(0.6f, -1.0f, 0.8f)); // The direction vector does not need to be normalized
+    //Node* lightNode = scene_->CreateChild("DirectionalLight");
+    //lightNode->SetDirection(Vector3(0.6f, -1.0f, 0.8f)); // The direction vector does not need to be normalized
 
-    Light* light = lightNode->CreateComponent<Light>();
-    light->SetLightType(LIGHT_DIRECTIONAL);
-    light->SetCastShadows(true);
-    light->SetBrightness(0.3);
+    //Light* light = lightNode->CreateComponent<Light>();
+    //light->SetLightType(LIGHT_DIRECTIONAL);
+    //light->SetCastShadows(true);
+    //light->SetBrightness(0.3);
 
     //Node* planeNode = scene_->CreateChild("Plane");
     //planeNode->SetScale(Vector3(100.0f, 1.0f, 100.0f));
@@ -273,7 +273,7 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
     {
         for (unsigned b = 0; b < heightMap->GetHeight() / 64; ++b)
         {
-            for (unsigned c = 0; c < 2; ++c)
+            for (unsigned c = 0; c < 1; ++c)
             {
                 Node* node = voxelNode_->CreateChild();
                 node->SetPosition(Vector3(a * 64, c*128, b * 64));
@@ -303,6 +303,7 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
                 }
                 builder->BuildVoxelChunk(chunk, definition);
             }
+			return;
         }
     }
 }

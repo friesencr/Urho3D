@@ -155,7 +155,7 @@ static const unsigned glStencilOps[] =
 // This avoids a skinning bug on GLES2 devices which only support 8.
 static const unsigned glVertexAttrIndex[] =
 {
-    0, 1, 2, 3, 4, 8, 9, 5, 6, 7, 10, 11, 12
+    0, 1, 2, 3, 4, 8, 9, 5, 6, 7, 10, 11, 12, 13
 };
 
 #ifdef GL_ES_VERSION_2_0
@@ -1317,6 +1317,92 @@ void Graphics::SetShaderParameter(StringHash param, const Matrix3x4& matrix)
         }
     }
 }
+void Graphics::SetShaderParameter(StringHash param, const VariantVector& variantVector)
+{
+	if (variantVector.Size() == 0)
+		return;
+
+	// base logic on the first parameter
+	Variant first = variantVector.Front();
+	VariantType type = first.GetType();
+	int size;
+
+	// only float types allowed
+	switch (type)
+	{
+		case VAR_FLOAT:
+			size = sizeof(float);
+			break;
+		case VAR_VECTOR2:
+			size = sizeof(Vector2);
+			break;
+		case VAR_VECTOR3:
+			size = sizeof(Vector3);
+			break;
+		case VAR_VECTOR4:
+			size = sizeof(Vector4);
+			break;
+		case VAR_MATRIX3:
+			size = sizeof(Matrix3);
+			break;
+		case VAR_MATRIX4:
+			size = sizeof(Matrix4);
+			break;
+		default:
+			return;
+	}
+
+
+	// validate that all parameters are the same as the first
+	for (unsigned i = 1; i < variantVector.Size(); ++i)
+	{
+		if (variantVector[i].GetType() != type)
+			return;
+	}
+
+	PODVector<unsigned char> data;
+	data.Resize(variantVector.Size() * size);
+
+	if (type == VAR_FLOAT)
+	{
+		float* dataPtr = (float*)&data.Front();
+		for (unsigned i = 0; i < variantVector.Size(); ++i)
+			*dataPtr++ = variantVector[i].GetFloat();
+	}
+	else if (type == VAR_VECTOR2)
+	{
+		Vector2* dataPtr = (Vector2*)&data.Front();
+		for (unsigned i = 0; i < variantVector.Size(); ++i)
+			*dataPtr++ = variantVector[i].GetVector2();
+	}
+	else if (type == VAR_VECTOR3)
+	{
+		Vector3* dataPtr = (Vector3*)&data.Front();
+		for (unsigned i = 0; i < variantVector.Size(); ++i)
+			*dataPtr++ = variantVector[i].GetVector3();
+	}
+	else if (type == VAR_VECTOR4)
+	{
+		Vector4* dataPtr = (Vector4*)&data.Front();
+		for (unsigned i = 0; i < variantVector.Size(); ++i)
+			*dataPtr++ = variantVector[i].GetVector4();
+	}
+	else if (type == VAR_MATRIX3)
+	{
+		Matrix3* dataPtr = (Matrix3*)&data.Front();
+		for (unsigned i = 0; i < variantVector.Size(); ++i)
+			*dataPtr++ = variantVector[i].GetMatrix3();
+	}
+	else if (type == VAR_MATRIX4)
+	{
+		Matrix4* dataPtr = (Matrix4*)&data.Front();
+		for (unsigned i = 0; i < variantVector.Size(); ++i)
+			*dataPtr++ = variantVector[i].GetMatrix4();
+	}
+
+
+	SetShaderParameter(param, (float*)&data.Front(), variantVector.Size());
+}
 
 void Graphics::SetShaderParameter(StringHash param, const Variant& value)
 {
@@ -1357,7 +1443,9 @@ void Graphics::SetShaderParameter(StringHash param, const Variant& value)
     case VAR_MATRIX4:
         SetShaderParameter(param, value.GetMatrix4());
         break;
-
+	case VAR_VARIANTVECTOR:
+		SetShaderParameter(param, value.GetVariantVector());
+		break;
     default:
         // Unsupported parameter type, do nothing
         break;

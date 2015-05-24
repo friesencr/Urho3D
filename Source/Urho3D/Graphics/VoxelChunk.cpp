@@ -19,7 +19,7 @@ VoxelChunk::VoxelChunk(Context* context) :
 {
 	size_[0] = 0; size_[1] = 0; size_[2] = 0;
 	index_[0] = 0; index_[1] = 0; index_[2] = 0;
-    geometry_->SetVertexBuffer(0, vertexBuffer_, MASK_POSITION | MASK_NORMAL | MASK_TEXCOORD1);
+	geometry_->SetVertexBuffer(0, vertexBuffer_, MASK_DATA);
     batches_.Resize(1);
     batches_[0].geometry_ = geometry_;
     batches_[0].geometryType_ = GEOM_STATIC_NOINSTANCING;

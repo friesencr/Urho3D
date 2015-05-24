@@ -129,6 +129,7 @@ bool ShaderProgram::Link()
     glBindAttribLocation(object_, 10, "iInstanceMatrix1");
     glBindAttribLocation(object_, 11, "iInstanceMatrix2");
     glBindAttribLocation(object_, 12, "iInstanceMatrix3");
+    glBindAttribLocation(object_, 13, "iData");
     #endif
     
     glAttachShader(object_, vertexShader_->GetGPUObject());

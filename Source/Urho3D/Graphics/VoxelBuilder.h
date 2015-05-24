@@ -10,6 +10,8 @@
 #include "VoxelChunk.h"
 
 #include <STB/stb_voxel_render.h>
+
+#define VOXEL_COMPATIBLE = 0
  
 namespace Urho3D {
 
@@ -19,7 +21,8 @@ static const unsigned char VOXEL_WORKER_SIZE_Z = 32;
 
 // VOXEL CONFIG MODE 0 - is 2 uints per vertex
 static const unsigned VOXEL_WORKER_MAX_QUADS = 800000;
-static const unsigned VOXEL_WORKER_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4 * 4 * 2; // w,d,h,quad,uint,2x
+static const unsigned VOXEL_WORKER_VERTEX_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4 * 4 * 1; // w,d,h,quad,uint,2x
+static const unsigned VOXEL_WORKER_FACE_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4; // w,d,h,quad,uint,2x
 
 static const unsigned char VOXEL_CHUNK_SIZE_X = 64;
 static const unsigned char VOXEL_CHUNK_SIZE_Y = 128;
@@ -34,31 +37,32 @@ struct VoxelJob {
     WeakPtr<VoxelChunk> chunk;
     SharedPtr<VoxelDefinition> voxelDefinition;
     VoxelWorkSlot* slot;
-	bool append;
+    bool append;
 };
 
 struct VoxelWorkSlot
 {
-	Vector<VoxelWorkload*> workloads;
+    Vector<VoxelWorkload*> workloads;
     VoxelJob* job;
-	stbvox_mesh_maker meshMakers[8];
-	unsigned char workBuffers[8][VOXEL_WORKER_BUFFER_SIZE];
-	int numQuads;
+    stbvox_mesh_maker meshMakers[8];
+    unsigned char workVertexBuffers[8][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
+    unsigned char workFaceBuffers[8][VOXEL_WORKER_FACE_BUFFER_SIZE];
+    int numQuads;
     bool failed;
-	bool free;
-	int workCounter;
+    bool free;
+    int workCounter;
     BoundingBox box;
-	Mutex workMutex;
+    Mutex workMutex;
     Mutex dataMutex;
 };
 
 struct VoxelWorkload 
 {
-	VoxelWorkSlot* slot;
-	VoxelBuilder* builder;
-	SharedPtr<WorkItem> workItem;
-	PODVector<unsigned char> gpuData;
-	PODVector<unsigned char> cpuData;
+    VoxelWorkSlot* slot;
+    VoxelBuilder* builder;
+    SharedPtr<WorkItem> workItem;
+    //PODVector<unsigned char> gpuData;
+    //PODVector<unsigned char> cpuData;
     unsigned char index[3];
     unsigned char start[3];
     unsigned char end[3];
@@ -68,17 +72,17 @@ struct VoxelWorkload
 };
 
 class URHO3D_API VoxelBuilder : public Object {
-	OBJECT(VoxelBuilder);
+    OBJECT(VoxelBuilder);
 
 public:
-	VoxelBuilder(Context* context);
-	~VoxelBuilder();
+    VoxelBuilder(Context* context);
+    ~VoxelBuilder();
     VoxelJob* BuildVoxelChunk(VoxelChunk* chunk, SharedPtr<VoxelDefinition> voxelDefinition);
-	// needs to be public for work item work method
+    // needs to be public for work item work method
     void BuildWorkload(VoxelWorkload* workload);
-	void CompleteWork(unsigned = M_MAX_UNSIGNED);
+    void CompleteWork(unsigned = M_MAX_UNSIGNED);
     void CancelJob(VoxelJob* job);
-	bool compatibilityMode;
+    bool compatibilityMode;
 
 private:
 
@@ -111,7 +115,7 @@ private:
     void RemoveJob(VoxelJob* job);
     void QueueJob(VoxelJob* job);
     VoxelJob* CreateJob(VoxelChunk* chunk, VoxelDefinition* voxelDefinition);
-	void PurgeAllJobs();
+    void PurgeAllJobs();
     int RunJobs();
 
     // 
