@@ -57,6 +57,7 @@
 #include "../../Graphics/Texture2D.h"
 #include "../../Graphics/Texture2DArray.h"
 #include "../../Graphics/Texture3D.h"
+#include "../../Graphics/TextureBuffer.h"
 #include "../../Graphics/TextureCube.h"
 #include "../../Graphics/VertexBuffer.h"
 #include "../../Graphics/Zone.h"
@@ -892,9 +893,17 @@ bool Graphics::SetVertexBuffers(const PODVector<VertexBuffer*>& buffers, const P
                 
                 // Set the attribute pointer. Add instance offset for the instance matrix pointers
                 unsigned offset = j >= ELEMENT_INSTANCEMATRIX1 ? instanceOffset * vertexSize : 0;
-                glVertexAttribPointer(attrIndex, VertexBuffer::elementComponents[j], VertexBuffer::elementType[j],
-                    VertexBuffer::elementNormalize[j], vertexSize, reinterpret_cast<const GLvoid*>(buffer->GetElementOffset((VertexElement)j)
-                    + offset));
+				if (elementBit == MASK_DATA)
+				{
+					glVertexAttribIPointer(attrIndex, VertexBuffer::elementComponents[j], VertexBuffer::elementType[j], 
+						vertexSize, reinterpret_cast<const GLvoid*>(buffer->GetElementOffset((VertexElement)j)));
+				}
+				else
+				{
+					glVertexAttribPointer(attrIndex, VertexBuffer::elementComponents[j], VertexBuffer::elementType[j],
+						VertexBuffer::elementNormalize[j], vertexSize, reinterpret_cast<const GLvoid*>(buffer->GetElementOffset((VertexElement)j)
+						+ offset));
+				}
             }
         }
     }
@@ -1361,6 +1370,7 @@ void Graphics::SetShaderParameter(StringHash param, const VariantVector& variant
 	}
 
 	PODVector<unsigned char> data;
+	unsigned numFloats = variantVector.Size() * size / 4;
 	data.Resize(variantVector.Size() * size);
 
 	if (type == VAR_FLOAT)
@@ -1401,7 +1411,7 @@ void Graphics::SetShaderParameter(StringHash param, const VariantVector& variant
 	}
 
 
-	SetShaderParameter(param, (float*)&data.Front(), variantVector.Size());
+	SetShaderParameter(param, (float*)&data.Front(), numFloats);
 }
 
 void Graphics::SetShaderParameter(StringHash param, const Variant& value)
@@ -3340,6 +3350,7 @@ void RegisterGraphicsLibrary(Context* context)
     Texture2D::RegisterObject(context);
     Texture2DArray::RegisterObject(context);
     Texture3D::RegisterObject(context);
+    TextureBuffer::RegisterObject(context);
     TextureCube::RegisterObject(context);
     Camera::RegisterObject(context);
     Drawable::RegisterObject(context);

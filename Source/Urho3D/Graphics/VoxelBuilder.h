@@ -20,9 +20,9 @@ static const unsigned char VOXEL_WORKER_SIZE_Y = 128;
 static const unsigned char VOXEL_WORKER_SIZE_Z = 32;
 
 // VOXEL CONFIG MODE 0 - is 2 uints per vertex
-static const unsigned VOXEL_WORKER_MAX_QUADS = 800000;
-static const unsigned VOXEL_WORKER_VERTEX_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4 * 4 * 1; // w,d,h,quad,uint,2x
-static const unsigned VOXEL_WORKER_FACE_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4; // w,d,h,quad,uint,2x
+static const unsigned VOXEL_WORKER_MAX_QUADS = 400000;
+static const unsigned VOXEL_WORKER_VERTEX_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4 * 4;
+static const unsigned VOXEL_WORKER_FACE_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4;
 
 static const unsigned char VOXEL_CHUNK_SIZE_X = 64;
 static const unsigned char VOXEL_CHUNK_SIZE_Y = 128;

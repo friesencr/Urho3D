@@ -47,7 +47,7 @@ const unsigned VertexBuffer::elementSize[] =
     4 * sizeof(float), // Instancematrix1
     4 * sizeof(float), // Instancematrix2
     4 * sizeof(float), // Instancematrix3
-	1 * sizeof(int) // Data
+	1 * sizeof(unsigned) // Data
 };
 
 const unsigned VertexBuffer::elementType[] =

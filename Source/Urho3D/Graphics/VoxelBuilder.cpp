@@ -4,6 +4,7 @@
 #include "../Resource/Image.h"
 #include "Technique.h"
 #include "Texture2D.h"
+#include "TextureBuffer.h"
 
 #define STB_VOXEL_RENDER_IMPLEMENTATION
 #define STBVOX_CONFIG_MODE  1
@@ -405,6 +406,7 @@ namespace Urho3D
         VoxelJob* job = slot->job;
         VoxelChunk* chunk = job->chunk;
         VertexBuffer* vb = chunk->GetVertexBuffer();
+		SharedPtr<IndexBuffer> faceData(new IndexBuffer(context_));
         int totalVertices = slot->numQuads * 4;
         if (totalVertices == 0)
             return true;
@@ -412,7 +414,10 @@ namespace Urho3D
         //if (!vb->SetSize(totalVertices, MASK_POSITION | MASK_TEXCOORD1 | MASK_NORMAL, true))
         //    return false;
 
-		if (!vb->SetSize(totalVertices, MASK_DATA, true))
+		if (!vb->SetSize(totalVertices, MASK_DATA, false))
+			return false;
+
+		if (!faceData->SetSize(slot->numQuads, true, false))
 			return false;
 
         int end = 0;
@@ -421,11 +426,15 @@ namespace Urho3D
         {
             VoxelWorkload* workload = slot->workloads[i];
             start = end;
-            end = start + workload->numQuads * 4;
+            end = start + workload->numQuads;
             //if (!vb->SetDataRange(&workload->gpuData.Front(), start, workload->numQuads * 4))
 			unsigned char* vertexBuffer = (unsigned char*)slot->workVertexBuffers[workload->threadIndex];
-            if (!vb->SetDataRange(vertexBuffer, start, workload->numQuads * 4))
+            if (!vb->SetDataRange(vertexBuffer, start*4, workload->numQuads * 4))
                 return false;
+
+			unsigned char* indexBuffer = (unsigned char*)slot->workFaceBuffers[workload->threadIndex];
+			if (!faceData->SetDataRange(indexBuffer, start, workload->numQuads))
+				return false;
         }
 
         ResourceCache* cache = GetSubsystem<ResourceCache>();
@@ -443,7 +452,7 @@ namespace Urho3D
 		material->SetTexture(TU_DIFFUSE, texture);
 
 		Vector<Variant> transform(3);
-		transform[0] = Vector3(1.0, 1.0, 0.5f);
+		transform[0] = Vector3(1.0, 0.5f, 1.0);
 		transform[1] = Vector3(0.0, 0.0, 0.0);
 		transform[2] = Vector3((float)(0 & 255), (float)(0 & 255), (float)(0 & 255));
 		material->SetShaderParameter("Transform", transform);
@@ -451,25 +460,27 @@ namespace Urho3D
 		Vector<Variant> normals(32);
 		for (unsigned i = 0; i < 32; ++i)
 			normals[i] = Vector3(URHO3D_default_normals[i]);
-		material->SetShaderParameter("NormalTable", Variant(normals));
+		material->SetShaderParameter("NormalTable", normals);
 
-		SharedPtr<Texture2D> faceData(new Texture2D(context_));
-        material->SetTexture(TU_CUSTOM1, faceData);
+		SharedPtr<TextureBuffer> faceDataTexture(new TextureBuffer(context_));
+		faceDataTexture->SetSize(0);
+		faceDataTexture->SetData(faceData);
+        material->SetTexture(TU_CUSTOM1, faceDataTexture);
 
 		chunk->SetMaterial(material);
         //chunk->SetCastShadows(true);
 
         {
-            Geometry* geo = chunk->GetGeometry();
-            const unsigned char* vertexData = 0;
-            const unsigned char* indexData = 0;
-            unsigned vertexCount = 0;
-            unsigned indexCount = 0;
-            unsigned mask = 0;
-            int indexEnd = end / 4 * 6; // 6 indexes per quad
+            //const unsigned char* vertexData = 0;
+            //const unsigned char* indexData = 0;
+            //unsigned vertexCount = 0;
+            //unsigned indexCount = 0;
+            //unsigned mask = 0;
             //geo->GetRawData(vertexData, vertexCount, indexData, indexCount, mask);
             //PODVector<unsigned char> cpuData(vertexData, vertexCount * 4);
 
+            Geometry* geo = chunk->GetGeometry();
+            int indexEnd = end * 6; // 6 indexes per quad
             ResizeIndexBuffer(slot->numQuads);
 
             geo->SetIndexBuffer(sharedIndexBuffer_);
