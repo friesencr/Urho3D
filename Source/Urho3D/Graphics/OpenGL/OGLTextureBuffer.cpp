@@ -115,7 +115,7 @@ void TextureBuffer::Release()
 bool TextureBuffer::SetSize(unsigned format, TextureUsage usage)
 {
     usage_ = usage;
-	format_ = GL_R32UI;
+	format_ = GL_RGBA8UI;
     
     return Create();
 }

@@ -94,7 +94,7 @@ void VoxelWorld::CreateScene()
     Node* zoneNode = scene_->CreateChild("Zone");
     Zone* zone = zoneNode->CreateComponent<Zone>();
     zone->SetBoundingBox(BoundingBox(-10000, 10000));
-    zone->SetAmbientColor(Color(0.1, 0.1, 0.1));
+    zone->SetAmbientColor(Color(0.8, 0.8, 0.8));
 
      //Create a directional light to the world so that we can see something. The light scene node's orientation controls the
      //light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
@@ -119,18 +119,45 @@ void VoxelWorld::CreateScene()
     voxelDefinition_ = new VoxelDefinition(context_);
     unsigned char geoSolid = VoxelDefinition::EncodeGeometry(VOXEL_TYPE_SOLID);
     unsigned char heightNormal = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+	voxelDefinition_->blockTex1Face.Resize(3);
     //unsigned char heightSlope = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
     //unsigned char heightRoof = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0);
     voxelDefinition_->blockVHeight.Push(0);
     voxelDefinition_->blockVHeight.Push(heightNormal);
-    //voxelDefinition_->blockVHeight.Push(heightSlope);
-    //voxelDefinition_->blockVHeight.Push(heightRoof);
+    voxelDefinition_->blockVHeight.Push(heightNormal);
+
+	// empty
+	voxelDefinition_->blockTex1Face[0][0] = 1;
+	voxelDefinition_->blockTex1Face[0][1] = 1;
+	voxelDefinition_->blockTex1Face[0][2] = 1;
+	voxelDefinition_->blockTex1Face[0][3] = 1;
+	voxelDefinition_->blockTex1Face[0][4] = 1;
+	voxelDefinition_->blockTex1Face[0][5] = 1;
+
+	// grass
+	voxelDefinition_->blockTex1Face[1][0] = 0;
+	voxelDefinition_->blockTex1Face[1][1] = 0;
+	voxelDefinition_->blockTex1Face[1][2] = 0;
+	voxelDefinition_->blockTex1Face[1][3] = 0;
+	voxelDefinition_->blockTex1Face[1][4] = 0;
+	voxelDefinition_->blockTex1Face[1][5] = 0;
+
+	// dirt
+	voxelDefinition_->blockTex1Face[2][0] = 1;
+	voxelDefinition_->blockTex1Face[2][1] = 1;
+	voxelDefinition_->blockTex1Face[2][2] = 1;
+	voxelDefinition_->blockTex1Face[2][3] = 1;
+	voxelDefinition_->blockTex1Face[2][4] = 1;
+	voxelDefinition_->blockTex1Face[2][5] = 1;
+
+	// voxelDefinition_->blockTex1Face.Push(empty);
+	// voxelDefinition_->blockTex1Face.Push(dirt);
+	// voxelDefinition_->blockTex1Face.Push(grass);
     voxelDefinition_->blockGeometry.Push(0);
     voxelDefinition_->blockGeometry.Push(geoSolid);
-    //voxelDefinition_->blockGeometry.Push(geoSolid);
-    //voxelDefinition_->blockGeometry.Push(geoSolid);
-    voxelDefinition_->blocktype.Clear();
-    //voxelSet->SetDimensions(w,h,d);
+    voxelDefinition_->blockGeometry.Push(geoSolid);
+    //voxelDefinition_->blocktype.Clear();
+
     voxelDefinition_->SetSize(w, h, d);
 
     // Create a scene node for the camera, which we will move around
@@ -238,86 +265,85 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
     voxelNode_->RemoveAllChildren();
     VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
 
-    float offset = (float)h / 2.0 + ((counter_ % 10) - 5);
-    float sphereSize = 25.0; // +((counter_ % 10) - 5);
-    int counter = counter_ % h;
-    for (unsigned x = 0; x < w; ++x)
+    //float offset = (float)h / 2.0 + ((counter_ % 10) - 5);
+    //float sphereSize = 25.0; // +((counter_ % 10) - 5);
+    //int counter = counter_ % h;
+    //for (unsigned x = 0; x < w; ++x)
+    //{
+    //	for (unsigned z = 0; z < d; ++z)
+    //	{
+    //		for (unsigned y = 0; y < h; ++y)
+    //		{
+    //			//voxelDefinition_->SetBlocktype(x, y, z, Rand() % 100 ? 0 : 1);
+    //			Vector3 v(x, y, z);
+    //			v = v - Vector3(w/2.0, h/2.0, offset);
+    //			voxelDefinition_->SetBlocktype(x,y,z,v.Length() < sphereSize && v.Length() > sphereSize - 5.0 ? 1 : 0);
+    //		}
+    //		counter++;
+    //	}
+    //}
+
+    //for (unsigned x = 0; x < 4; ++x)
+    //{
+    //	for (unsigned y = 0; y < 4; ++y)
+    //	{
+    //		Node* node = voxelNode_->CreateChild();
+    //		node->SetPosition(Vector3(x * 64, 0, y * 64));
+    //		VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
+    //		builder->BuildVoxelChunk(chunk, voxelDefinition_);
+    //	}
+    //}
+
+    Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
+    SharedPtr<VoxelDefinition> definition(new VoxelDefinition(context_));
+    for (unsigned a = 0; a < heightMap->GetWidth() / 64; ++a)
     {
-    	for (unsigned z = 0; z < d; ++z)
-    	{
-    		for (unsigned y = 0; y < h; ++y)
-    		{
-    			//voxelDefinition_->SetBlocktype(x, y, z, Rand() % 100 ? 0 : 1);
-    			Vector3 v(x, y, z);
-    			v = v - Vector3(w/2.0, h/2.0, offset);
-    			voxelDefinition_->SetBlocktype(x,y,z,v.Length() < sphereSize && v.Length() > sphereSize - 5.0 ? 1 : 0);
-    		}
-    		counter++;
-    	}
+        for (unsigned b = 0; b < heightMap->GetHeight() / 64; ++b)
+        {
+            for (unsigned c = 0; c < 1; ++c)
+            {
+                Node* node = voxelNode_->CreateChild();
+                node->SetPosition(Vector3(a * 64, c*128, b * 64));
+                VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
+                definition->SetSize(64, 128, 64);
+				definition->blockGeometry = voxelDefinition_->blockGeometry;
+				definition->blockTex1Face = voxelDefinition_->blockTex1Face;
+				definition->blockVHeight = voxelDefinition_->blockVHeight;
+                for (unsigned x = 0; x < w; ++x)
+                {
+                    for (unsigned z = 0; z < d; ++z)
+                    {
+                        //for (unsigned y = 0; y < h; ++y)
+                        //{
+                        //	definition->SetBlocktype(x, y, z, Rand() % 20 ? 0 : 1);
+                        //}
+                        unsigned int y = 255 - ((heightMap->GetPixelInt(a * 64 + x, b * 64 + z) & 0x0000FF00) >> 8);
+						definition->SetBlocktype(x, y / 4, z, y > 80 ? 1 : 2);
+
+                        //definition->SetBlocktype(x, y / 4, z-1, 1);
+                        //definition->SetBlocktype(x, y / 4, z+1, 1);
+                        //definition->SetBlocktype(x-1, y / 4, z, 1);
+                        //definition->SetBlocktype(x+1, y / 4, z, 1);
+                        //definition->SetBlocktype(x, (y / 4) - 1, z, 1);
+                        //definition->SetBlocktype(x, (y / 4) + 1, z, 1);
+                    }
+                }
+                builder->BuildVoxelChunk(chunk, definition);
+            }
+        }
     }
-
-    for (unsigned x = 0; x < 4; ++x)
-    {
-    	for (unsigned y = 0; y < 4; ++y)
-    	{
-    		Node* node = voxelNode_->CreateChild();
-    		node->SetPosition(Vector3(x * 64, 0, y * 64));
-    		VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
-    		builder->BuildVoxelChunk(chunk, voxelDefinition_);
-    	}
-    }
-
-   // Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
-   // SharedPtr<VoxelDefinition> definition(new VoxelDefinition(context_));
-   // for (unsigned a = 0; a < heightMap->GetWidth() / 64; ++a)
-   // {
-   //     for (unsigned b = 0; b < heightMap->GetHeight() / 64; ++b)
-   //     {
-   //         for (unsigned c = 0; c < 1; ++c)
-   //         {
-   //             Node* node = voxelNode_->CreateChild();
-   //             node->SetPosition(Vector3(a * 64, c*128, b * 64));
-   //             VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
-   //             definition->SetSize(64, 128, 64);
-   //             for (unsigned x = 0; x < w; ++x)
-   //             {
-   //                 for (unsigned z = 0; z < d; ++z)
-   //                 {
-   //                     //for (unsigned y = 0; y < h; ++y)
-   //                     //{
-   //                     //	definition->SetBlocktype(x, y, z, Rand() % 20 ? 0 : 1);
-   //                     //}
-   //                     unsigned int y = 255 - ((heightMap->GetPixelInt(a * 64 + x, b * 64 + z) & 0x0000FF00) >> 8);
-   //                     if (c == 0 && y <= 128)
-   //                         definition->SetBlocktype(x, y / 2, z, 1);
-   //                     else
-   //                         definition->SetBlocktype(x, y / 2, z, 1);
-
-   //                     //definition->SetBlocktype(x, y / 4, z-1, 1);
-   //                     //definition->SetBlocktype(x, y / 4, z+1, 1);
-   //                     //definition->SetBlocktype(x-1, y / 4, z, 1);
-   //                     //definition->SetBlocktype(x+1, y / 4, z, 1);
-   //                     //definition->SetBlocktype(x, (y / 4) - 1, z, 1);
-   //                     //definition->SetBlocktype(x, (y / 4) + 1, z, 1);
-   //                 }
-   //             }
-   //             builder->BuildVoxelChunk(chunk, definition);
-   //         }
-			//return;
-   //     }
-   // }
 }
 
 void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData)
 {
-    DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
+    //DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
 
-    // If draw debug mode is enabled, draw navigation mesh debug geometry
-    PODVector<VoxelChunk*> voxelChunks;
-    scene_->GetComponents<VoxelChunk>(voxelChunks, true);
-    for (unsigned i = 0; i < voxelChunks.Size(); ++i)
-    	voxelChunks[i]->DrawDebugGeometry(debug, true);
-    scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
+    //// If draw debug mode is enabled, draw navigation mesh debug geometry
+    //PODVector<VoxelChunk*> voxelChunks;
+    //scene_->GetComponents<VoxelChunk>(voxelChunks, true);
+    //for (unsigned i = 0; i < voxelChunks.Size(); ++i)
+    //	voxelChunks[i]->DrawDebugGeometry(debug, true);
+    //scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
 }
 
 

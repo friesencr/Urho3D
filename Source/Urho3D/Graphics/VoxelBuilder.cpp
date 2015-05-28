@@ -10,8 +10,8 @@
 #define STBVOX_CONFIG_MODE  1
 #include <STB/stb_voxel_render.h>
 
-#define URHO3D_RSQRT2   0.7071067811865f
-#define URHO3D_RSQRT3   0.5773502691896f
+static const float URHO3D_RSQRT2 = 0.7071067811865f;
+static const float URHO3D_RSQRT3 = 0.5773502691896f;
 
 static float URHO3D_default_normals[32][3] =
 {
@@ -51,6 +51,58 @@ static float URHO3D_default_normals[32][3] =
     { 0,-URHO3D_RSQRT2, URHO3D_RSQRT2 }, // south & up
     { 0,-URHO3D_RSQRT2, -URHO3D_RSQRT2 }, // south & down
 };
+
+static float URHO3D_default_ambient[4][4] =
+{
+	{ 0, 0, 1, 0 }, // reversed lighting direction
+	{ 0.5, 0.5, 0.5, 0 }, // directional color
+	{ 0.5, 0.5, 0.5, 0 }, // constant color
+	{ 0.5, 0.5, 0.5, 1.0f / 1000.0f / 1000.0f }, // fog data for simple_fog
+};
+
+static float URHO3D_default_texscale[128][4] =
+{
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+	{ 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 1, 1, 0, 0 },
+};
+
+static float URHO3D_default_texgen[64][3] =
+{
+	{ 0, 1, 0 }, { 0, 0, 1 }, { 0, -1, 0 }, { 0, 0, -1 },
+	{ -1, 0, 0 }, { 0, 0, 1 }, { 1, 0, 0 }, { 0, 0, -1 },
+	{ 0, -1, 0 }, { 0, 0, 1 }, { 0, 1, 0 }, { 0, 0, -1 },
+	{ 1, 0, 0 }, { 0, 0, 1 }, { -1, 0, 0 }, { 0, 0, -1 },
+
+	{ 1, 0, 0 }, { 0, 1, 0 }, { -1, 0, 0 }, { 0, -1, 0 },
+	{ -1, 0, 0 }, { 0, -1, 0 }, { 1, 0, 0 }, { 0, 1, 0 },
+	{ 1, 0, 0 }, { 0, 1, 0 }, { -1, 0, 0 }, { 0, -1, 0 },
+	{ -1, 0, 0 }, { 0, -1, 0 }, { 1, 0, 0 }, { 0, 1, 0 },
+
+	{ 0, 0, -1 }, { 0, 1, 0 }, { 0, 0, 1 }, { 0, -1, 0 },
+	{ 0, 0, -1 }, { -1, 0, 0 }, { 0, 0, 1 }, { 1, 0, 0 },
+	{ 0, 0, -1 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 1, 0 },
+	{ 0, 0, -1 }, { 1, 0, 0 }, { 0, 0, 1 }, { -1, 0, 0 },
+
+	{ 0, -1, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, { -1, 0, 0 },
+	{ 0, 1, 0 }, { -1, 0, 0 }, { 0, -1, 0 }, { 1, 0, 0 },
+	{ 0, -1, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, { -1, 0, 0 },
+	{ 0, 1, 0 }, { -1, 0, 0 }, { 0, -1, 0 }, { 1, 0, 0 },
+};
+
 
 namespace Urho3D
 {
@@ -365,8 +417,10 @@ namespace Urho3D
         stbvox_input_description *map;
         map = stbvox_get_input_description(mm);
         map->blocktype = definition->GetAddress(0,0,0);
+		//map->block_tex1 = &definition->blockTex1.Front();
         map->block_tex1_face = &definition->blockTex1Face.Front();
-        map->block_tex2_face = &definition->blockTex2Face.Front();
+		//map->block_tex2 = &definition->blockTex2.Front();
+        //map->block_tex2_face = &definition->blockTex2Face.Front();
         map->block_geometry = &definition->blockGeometry.Front();
         map->block_vheight = &definition->blockVHeight.Front();
         map->geometry = &definition->geometry.Front();
@@ -441,31 +495,68 @@ namespace Urho3D
         chunk->SetBoundingBox(slot->box);
 
         Material* material = new Material(context_);
-        Technique* technique = cache->GetResource<Technique>("Techniques/VoxelDiff.xml");
+		Technique* technique = cache->GetResource<Technique>("Techniques/VoxelDiff.xml");
+		material->SetTechnique(0, technique);
 
-        Texture2DArray* texture = new Texture2DArray(context_);
-		Vector<SharedPtr<Image> > images;
-		images.Push(SharedPtr<Image>(cache->GetResource<Image>("Textures/grass.png")));
-		images.Push(SharedPtr<Image>(cache->GetResource<Image>("Textures/dirt.png")));
-		texture->SetData(images);
-        material->SetTechnique(0, technique);
-		material->SetTexture(TU_DIFFUSE, texture);
+		// diffuse texture array 1
+		{
+			SharedPtr<Texture2DArray> texture(new Texture2DArray(context_));
+			Vector<SharedPtr<Image> > images;
+			images.Push(SharedPtr<Image>(cache->GetResource<Image>("Textures/grass.png")));
+			images.Push(SharedPtr<Image>(cache->GetResource<Image>("Textures/dirt.png")));
+			if (!texture->SetData(images))
+				return false;
+			material->SetTexture(TU_DIFFUSE, texture);
+		}
 
-		Vector<Variant> transform(3);
-		transform[0] = Vector3(1.0, 0.5f, 1.0);
-		transform[1] = Vector3(0.0, 0.0, 0.0);
-		transform[2] = Vector3((float)(0 & 255), (float)(0 & 255), (float)(0 & 255));
-		material->SetShaderParameter("Transform", transform);
+		// copy transforms
+		{
+			Vector<Variant> transform(3);
+			transform[0] = Vector3(1.0, 0.5f, 1.0);
+			transform[1] = Vector3(0.0, 0.0, 0.0);
+			transform[2] = Vector3((float)(0 & 255), (float)(0 & 255), (float)(0 & 255));
+			material->SetShaderParameter("Transform", transform);
+		}
 
-		Vector<Variant> normals(32);
-		for (unsigned i = 0; i < 32; ++i)
-			normals[i] = Vector3(URHO3D_default_normals[i]);
-		material->SetShaderParameter("NormalTable", normals);
+		// copy normal table
+		{
+			Vector<Variant> normals(32);
+			for (unsigned i = 0; i < 32; ++i)
+				normals[i] = Vector3(URHO3D_default_normals[i]);
+			material->SetShaderParameter("NormalTable", normals);
+		}
 
-		SharedPtr<TextureBuffer> faceDataTexture(new TextureBuffer(context_));
-		faceDataTexture->SetSize(0);
-		faceDataTexture->SetData(faceData);
-        material->SetTexture(TU_CUSTOM1, faceDataTexture);
+		// ambient color table
+		{
+			Vector<Variant> ambientTable(4);
+			for (unsigned i = 0; i < 4; ++i)
+				ambientTable[i] = Vector3(URHO3D_default_ambient[i]);
+			material->SetShaderParameter("AmbientTable", ambientTable);
+		}
+
+		// texscale table
+		{
+			Vector<Variant> texscaleTable(64);
+			for (unsigned i = 0; i < 64; ++i)
+				texscaleTable[i] = Vector4(URHO3D_default_texscale[i]);
+			material->SetShaderParameter("TexScale", texscaleTable);
+		}
+
+		// texgen table
+		{
+			Vector<Variant> texgenTable(64);
+			for (unsigned i = 0; i < 64; ++i)
+				texgenTable[i] = Vector3(URHO3D_default_texgen[i]);
+			material->SetShaderParameter("TexGen", texgenTable);
+		}
+
+		// face data
+		{
+			SharedPtr<TextureBuffer> faceDataTexture(new TextureBuffer(context_));
+			faceDataTexture->SetSize(0);
+			faceDataTexture->SetData(faceData);
+			material->SetTexture(TU_CUSTOM1, faceDataTexture);
+		}
 
 		chunk->SetMaterial(material);
         //chunk->SetCastShadows(true);

@@ -214,7 +214,7 @@ bool Texture2DArray::SetData(unsigned level, int x, int y, int width, int height
         return false;
     }
 
-    if (!width_ || !height_ || layers_)
+    if (!width_ || !height_ || !layers_)
     {
         LOGERROR("Texture dimensions are not set");
         return false;
@@ -259,11 +259,18 @@ bool Texture2DArray::SetData(unsigned level, int x, int y, int width, int height
 
     if (!IsCompressed())
     {
-        glTexSubImage3D(target_, level, x, y, 0, width, height, layer, GetExternalFormat(format_), GetDataType(format_), data);
+        glGetError();
+        glTexSubImage3D(target_, level, x, y, layer, width, height, 1, GetExternalFormat(format_), GetDataType(format_), data);
+		GLenum err = glGetError();
+        if (err)
+        {
+            LOGERROR("Failed to create texture");
+			return false;
+        }
     }
     else
     {
-        glCompressedTexSubImage3D(target_, level, x, y, 0, width, height, layer, format, GetDataSize(width, height, layer), data);
+        glCompressedTexSubImage3D(target_, level, x, y, layer, width, height, 1, format, GetDataSize(width, height, layer), data);
     }
     
     graphics_->SetTexture(0, 0);
@@ -345,7 +352,9 @@ bool Texture2DArray::SetData(unsigned layer, SharedPtr<Image> image, bool useAlp
         
         for (unsigned i = 0; i < levels_; ++i)
         {
-            SetData(i, 0, 0, levelWidth, levelHeight, layer, levelData);
+			if (!SetData(i, 0, 0, levelWidth, levelHeight, layer, levelData))
+				return false;
+
             memoryUse += levelWidth * levelHeight * components;
             
             if (i < levels_ - 1)
@@ -446,13 +455,21 @@ bool Texture2DArray::SetData(Vector<SharedPtr<Image> > images, bool useAlpha)
             return false;
     }
 
-    bool success = true;
+	unsigned tmpLevels = levels_;
+	levels_ = 1;
     for (unsigned i = 0; i < images.Size(); ++i)
     {
         SharedPtr<Image> image = images[i];
-        success = SetData(i, image);
-
+		if (!SetData(i, image))
+			return false;
     }
+	levels_ = tmpLevels;
+
+	graphics_->SetTextureForUpdate(this);
+	glGenerateMipmap(target_);
+	graphics_->SetTexture(0, 0);
+
+	return true;
 }
 
 bool Texture2DArray::GetData(unsigned level, unsigned layer, void* dest) const
@@ -501,7 +518,7 @@ bool Texture2DArray::Create()
 {
     Release();
     
-    if (!graphics_ || !width_ || !height_ || layers_)
+    if (!graphics_ || !width_ || !height_ || !layers_)
         return false;
     
     if (graphics_->IsDeviceLost())
@@ -518,7 +535,6 @@ bool Texture2DArray::Create()
     
     // Ensure that our texture is bound to OpenGL texture unit 0
     graphics_->SetTextureForUpdate(this);
-    
     // If not compressed, create the initial level 0 texture with null data
     bool success = true;
     
@@ -544,9 +560,15 @@ bool Texture2DArray::Create()
             ++levels_;
         }
     }
+
+    #ifndef GL_ES_VERSION_2_0
+    glTexParameteri(target_, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(target_, GL_TEXTURE_MAX_LEVEL, levels_ - 1);
+    #endif
     
     // Set initial parameters, then unbind the texture
     UpdateParameters();
+
     graphics_->SetTexture(0, 0);
     
     return success;

@@ -62,6 +62,9 @@ public:
 	PODVector<unsigned char> blocktype;
 	PODVector<unsigned char> blockGeometry;
 	PODVector<unsigned char> blockVHeight;
+	PODVector<unsigned char> blockTex1;
+	PODVector<unsigned char> blockTex2;
+	PODVector<unsigned char> color;
 	PODVector<unsigned char[6]> blockTex1Face;
 	PODVector<unsigned char[6]> blockTex2Face;
 	PODVector<unsigned char> geometry;
@@ -104,11 +107,13 @@ public:
 		height_ = height;
 		width_ = width;
 		depth_ = depth;
-		blocktype.Resize((width+2)*(height+2)*(depth*2));
-		for (unsigned i = 0; i < blocktype.Size(); ++i)
-			blocktype[i] = 0;
 		zStride = height + 2;
 		xStride = (height + 2) * (depth + 2);
+		unsigned blocktypeSize = (width + 2)*(height + 2)*(depth * 2);
+
+		blocktype.Resize(blocktypeSize);
+		for (unsigned i = 0; i < blocktype.Size(); ++i)
+			blocktype[i] = 0;
 	}
 
 	void SetBlocktype(unsigned x, unsigned y, unsigned z, unsigned char val)
