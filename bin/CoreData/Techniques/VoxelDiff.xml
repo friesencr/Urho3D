@@ -1,0 +1,4 @@
+<technique vs="Voxel" ps="Voxel">
+    <pass name="base" />
+    <pass name="litbase" psdefines="AMBIENT" />
+</technique>
