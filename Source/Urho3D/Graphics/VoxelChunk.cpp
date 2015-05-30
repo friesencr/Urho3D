@@ -13,16 +13,12 @@ extern const char* GEOMETRY_CATEGORY;
 
 VoxelChunk::VoxelChunk(Context* context) :
     Drawable(context, DRAWABLE_GEOMETRY),
-    geometry_(new Geometry(context)),
-    vertexBuffer_(new VertexBuffer(context)),
+	numberOfMeshes_(1),
     lodLevel_(0)
 {
 	size_[0] = 0; size_[1] = 0; size_[2] = 0;
 	index_[0] = 0; index_[1] = 0; index_[2] = 0;
-	geometry_->SetVertexBuffer(0, vertexBuffer_, MASK_DATA);
-    batches_.Resize(1);
-    batches_[0].geometry_ = geometry_;
-    batches_[0].geometryType_ = GEOM_STATIC_NOINSTANCING;
+	SetNumberOfMeshes(numberOfMeshes_);
 }
 
 VoxelChunk::~VoxelChunk()
@@ -35,14 +31,24 @@ void VoxelChunk::RegisterObject(Context* context)
     context->RegisterFactory<VoxelChunk>(GEOMETRY_CATEGORY);
 }
 
-Geometry* VoxelChunk::GetGeometry() const
+Geometry* VoxelChunk::GetGeometry(unsigned index) const
 {
-    return geometry_;
+	return geometries_[index];
 }
 
-VertexBuffer* VoxelChunk::GetVertexBuffer() const
+VertexBuffer* VoxelChunk::GetVertexBuffer(unsigned index) const
 {
-    return vertexBuffer_;
+	return vertexData_[index];
+}
+
+IndexBuffer* VoxelChunk::GetFaceData(unsigned index) const
+{
+	return faceData_[index];
+}
+
+TextureBuffer* VoxelChunk::GetFaceBuffer(unsigned index) const
+{
+	return faceBuffer_[index];
 }
 
 UpdateGeometryType VoxelChunk::GetUpdateGeometryType()
@@ -103,47 +109,95 @@ void VoxelChunk::SetBoundingBox(const BoundingBox& box)
 
 void VoxelChunk::ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results)
 {
-    RayQueryLevel level = query.level_;
-    
-    switch (level)
-    {
-    case RAY_AABB:
-        Drawable::ProcessRayQuery(query, results);
-        break;
-        
-    case RAY_OBB:
-    case RAY_TRIANGLE:
-        Matrix3x4 inverse(node_->GetWorldTransform().Inverse());
-        Ray localRay = query.ray_.Transformed(inverse);
-        float distance = localRay.HitDistance(boundingBox_);
-        Vector3 normal = -query.ray_.direction_;
-        
-        if (level == RAY_TRIANGLE && distance < query.maxDistance_)
-        {
-            Vector3 geometryNormal;
-            distance = geometry_->GetHitDistance(localRay, &geometryNormal);
-            normal = (node_->GetWorldTransform() * Vector4(geometryNormal, 0.0f)).Normalized();
-        }
-        
-        if (distance < query.maxDistance_)
-        {
-            RayQueryResult result;
-            result.position_ = query.ray_.origin_ + distance * query.ray_.direction_;
-            result.normal_ = normal;
-            result.distance_ = distance;
-            result.drawable_ = this;
-            result.node_ = node_;
-            result.subObject_ = M_MAX_UNSIGNED;
-            results.Push(result);
-        }
-        break;
-    }
+    //RayQueryLevel level = query.level_;
+    //
+    //switch (level)
+    //{
+    //case RAY_AABB:
+    //    Drawable::ProcessRayQuery(query, results);
+    //    break;
+    //    
+    //case RAY_OBB:
+    //case RAY_TRIANGLE:
+    //    Matrix3x4 inverse(node_->GetWorldTransform().Inverse());
+    //    Ray localRay = query.ray_.Transformed(inverse);
+    //    float distance = localRay.HitDistance(boundingBox_);
+    //    Vector3 normal = -query.ray_.direction_;
+    //    
+    //    if (level == RAY_TRIANGLE && distance < query.maxDistance_)
+    //    {
+    //        Vector3 geometryNormal;
+    //        distance = geometry_->GetHitDistance(localRay, &geometryNormal);
+    //        normal = (node_->GetWorldTransform() * Vector4(geometryNormal, 0.0f)).Normalized();
+    //    }
+    //    
+    //    if (distance < query.maxDistance_)
+    //    {
+    //        RayQueryResult result;
+    //        result.position_ = query.ray_.origin_ + distance * query.ray_.direction_;
+    //        result.normal_ = normal;
+    //        result.distance_ = distance;
+    //        result.drawable_ = this;
+    //        result.node_ = node_;
+    //        result.subObject_ = M_MAX_UNSIGNED;
+    //        results.Push(result);
+    //    }
+    //    break;
+    //}
 }
 
-
-void VoxelChunk::SetMaterial(Material* material)
+bool VoxelChunk::GetHasShaderParameters(unsigned index)
 {
-    batches_[0].material_ = material;
+	return hasMaterialParameters_[index];
+}
+
+void VoxelChunk::SetHasShaderParameters(unsigned index, bool isRequired)
+{
+	hasMaterialParameters_[index] = isRequired;
+}
+
+void VoxelChunk::SetNumberOfMeshes(unsigned count)
+{
+	if (count > 64)
+		return;
+
+	numberOfMeshes_ = count;
+
+	batches_.Resize(count);
+	vertexData_.Resize(count);
+	faceData_.Resize(count);
+	faceBuffer_.Resize(count);
+	geometries_.Resize(count);
+	materials_.Resize(count);
+    batches_.Resize(count);
+	hasMaterialParameters_.Resize(count);
+
+	for (unsigned i = 0; i < count; ++i)
+	{
+		hasMaterialParameters_[i] = false;
+		vertexData_[i] = new VertexBuffer(context_);
+		faceData_[i] = new IndexBuffer(context_);
+		faceBuffer_[i] = new TextureBuffer(context_);
+		materials_[i] = new Material(context_);
+		geometries_[i] = new Geometry(context_);
+		geometries_[i]->SetVertexBuffer(0, vertexData_[i], MASK_DATA);
+		batches_[i].material_ = materials_[i];
+		batches_[i].geometry_ = geometries_[i];
+		batches_[i].geometryType_ = GEOM_STATIC_NOINSTANCING;
+	}
+}
+
+void VoxelChunk::SetMaterial(unsigned selector, Material* material)
+{
+    batches_[selector].material_ = material;
+}
+
+Material* VoxelChunk::GetMaterial(unsigned selector) const
+{
+	if (batches_.Size() > selector)
+		return batches_[selector].material_;
+	else
+		return 0;
 }
 
 void VoxelChunk::SetIndex(unsigned char x, unsigned char y, unsigned char z)
@@ -176,7 +230,7 @@ bool VoxelChunk::DrawOcclusion(OcclusionBuffer* buffer)
 
 Geometry* VoxelChunk::GetLodGeometry(unsigned batchIndex, unsigned level)
 {
-    return geometry_;
+    return batches_[batchIndex].geometry_;
 }
 
 }

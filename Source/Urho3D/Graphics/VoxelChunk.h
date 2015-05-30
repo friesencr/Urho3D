@@ -6,6 +6,8 @@
 #include "VertexBuffer.h"
 #include "../Container/Ptr.h"
 #include "../Core/Mutex.h"
+#include "TextureBuffer.h"
+#include "Voxel.h"
 
 namespace Urho3D {
 
@@ -21,8 +23,10 @@ public:
 
     static void RegisterObject(Context* context);
 
-    Geometry* GetGeometry() const;
-    VertexBuffer* GetVertexBuffer() const;
+    Geometry* GetGeometry(unsigned index) const;
+    VertexBuffer* GetVertexBuffer(unsigned index) const;
+    IndexBuffer* GetFaceData(unsigned index) const;
+    TextureBuffer* GetFaceBuffer(unsigned index) const;
 
     /// Process octree raycast. May be called from a worker thread.
     virtual void ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results);
@@ -39,14 +43,28 @@ public:
     /// Draw to occlusion buffer. Return true if did not run out of triangles.
     virtual bool DrawOcclusion(OcclusionBuffer* buffer);
 
+	bool GetHasShaderParameters(unsigned index);
+	void SetHasShaderParameters(unsigned index, bool isRequired);
+
+    /// Set mesh selector material.
+	Material* GetMaterial(unsigned selector) const;
+
+	/// Gets the voxel definition
+	VoxelDefinition* GetVoxelDefinition() const;
+
+	/// Sets the voxel definition
+	void SetVoxelDefinition(VoxelDefinition* voxelDefinition);
+
     /// Set owner terrain.
     void SetOwner(VoxelSet* voxelSet);
 
-    /// Set material.
-    void SetMaterial(Material* material);
+    /// Set material by mesh selector.
+    void SetMaterial(unsigned selector, Material* material);
 
     /// Set local-space bounding box.
     void SetBoundingBox(const BoundingBox& box);
+
+	void SetNumberOfMeshes(unsigned count);
 
     unsigned char GetIndexX();
     unsigned char GetIndexY();
@@ -64,15 +82,25 @@ protected:
 
 private:
     // Voxel chunk geometry
-    SharedPtr<Geometry> geometry_;
-    // Vertex data
-    SharedPtr<VertexBuffer> vertexBuffer_;
     unsigned char index_[3];
     unsigned char size_[3];
     float priority_;
     unsigned numQuads_;
     unsigned lodLevel_;
+	unsigned numberOfMeshes_;
     WeakPtr<VoxelSet> owner_;
+    WeakPtr<VoxelChunk> neighborNorth_;
+	WeakPtr<VoxelChunk> neighborWest_;
+    WeakPtr<VoxelChunk> neighborEast_;
+    WeakPtr<VoxelChunk> neighborSouth_;
+
+	SharedPtr<VoxelDefinition> voxelDefinition_;
+    Vector<SharedPtr<Geometry> > geometries_;
+	Vector<SharedPtr<Material> > materials_;
+	Vector<SharedPtr<VertexBuffer> > vertexData_;
+	Vector<SharedPtr<IndexBuffer> > faceData_;
+	Vector<SharedPtr<TextureBuffer> > faceBuffer_;
+	Vector<bool> hasMaterialParameters_;
 };
 
 }

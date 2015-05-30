@@ -96,6 +96,7 @@ private:
     bool BuildMesh(VoxelWorkload* workload);
     void DecodeWorkBuffer(VoxelWorkload* workload);
     bool UploadGpuData(VoxelWorkSlot* slot, bool append = false);
+	bool SetMaterialParameters(Material* material);
     void TransferDataToSlot(VoxelWorkload* workload);
     void HandleWorkItemCompleted(StringHash eventType, VariantMap& eventData);
 
@@ -124,6 +125,11 @@ private:
     Vector<VoxelJob*> jobs_;
     SharedPtr<IndexBuffer> sharedIndexBuffer_;
     Vector<VoxelWorkSlot> slots_;
+	Vector<Variant> transform_;
+	Vector<Variant> normals_;
+	Vector<Variant> ambientTable_;
+	Vector<Variant> texscaleTable_;
+	Vector<Variant> texgenTable_;
 };
 
 }

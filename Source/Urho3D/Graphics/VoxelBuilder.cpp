@@ -5,6 +5,7 @@
 #include "Technique.h"
 #include "Texture2D.h"
 #include "TextureBuffer.h"
+#include "Material.h"
 
 #define STB_VOXEL_RENDER_IMPLEMENTATION
 #define STBVOX_CONFIG_MODE  1
@@ -112,6 +113,33 @@ namespace Urho3D
         sharedIndexBuffer_(0),
         compatibilityMode(false)
     {
+		transform_.Resize(3);
+		normals_.Resize(32);
+		ambientTable_.Resize(4);
+		texscaleTable_.Resize(64);
+		texgenTable_.Resize(64);
+
+
+		// copy transforms
+		transform_[0] = Vector3(1.0, 0.5f, 1.0);
+		transform_[1] = Vector3(0.0, 0.0, 0.0);
+		transform_[2] = Vector3((float)(0 & 255), (float)(0 & 255), (float)(0 & 255));
+
+		// copy normal table
+		for (unsigned i = 0; i < 32; ++i)
+			normals_[i] = Vector3(URHO3D_default_normals[i]);
+
+		// ambient color table
+		for (unsigned i = 0; i < 4; ++i)
+			ambientTable_[i] = Vector3(URHO3D_default_ambient[i]);
+
+		// texscale table
+		for (unsigned i = 0; i < 64; ++i)
+			texscaleTable_[i] = Vector4(URHO3D_default_texscale[i]);
+
+		// texgen table
+		for (unsigned i = 0; i < 64; ++i)
+			texgenTable_[i] = Vector3(URHO3D_default_texgen[i]);
 
         //SubscribeToEvent(E_WORKITEMCOMPLETED, HANDLER(VoxelBuilder, HandleWorkItemCompleted));
     }
@@ -215,8 +243,6 @@ namespace Urho3D
             // normalf = Vector3(normalf.x_, normalf.z_, normalf.y_);
 
             workload->box.Merge(position);
-
-            //LOGINFO(position.ToString());
 
             //*gpu++ = position.x_;
             //*gpu++ = position.y_;
@@ -416,14 +442,18 @@ namespace Urho3D
         
         stbvox_input_description *map;
         map = stbvox_get_input_description(mm);
-        map->blocktype = definition->GetAddress(0,0,0);
-		//map->block_tex1 = &definition->blockTex1.Front();
+		map->blocktype = &definition->blocktype[definition->GetIndex(0, 0, 0)];
+		map->block_tex1 = &definition->blockTex1.Front();
         map->block_tex1_face = &definition->blockTex1Face.Front();
-		//map->block_tex2 = &definition->blockTex2.Front();
-        //map->block_tex2_face = &definition->blockTex2Face.Front();
+		map->block_tex2 = &definition->blockTex2.Front();
+        map->block_tex2_face = &definition->blockTex2Face.Front();
         map->block_geometry = &definition->blockGeometry.Front();
         map->block_vheight = &definition->blockVHeight.Front();
-        map->geometry = &definition->geometry.Front();
+
+		if (definition->geometry.Size())
+			map->geometry = &definition->geometry[definition->GetIndex(0, 0, 0)];
+		if (definition->vHeight.Size())
+			map->vheight = &definition->vHeight[definition->GetIndex(0, 0, 0)];
 
         stbvox_reset_buffers(mm);
         stbvox_set_buffer(mm, 0, 0, slot->workVertexBuffers[threadIndex], VOXEL_WORKER_VERTEX_BUFFER_SIZE);
@@ -434,8 +464,6 @@ namespace Urho3D
         bool success = true;
         for (unsigned y = 0; y < workload->end[1]; y += 16)
         {
-
-
             stbvox_set_input_range(
                 mm,
                 workload->start[0],
@@ -455,12 +483,25 @@ namespace Urho3D
         return success;
     }
 
+	bool VoxelBuilder::SetMaterialParameters(Material* material)
+	{
+        ResourceCache* cache = GetSubsystem<ResourceCache>();
+		Technique* technique = cache->GetResource<Technique>("Techniques/VoxelDiff.xml");
+		material->SetTechnique(0, technique);
+		material->SetShaderParameter("Transform", transform_);
+		material->SetShaderParameter("NormalTable", normals_);
+		material->SetShaderParameter("AmbientTable", ambientTable_);
+		material->SetShaderParameter("TexScale", texscaleTable_);
+		material->SetShaderParameter("TexGen", texgenTable_);
+		return true;
+	}
+
     bool VoxelBuilder::UploadGpuData(VoxelWorkSlot* slot, bool append)
     {
         VoxelJob* job = slot->job;
         VoxelChunk* chunk = job->chunk;
-        VertexBuffer* vb = chunk->GetVertexBuffer();
-		SharedPtr<IndexBuffer> faceData(new IndexBuffer(context_));
+        VertexBuffer* vb = chunk->GetVertexBuffer(0);
+		IndexBuffer* faceData = chunk->GetFaceData(0);
         int totalVertices = slot->numQuads * 4;
         if (totalVertices == 0)
             return true;
@@ -491,75 +532,23 @@ namespace Urho3D
 				return false;
         }
 
-        ResourceCache* cache = GetSubsystem<ResourceCache>();
+		if (!chunk->GetHasShaderParameters(0))
+		{
+			SetMaterialParameters(chunk->GetMaterial(0));
+			chunk->SetHasShaderParameters(0, true);
+		}
+
         chunk->SetBoundingBox(slot->box);
-
-        Material* material = new Material(context_);
-		Technique* technique = cache->GetResource<Technique>("Techniques/VoxelDiff.xml");
-		material->SetTechnique(0, technique);
-
-		// diffuse texture array 1
-		{
-			SharedPtr<Texture2DArray> texture(new Texture2DArray(context_));
-			Vector<SharedPtr<Image> > images;
-			images.Push(SharedPtr<Image>(cache->GetResource<Image>("Textures/grass.png")));
-			images.Push(SharedPtr<Image>(cache->GetResource<Image>("Textures/dirt.png")));
-			if (!texture->SetData(images))
-				return false;
-			material->SetTexture(TU_DIFFUSE, texture);
-		}
-
-		// copy transforms
-		{
-			Vector<Variant> transform(3);
-			transform[0] = Vector3(1.0, 0.5f, 1.0);
-			transform[1] = Vector3(0.0, 0.0, 0.0);
-			transform[2] = Vector3((float)(0 & 255), (float)(0 & 255), (float)(0 & 255));
-			material->SetShaderParameter("Transform", transform);
-		}
-
-		// copy normal table
-		{
-			Vector<Variant> normals(32);
-			for (unsigned i = 0; i < 32; ++i)
-				normals[i] = Vector3(URHO3D_default_normals[i]);
-			material->SetShaderParameter("NormalTable", normals);
-		}
-
-		// ambient color table
-		{
-			Vector<Variant> ambientTable(4);
-			for (unsigned i = 0; i < 4; ++i)
-				ambientTable[i] = Vector3(URHO3D_default_ambient[i]);
-			material->SetShaderParameter("AmbientTable", ambientTable);
-		}
-
-		// texscale table
-		{
-			Vector<Variant> texscaleTable(64);
-			for (unsigned i = 0; i < 64; ++i)
-				texscaleTable[i] = Vector4(URHO3D_default_texscale[i]);
-			material->SetShaderParameter("TexScale", texscaleTable);
-		}
-
-		// texgen table
-		{
-			Vector<Variant> texgenTable(64);
-			for (unsigned i = 0; i < 64; ++i)
-				texgenTable[i] = Vector3(URHO3D_default_texgen[i]);
-			material->SetShaderParameter("TexGen", texgenTable);
-		}
+		Material* material = chunk->GetMaterial(0);
 
 		// face data
 		{
-			SharedPtr<TextureBuffer> faceDataTexture(new TextureBuffer(context_));
+			TextureBuffer* faceDataTexture = chunk->GetFaceBuffer(0);
 			faceDataTexture->SetSize(0);
 			faceDataTexture->SetData(faceData);
 			material->SetTexture(TU_CUSTOM1, faceDataTexture);
 		}
 
-		chunk->SetMaterial(material);
-        //chunk->SetCastShadows(true);
 
         {
             //const unsigned char* vertexData = 0;
@@ -570,7 +559,7 @@ namespace Urho3D
             //geo->GetRawData(vertexData, vertexCount, indexData, indexCount, mask);
             //PODVector<unsigned char> cpuData(vertexData, vertexCount * 4);
 
-            Geometry* geo = chunk->GetGeometry();
+			Geometry* geo = chunk->GetGeometry(0);
             int indexEnd = end * 6; // 6 indexes per quad
             ResizeIndexBuffer(slot->numQuads);
 
