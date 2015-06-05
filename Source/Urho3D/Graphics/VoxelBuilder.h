@@ -30,19 +30,20 @@ static const unsigned char VOXEL_CHUNK_SIZE_Z = 64;
 static const unsigned VOXEL_CHUNK_SIZE = VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Y * VOXEL_CHUNK_SIZE_Z;
 
 class VoxelBuilder;
+class VoxelChunk;
 struct VoxelWorkSlot;
 struct VoxelWorkload;
 
 struct VoxelJob {
-    WeakPtr<VoxelChunk> chunk;
-    SharedPtr<VoxelDefinition> voxelDefinition;
+    SharedPtr<VoxelChunk> chunk;
     VoxelWorkSlot* slot;
     bool append;
+	bool async;
 };
 
 struct VoxelWorkSlot
 {
-    Vector<VoxelWorkload*> workloads;
+    Vector<VoxelWorkload> workloads;
     VoxelJob* job;
     stbvox_mesh_maker meshMakers[8];
     unsigned char workVertexBuffers[8][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
@@ -51,6 +52,7 @@ struct VoxelWorkSlot
     bool failed;
     bool free;
     int workCounter;
+	int numWorkloads;
     BoundingBox box;
     Mutex workMutex;
     Mutex dataMutex;
@@ -63,6 +65,7 @@ struct VoxelWorkload
     SharedPtr<WorkItem> workItem;
     //PODVector<unsigned char> gpuData;
     //PODVector<unsigned char> cpuData;
+	PODVector<Vector3> shadowData;
     unsigned char index[3];
     unsigned char start[3];
     unsigned char end[3];
@@ -77,7 +80,8 @@ class URHO3D_API VoxelBuilder : public Object {
 public:
     VoxelBuilder(Context* context);
     ~VoxelBuilder();
-    VoxelJob* BuildVoxelChunk(VoxelChunk* chunk, SharedPtr<VoxelDefinition> voxelDefinition);
+    VoxelJob* BuildVoxelChunk(SharedPtr<VoxelChunk> chunk);
+	VoxelJob* BuildVoxelChunkAsync(SharedPtr<VoxelChunk> chunk);
     // needs to be public for work item work method
     void BuildWorkload(VoxelWorkload* workload);
     void CompleteWork(unsigned = M_MAX_UNSIGNED);
@@ -98,7 +102,8 @@ private:
     bool UploadGpuData(VoxelWorkSlot* slot, bool append = false);
 	bool SetMaterialParameters(Material* material);
     void TransferDataToSlot(VoxelWorkload* workload);
-    void HandleWorkItemCompleted(StringHash eventType, VariantMap& eventData);
+    void HandleBeginFrame(StringHash eventType, VariantMap& eventData);
+	void SimplifyMesh(VoxelWorkSlot* slot);
 
     //
     // slot management
@@ -115,7 +120,7 @@ private:
     void ProcessJob(VoxelJob* job);
     void RemoveJob(VoxelJob* job);
     void QueueJob(VoxelJob* job);
-    VoxelJob* CreateJob(VoxelChunk* chunk, VoxelDefinition* voxelDefinition);
+    VoxelJob* CreateJob(VoxelChunk* chunk);
     void PurgeAllJobs();
     int RunJobs();
 
@@ -130,6 +135,11 @@ private:
 	Vector<Variant> ambientTable_;
 	Vector<Variant> texscaleTable_;
 	Vector<Variant> texgenTable_;
+	Mutex slotMutex_;
+	Timer frameTimer_;
+	unsigned maxFrameTime_;
+	bool frameReset_;
+	bool completeAllWork_;
 };
 
 }

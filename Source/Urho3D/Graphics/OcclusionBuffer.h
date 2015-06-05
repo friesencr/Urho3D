@@ -107,6 +107,8 @@ public:
     bool IsVisible(const BoundingBox& worldSpaceBox) const;
     /// Return time since last use in milliseconds.
     unsigned GetUseTimer();
+    /// Draw a triangle.
+    void DrawTriangle(Vector4* vertices);
     
 private:
     /// Apply modelview transform to vertex.
@@ -119,8 +121,6 @@ private:
     inline float SignedArea(const Vector3& v0, const Vector3& v1, const Vector3& v2) const;
     /// Calculate viewport transform.
     void CalculateViewport();
-    /// Draw a triangle.
-    void DrawTriangle(Vector4* vertices);
     /// Clip vertices against a plane.
     void ClipVertices(const Vector4& plane, Vector4* vertices, bool* triangles, unsigned& numTriangles);
     /// Draw a clipped triangle.

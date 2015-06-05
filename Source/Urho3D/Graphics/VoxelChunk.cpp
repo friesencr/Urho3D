@@ -6,10 +6,24 @@
 #include "Graphics/VertexBuffer.h"
 #include "Graphics/Camera.h"
 #include "DebugRenderer.h"
+#include "VoxelBuilder.h"
+#include "OcclusionBuffer.h"
 
 namespace Urho3D {
 
 extern const char* GEOMETRY_CATEGORY;
+
+static inline Vector4 ModelTransform(const Matrix4& transform, const Vector3& vertex)
+{
+	return Vector4(
+		transform.m00_ * vertex.x_ + transform.m01_ * vertex.y_ + transform.m02_ * vertex.z_ + transform.m03_,
+		transform.m10_ * vertex.x_ + transform.m11_ * vertex.y_ + transform.m12_ * vertex.z_ + transform.m13_,
+		transform.m20_ * vertex.x_ + transform.m21_ * vertex.y_ + transform.m22_ * vertex.z_ + transform.m23_,
+		transform.m30_ * vertex.x_ + transform.m31_ * vertex.y_ + transform.m32_ * vertex.z_ + transform.m33_
+		);
+}
+
+
 
 VoxelChunk::VoxelChunk(Context* context) :
     Drawable(context, DRAWABLE_GEOMETRY),
@@ -19,6 +33,8 @@ VoxelChunk::VoxelChunk(Context* context) :
 	size_[0] = 0; size_[1] = 0; size_[2] = 0;
 	index_[0] = 0; index_[1] = 0; index_[2] = 0;
 	SetNumberOfMeshes(numberOfMeshes_);
+	//SetOccludee(true);
+	//SetOccluder(true);
 }
 
 VoxelChunk::~VoxelChunk()
@@ -58,11 +74,17 @@ UpdateGeometryType VoxelChunk::GetUpdateGeometryType()
 
 unsigned VoxelChunk::GetNumOccluderTriangles()
 {
-    return 0;
-    /* if (geometry_->GetIndexBuffer()) */
-    /* { */
-    /* geometry_->GetIndexBuffer()->GetIndexCount() / 3 : 0; */
-    /* } */
+	unsigned numTriangles = 0;
+	for (unsigned i = 0; i < batches_.Size(); ++i)
+	{
+		// Check that the material is suitable for occlusion (default material always is)
+		Material* mat = batches_[i].material_;
+		if (mat && !mat->GetOcclusion())
+			continue;
+		else
+			numTriangles += batches_[i].geometry_->GetIndexCount() / 3;
+	}
+	return numTriangles;
 }
 
 void VoxelChunk::UpdateBatches(const FrameInfo& frame)
@@ -171,6 +193,9 @@ void VoxelChunk::SetNumberOfMeshes(unsigned count)
 	materials_.Resize(count);
     batches_.Resize(count);
 	hasMaterialParameters_.Resize(count);
+	numQuads_.Resize(count);
+	rawData_.Resize(count);
+	
 
 	for (unsigned i = 0; i < count; ++i)
 	{
@@ -184,6 +209,7 @@ void VoxelChunk::SetNumberOfMeshes(unsigned count)
 		batches_[i].material_ = materials_[i];
 		batches_[i].geometry_ = geometries_[i];
 		batches_[i].geometryType_ = GEOM_STATIC_NOINSTANCING;
+		numQuads_[i] = 0;
 	}
 }
 
@@ -223,9 +249,99 @@ unsigned char VoxelChunk::GetIndexZ() { return index_[2]; }
 
 unsigned VoxelChunk::GetLodLevel() const { return lodLevel_; }
 
+void VoxelChunk::SetNeighbors(VoxelChunk* north, VoxelChunk* south, VoxelChunk* east, VoxelChunk* west)
+{
+	neighborNorth_ = north;
+	neighborSouth_ = south;
+	neighborEast_ = east;
+	neighborWest_ = west;
+}
+
+VoxelChunk* VoxelChunk::GetNeighborNorth() const
+{
+	return neighborNorth_;
+}
+
+VoxelChunk* VoxelChunk::GetNeighborSouth() const
+{
+	return neighborSouth_;
+}
+
+VoxelChunk* VoxelChunk::GetNeighborEast() const
+{
+	return neighborEast_;
+}
+
+VoxelChunk* VoxelChunk::GetNeighborWest() const
+{
+	return neighborWest_;
+}
+
 bool VoxelChunk::DrawOcclusion(OcclusionBuffer* buffer)
 {
+	Matrix4 viewProj = buffer->GetProjection() * buffer->GetView();
+	Matrix4 modelViewProj = viewProj * GetNode()->GetWorldTransform();
+
+	for (unsigned i = 0; i < batches_.Size(); ++i)
+	{
+		Material* material = batches_[i].material_;
+		if (material)
+		{
+			if (!material->GetOcclusion())
+				return true;
+			buffer->SetCullMode(material->GetCullMode());
+		}
+		else
+			buffer->SetCullMode(CULL_CCW);
+
+
+		Geometry* geometry = geometries_[i];
+
+		const unsigned char* vb = 0;
+		const unsigned char* ib = 0;
+		unsigned vertexSize;
+		unsigned indexCount;
+		unsigned elementMask;
+		geometry->GetRawData(vb, vertexSize, ib, indexCount, elementMask);
+
+		unsigned* vertexData = (unsigned*)vb;
+		for (int i = 0; i < indexCount; i += 3)
+		{
+			if (buffer->GetNumTriangles() >= buffer->GetMaxTriangles())
+				return false;
+
+			unsigned int v1 = *vertexData++;
+			unsigned int v2 = *vertexData++;
+			unsigned int v3 = *vertexData++;
+
+			Vector4 verticies[3] = {
+				ModelTransform(modelViewProj, Vector3((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0, (float)((v1 >> 7u) & 127u))),
+				ModelTransform(modelViewProj, Vector3((float)(v2 & 127u), (float)((v2 >> 14u) & 511u) / 2.0, (float)((v2 >> 7u) & 127u))),
+				ModelTransform(modelViewProj, Vector3((float)(v3 & 127u), (float)((v3 >> 14u) & 511u) / 2.0, (float)((v3 >> 7u) & 127u)))
+			};
+
+			buffer->DrawTriangle(verticies);
+		}
+	}
+    /* if (geometry_->GetIndexBuffer()) */
+    /* { */
+    /* geometry_->GetIndexBuffer()->GetIndexCount() / 3 : 0; */
+    /* } */
     return true;
+}
+
+void VoxelChunk::Build()
+{
+	VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
+	SharedPtr<VoxelMap> voxelMap(GetVoxelMap());
+	builder->BuildVoxelChunk(SharedPtr<VoxelChunk>(this));
+}
+
+void VoxelChunk::BuildAsync()
+{
+	VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
+	SharedPtr<VoxelMap> voxelMap(GetVoxelMap());
+	builder->BuildVoxelChunkAsync(SharedPtr<VoxelChunk>(this));
 }
 
 Geometry* VoxelChunk::GetLodGeometry(unsigned batchIndex, unsigned level)
@@ -233,5 +349,14 @@ Geometry* VoxelChunk::GetLodGeometry(unsigned batchIndex, unsigned level)
     return batches_[batchIndex].geometry_;
 }
 
+VoxelMap* VoxelChunk::GetVoxelMap() const
+{
+	return voxelMap_;
 }
 
+void VoxelChunk::SetVoxelMap(VoxelMap* voxelMap)
+{
+	voxelMap_ = voxelMap;
+}
+
+}

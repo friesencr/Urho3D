@@ -8,6 +8,7 @@
 #include "../Core/Mutex.h"
 #include "TextureBuffer.h"
 #include "Voxel.h"
+#include "VoxelBuilder.h"
 
 namespace Urho3D {
 
@@ -16,6 +17,7 @@ class URHO3D_API VoxelChunk : public Drawable
 {
     OBJECT(VoxelChunk);
     friend class VoxelSet;
+    friend class VoxelBuilder;
 
 public:
     VoxelChunk(Context* context);
@@ -50,10 +52,10 @@ public:
 	Material* GetMaterial(unsigned selector) const;
 
 	/// Gets the voxel definition
-	VoxelDefinition* GetVoxelDefinition() const;
+	VoxelMap* GetVoxelMap() const;
 
 	/// Sets the voxel definition
-	void SetVoxelDefinition(VoxelDefinition* voxelDefinition);
+	void SetVoxelMap(VoxelMap* voxelMap);
 
     /// Set owner terrain.
     void SetOwner(VoxelSet* voxelSet);
@@ -66,6 +68,9 @@ public:
 
 	void SetNumberOfMeshes(unsigned count);
 
+	void Build();
+	void BuildAsync();
+
     unsigned char GetIndexX();
     unsigned char GetIndexY();
     unsigned char GetIndexZ();
@@ -74,6 +79,11 @@ public:
     unsigned char GetSizeZ();
     void SetIndex(unsigned char x, unsigned char y, unsigned char z);
     void SetSize(unsigned char x, unsigned char y, unsigned char z);
+	void SetNeighbors(VoxelChunk* north, VoxelChunk* south, VoxelChunk* east, VoxelChunk* west);
+	VoxelChunk* GetNeighborNorth() const;
+	VoxelChunk* GetNeighborSouth() const;
+	VoxelChunk* GetNeighborEast() const;
+	VoxelChunk* GetNeighborWest() const;
     unsigned GetLodLevel() const;
 
 protected:
@@ -85,7 +95,6 @@ private:
     unsigned char index_[3];
     unsigned char size_[3];
     float priority_;
-    unsigned numQuads_;
     unsigned lodLevel_;
 	unsigned numberOfMeshes_;
     WeakPtr<VoxelSet> owner_;
@@ -94,12 +103,14 @@ private:
     WeakPtr<VoxelChunk> neighborEast_;
     WeakPtr<VoxelChunk> neighborSouth_;
 
-	SharedPtr<VoxelDefinition> voxelDefinition_;
+	SharedPtr<VoxelMap> voxelMap_;
     Vector<SharedPtr<Geometry> > geometries_;
 	Vector<SharedPtr<Material> > materials_;
 	Vector<SharedPtr<VertexBuffer> > vertexData_;
 	Vector<SharedPtr<IndexBuffer> > faceData_;
 	Vector<SharedPtr<TextureBuffer> > faceBuffer_;
+	Vector<PODVector<unsigned> > rawData_;
+	Vector<unsigned> numQuads_;
 	Vector<bool> hasMaterialParameters_;
 };
 

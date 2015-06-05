@@ -6,6 +6,9 @@
 #include "Texture2D.h"
 #include "TextureBuffer.h"
 #include "Material.h"
+#include "../IO/Log.h"
+#include "Core/CoreEvents.h"
+
 
 #define STB_VOXEL_RENDER_IMPLEMENTATION
 #define STBVOX_CONFIG_MODE  1
@@ -111,7 +114,9 @@ namespace Urho3D
     VoxelBuilder::VoxelBuilder(Context* context) 
         : Object(context),
         sharedIndexBuffer_(0),
-        compatibilityMode(false)
+		maxFrameTime_(1),
+        compatibilityMode(false),
+		completeAllWork_(false)
     {
 		transform_.Resize(3);
 		normals_.Resize(32);
@@ -141,7 +146,8 @@ namespace Urho3D
 		for (unsigned i = 0; i < 64; ++i)
 			texgenTable_[i] = Vector3(URHO3D_default_texgen[i]);
 
-        //SubscribeToEvent(E_WORKITEMCOMPLETED, HANDLER(VoxelBuilder, HandleWorkItemCompleted));
+        AllocateWorkerBuffers();
+		SubscribeToEvent(E_BEGINFRAME, HANDLER(VoxelBuilder, HandleBeginFrame));
     }
 
     VoxelBuilder::~VoxelBuilder()
@@ -167,6 +173,7 @@ namespace Urho3D
                 stbvox_init_mesh_maker(&slots_[i].meshMakers[a]);
 
             slots_[i].job = 0;
+			slots_[i].workloads.Resize(4);
             FreeWorkSlot(&slots_[i]);
         }
     }
@@ -193,18 +200,37 @@ namespace Urho3D
             data[i * 6 + 4] = i * 4 + 3;
             data[i * 6 + 5] = i * 4;
         }
-        sharedIndexBuffer_ = new IndexBuffer(context_);
-        if (!sharedIndexBuffer_->SetSize(numIndices, true, false))
-            return false;
 
-        if (!sharedIndexBuffer_->SetData(&data.Front()))
-            return false;
+		if (sharedIndexBuffer_.Null())
+		{
+			sharedIndexBuffer_ = new IndexBuffer(context_);
+			sharedIndexBuffer_->SetShadowed(true);
+		}
+
+		if (!sharedIndexBuffer_->SetSize(numIndices, true, false))
+		{
+			LOGERROR("Could not set size of shared voxel index buffer.");
+			return false;
+		}
+
+		if (!sharedIndexBuffer_->SetData(&data.Front()))
+		{
+			LOGERROR("Could not set data of shared voxel index buffer.");
+			return false;
+		}
+		return true;
     }
 
     void VoxelBuilder::CompleteWork(unsigned priority)
     {
-        WorkQueue* workQueue = GetSubsystem<WorkQueue>();
-        workQueue->Complete(M_MAX_UNSIGNED);
+		completeAllWork_ = true;
+		while (RunJobs() > 0)
+		{
+			Time::Sleep(0);
+		}
+		completeAllWork_ = false;
+        //WorkQueue* workQueue = GetSubsystem<WorkQueue>();
+        //workQueue->Complete(M_MAX_UNSIGNED);
     }
 
     // Decode to vertex buffer
@@ -216,8 +242,8 @@ namespace Urho3D
 
         VoxelWorkSlot* slot = workload->slot;
         int threadIndex = workload->threadIndex;
-        int gpuVertexSize = sizeof(float) * 8; // position(3) / normal(3) / uv1(2)
-        int cpuVertexSize = sizeof(float) * 3; // position(3)
+        //int gpuVertexSize = sizeof(float) * 8; // position(3) / normal(3) / uv1(2)
+        //int cpuVertexSize = sizeof(float) * 3; // position(3)
         int numVertices = numQuads * 4; // 4 verts in a quad
 
         //workload->gpuData.Resize(numVertices * gpuVertexSize);
@@ -291,60 +317,104 @@ namespace Urho3D
         workload->builder->BuildWorkload(workload);
     }
 
-    VoxelJob* VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, SharedPtr<VoxelDefinition> voxelDefinition)
-    {
-        if (voxelDefinition.Null())
+	VoxelJob* VoxelBuilder::BuildVoxelChunkAsync(SharedPtr<VoxelChunk> chunk)
+	{
+		if (chunk.Null())
+			return 0;
+
+		SharedPtr<VoxelMap> voxelMap(chunk->GetVoxelMap());
+        if (voxelMap.Null())
             return 0;
 
-        unsigned char width = voxelDefinition->width_;
-        unsigned char depth = voxelDefinition->depth_;
-        unsigned char height = voxelDefinition->height_;
+        unsigned char width = voxelMap->width_;
+        unsigned char depth = voxelMap->depth_;
+        unsigned char height = voxelMap->height_;
 
         if (!(width > 0 && depth > 0 && height > 0))
             return 0;
 
-        VoxelJob* job = CreateJob(chunk, voxelDefinition);
-        RunJobs();
+        VoxelJob* job = CreateJob(chunk);
+		job->async = true;
+		RunJobs();
+
         return job;
+	}
+
+    VoxelJob* VoxelBuilder::BuildVoxelChunk(SharedPtr<VoxelChunk> chunk)
+    {
+		if (chunk.Null())
+			return 0;
+
+		SharedPtr<VoxelMap> voxelMap(chunk->GetVoxelMap());
+        if (voxelMap.Null())
+            return 0;
+
+        unsigned char width = voxelMap->width_;
+        unsigned char depth = voxelMap->depth_;
+        unsigned char height = voxelMap->height_;
+
+        if (!(width > 0 && depth > 0 && height > 0))
+            return 0;
+
+        VoxelJob* job = CreateJob(chunk);
+		job->async = false;
+
+        RunJobs();
+		CompleteWork();
+        return 0;
     }
 
     int VoxelBuilder::RunJobs()
     {
-        if (jobs_.Empty())
-            return 0;
+		if (!completeAllWork_ && frameTimer_.GetMSec(false) > maxFrameTime_)
+			return 0;
 
-        AllocateWorkerBuffers();
-        unsigned total = 0;
+		for (unsigned i = 0; i < slots_.Size(); ++i)
+		{
+				VoxelWorkSlot* slot = &slots_[i];
+				bool process = false;
+				{
+					MutexLock lock(slot->workMutex);
+					process = (!slot->free && slot->workCounter == 0);
+				}
+				if (process)
+					ProcessSlot(slot);
+		}
+
+		if (jobs_.Size() == 0)
+			return 0;
+
         for (;;)
         {
             VoxelWorkSlot* slot = GetFreeWorkSlot();
-            if (slot == 0)
-                return total;
+			if (slot == 0)
+				break;
 
-            if (!jobs_.Empty())
-            {
-                total++;
-                VoxelJob* job(jobs_[0]);
-                job->slot = slot;
-                slot->job = job;
-                slot->free = false;
-                jobs_.Erase(0);
-                ProcessJob(job);
-            }
-            else
-                return total;
+			if (!jobs_.Empty())
+			{
+				unsigned count = jobs_.Size();
+				VoxelJob* job = jobs_[0];
+				job->slot = slot;
+				slot->job = job;
+				slot->free = false;
+				jobs_.Erase(0);
+				ProcessJob(job);
+			}
+			else
+				break;
         }
 
-        return total;
+        return jobs_.Size();
     }
 
-    VoxelJob* VoxelBuilder::CreateJob(VoxelChunk* chunk, VoxelDefinition* voxelDefinition)
+    VoxelJob* VoxelBuilder::CreateJob(VoxelChunk* chunk)
     {
         VoxelJob* job = new VoxelJob();
         job->chunk = chunk;
-        job->voxelDefinition = voxelDefinition;
         job->slot = 0;
+		unsigned size = jobs_.Size();
         jobs_.Push(job);
+		size = jobs_.Size();
         return job;
     }
 
@@ -353,18 +423,19 @@ namespace Urho3D
         WorkQueue* workQueue = GetSubsystem<WorkQueue>();
         VoxelChunk* chunk = job->chunk;
         VoxelWorkSlot* slot = job->slot;
-        VoxelDefinition* definition = job->voxelDefinition;
+		VoxelMap* voxelMap = job->chunk->GetVoxelMap();
 
-        unsigned char workloadsX = (unsigned char)ceil((float)definition->width_ / (float)VOXEL_WORKER_SIZE_X);
-        unsigned char workloadsY = (unsigned char)ceil((float)definition->height_ / (float)VOXEL_WORKER_SIZE_Y);
-        unsigned char workloadsZ = (unsigned char)ceil((float)definition->depth_ / (float)VOXEL_WORKER_SIZE_Z);
+        unsigned char workloadsX = (unsigned char)ceil((float)voxelMap->width_ / (float)VOXEL_WORKER_SIZE_X);
+        unsigned char workloadsY = (unsigned char)ceil((float)voxelMap->height_ / (float)VOXEL_WORKER_SIZE_Y);
+        unsigned char workloadsZ = (unsigned char)ceil((float)voxelMap->depth_ / (float)VOXEL_WORKER_SIZE_Z);
+		unsigned index = 0;
         for (unsigned char x = 0; x < workloadsX; ++x)
         {
             for (unsigned char z = 0; z < workloadsZ; ++z)
             {
                 for (unsigned char y = 0; y < workloadsY; ++y)
                 {
-                    VoxelWorkload* workload = new VoxelWorkload();
+					VoxelWorkload* workload = &slot->workloads[index++];
                     workload->builder = this;
                     workload->slot = slot;
                     workload->index[0] = x; 
@@ -373,9 +444,9 @@ namespace Urho3D
                     workload->start[0] = x * VOXEL_WORKER_SIZE_X;
                     workload->start[1] = 0;
                     workload->start[2] = z * VOXEL_WORKER_SIZE_Z;
-                    workload->end[0] = Min((int)definition->width_, (x + 1) * VOXEL_WORKER_SIZE_X);
-                    workload->end[1] = Min((int)definition->height_, (y + 1) * VOXEL_WORKER_SIZE_Y);
-                    workload->end[2] = Min((int)definition->depth_, (z + 1) * VOXEL_WORKER_SIZE_Z);
+                    workload->end[0] = Min((int)voxelMap->width_, (x + 1) * VOXEL_WORKER_SIZE_X);
+                    workload->end[1] = Min((int)voxelMap->height_, (y + 1) * VOXEL_WORKER_SIZE_Y);
+                    workload->end[2] = Min((int)voxelMap->depth_, (z + 1) * VOXEL_WORKER_SIZE_Z);
                     workload->threadIndex = 0;
                     workload->numQuads = 0;
 
@@ -387,13 +458,17 @@ namespace Urho3D
                     workload->workItem = workItem;
 
                     slot->workCounter++;
-                    slot->workloads.Push(workload);
                     workQueue->AddWorkItem(workItem);
                 }
             }
         }
-        workQueue->Complete(M_MAX_UNSIGNED);
-        ProcessSlot(slot);
+		slot->numWorkloads = index;
+
+		//if (!async)
+		//{
+		//	workQueue->Complete(M_MAX_UNSIGNED);
+		//	ProcessSlot(slot);
+		//}
     }
 
     void VoxelBuilder::TransferDataToSlot(VoxelWorkload* workload)
@@ -416,8 +491,11 @@ namespace Urho3D
             workload->slot->failed = true;
         }
 
-		if (DecrementWorkSlot(workload->slot, workload) == 0)
-			workload->workItem->sendEvent_ = false;
+		DecrementWorkSlot(workload->slot, workload);
+		//{
+		//	if (workload->slot->job->async)
+		//		workload->workItem->sendEvent_ = true;
+		//}
     }
 
     void VoxelBuilder::AbortSlot(VoxelWorkSlot* slot)
@@ -435,25 +513,92 @@ namespace Urho3D
         unsigned threadIndex = workload->threadIndex;
         VoxelWorkSlot* slot = workload->slot;
         VoxelJob* job = slot->job;
-        VoxelDefinition* definition = job->voxelDefinition;
+		VoxelChunk* chunk = job->chunk;
+		VoxelMap* voxelMap = chunk->GetVoxelMap();
+		VoxelBlocktypeMap* voxelBlocktypeMap = voxelMap->blocktypeMap;
 
         stbvox_mesh_maker* mm = &slot->meshMakers[threadIndex];
-        stbvox_set_input_stride(mm, definition->xStride, definition->zStride);
+        stbvox_set_input_stride(mm, voxelMap->xStride, voxelMap->zStride);
         
         stbvox_input_description *map;
         map = stbvox_get_input_description(mm);
-		map->blocktype = &definition->blocktype[definition->GetIndex(0, 0, 0)];
-		map->block_tex1 = &definition->blockTex1.Front();
-        map->block_tex1_face = &definition->blockTex1Face.Front();
-		map->block_tex2 = &definition->blockTex2.Front();
-        map->block_tex2_face = &definition->blockTex2Face.Front();
-        map->block_geometry = &definition->blockGeometry.Front();
-        map->block_vheight = &definition->blockVHeight.Front();
 
-		if (definition->geometry.Size())
-			map->geometry = &definition->geometry[definition->GetIndex(0, 0, 0)];
-		if (definition->vHeight.Size())
-			map->vheight = &definition->vHeight[definition->GetIndex(0, 0, 0)];
+		VoxelChunk* northChunk = chunk->GetNeighborNorth();
+		VoxelChunk* southChunk = chunk->GetNeighborSouth();
+		VoxelChunk* eastChunk = chunk->GetNeighborEast();
+		VoxelChunk* westChunk = chunk->GetNeighborWest();
+		VoxelMap* northMap = northChunk ? northChunk->GetVoxelMap() : 0;
+		VoxelMap* southMap = southChunk ? southChunk->GetVoxelMap() : 0;
+		VoxelMap* eastMap = eastChunk ? eastChunk->GetVoxelMap() : 0;
+		VoxelMap* westMap = westChunk ? westChunk->GetVoxelMap() : 0;
+
+		if (voxelBlocktypeMap)
+		{
+			map->block_tex1 = &voxelBlocktypeMap->blockTex1.Front();
+			map->block_tex1_face = &voxelBlocktypeMap->blockTex1Face.Front();
+			map->block_tex2 = &voxelBlocktypeMap->blockTex2.Front();
+			map->block_tex2_face = &voxelBlocktypeMap->blockTex2Face.Front();
+			map->block_geometry = &voxelBlocktypeMap->blockGeometry.Front();
+			map->block_vheight = &voxelBlocktypeMap->blockVHeight.Front();
+		}
+
+		if (voxelMap->blocktype.Size())
+		{
+			map->blocktype = &voxelMap->blocktype[voxelMap->GetIndex(0, 0, 0)];
+
+			// transfer data from nearby blocks
+			// we are assuming same size 
+			if (northMap)
+				for (unsigned x = 0; x < voxelMap->width_; ++x)
+					for (unsigned y = 0; y < voxelMap->height_; ++y)
+						voxelMap->SetBlocktype(x, y, voxelMap->depth_, northMap->GetBlocktype(x, y, 0));
+
+			if (southMap)
+				for (unsigned x = 0; x < voxelMap->width_; ++x)
+					for (unsigned y = 0; y < voxelMap->height_; ++y)
+						voxelMap->SetBlocktype(x, y, -1, southMap->GetBlocktype(x, y, southMap->depth_ - 1));
+
+			if (eastMap)
+				for (unsigned z = 0; z < voxelMap->depth_; ++z)
+					for (unsigned y = 0; y < voxelMap->height_; ++y)
+						voxelMap->SetBlocktype(voxelMap->width_, y, z, eastMap->GetBlocktype(0, y, z));
+			if (westMap)
+				for (unsigned z = 0; z < voxelMap->depth_; ++z)
+					for (unsigned y = 0; y < voxelMap->height_; ++y)
+						voxelMap->SetBlocktype(-1, y, z, westMap->GetBlocktype(westMap->width_ - 1, y, z));
+		}
+
+		if (voxelMap->geometry.Size())
+		{
+			map->geometry = &voxelMap->geometry[voxelMap->GetIndex(0, 0, 0)];
+			
+		}
+
+		if (voxelMap->vHeight.Size())
+		{
+			map->vheight = &voxelMap->vHeight[voxelMap->GetIndex(0, 0, 0)];
+
+			if (northMap)
+				for (unsigned x = 0; x < voxelMap->width_; ++x)
+					for (unsigned y = 0; y < voxelMap->height_; ++y)
+						voxelMap->vHeight[voxelMap->GetIndex(x, y, voxelMap->depth_)] = northMap->GetVheight(x, y, 0);
+
+			if (southMap)
+				for (unsigned x = 0; x < voxelMap->width_; ++x)
+					for (unsigned y = 0; y < voxelMap->height_; ++y)
+						voxelMap->vHeight[voxelMap->GetIndex(x, y, -1)] = southMap->GetVheight(x, y, southMap->depth_ - 1);
+
+			if (eastMap)
+				for (unsigned z = 0; z < voxelMap->depth_; ++z)
+					for (unsigned y = 0; y < voxelMap->height_; ++y)
+						voxelMap->vHeight[voxelMap->GetIndex(voxelMap->width_, y, z)] = eastMap->GetVheight(0, y, z);
+			if (westMap)
+				for (unsigned z = 0; z < voxelMap->depth_; ++z)
+					for (unsigned y = 0; y < voxelMap->height_; ++y)
+						voxelMap->vHeight[voxelMap->GetIndex(-1, y, z)] = westMap->GetVheight(westMap->width_ - 1, y, z);
+		}
+
+
 
         stbvox_reset_buffers(mm);
         stbvox_set_buffer(mm, 0, 0, slot->workVertexBuffers[threadIndex], VOXEL_WORKER_VERTEX_BUFFER_SIZE);
@@ -473,8 +618,10 @@ namespace Urho3D
                 workload->end[2],
                 Min(y+16, workload->end[1])
             );
+
             if (stbvox_make_mesh(mm) == 0)
             {
+				// TODO handle partial uploads
                 success = false;
                 break;
             }
@@ -502,6 +649,7 @@ namespace Urho3D
         VoxelChunk* chunk = job->chunk;
         VertexBuffer* vb = chunk->GetVertexBuffer(0);
 		IndexBuffer* faceData = chunk->GetFaceData(0);
+		chunk->numQuads_[0] = slot->numQuads;
         int totalVertices = slot->numQuads * 4;
         if (totalVertices == 0)
             return true;
@@ -517,19 +665,25 @@ namespace Urho3D
 
         int end = 0;
         int start = 0;
-        for (unsigned i = 0; i < slot->workloads.Size(); ++i)
+        for (unsigned i = 0; i < slot->numWorkloads; ++i)
         {
-            VoxelWorkload* workload = slot->workloads[i];
+            VoxelWorkload* workload = &slot->workloads[i];
             start = end;
             end = start + workload->numQuads;
             //if (!vb->SetDataRange(&workload->gpuData.Front(), start, workload->numQuads * 4))
 			unsigned char* vertexBuffer = (unsigned char*)slot->workVertexBuffers[workload->threadIndex];
-            if (!vb->SetDataRange(vertexBuffer, start*4, workload->numQuads * 4))
-                return false;
+			if (!vb->SetDataRange(vertexBuffer, start * 4, workload->numQuads * 4))
+			{
+				LOGERROR("Error uploading voxel vertex data.");
+				return false;
+			}
 
 			unsigned char* indexBuffer = (unsigned char*)slot->workFaceBuffers[workload->threadIndex];
 			if (!faceData->SetDataRange(indexBuffer, start, workload->numQuads))
+			{
+				LOGERROR("Error uploading voxel face data.");
 				return false;
+			}
         }
 
 		if (!chunk->GetHasShaderParameters(0))
@@ -544,8 +698,16 @@ namespace Urho3D
 		// face data
 		{
 			TextureBuffer* faceDataTexture = chunk->GetFaceBuffer(0);
-			faceDataTexture->SetSize(0);
-			faceDataTexture->SetData(faceData);
+			if (!faceDataTexture->SetSize(0))
+			{
+				LOGERROR("Error initializing voxel texture buffer");
+				return false;
+			}
+			if (!faceDataTexture->SetData(faceData))
+			{
+				LOGERROR("Error setting voxel texture buffer data");
+				return false;
+			}
 			material->SetTexture(TU_CUSTOM1, faceDataTexture);
 		}
 
@@ -561,32 +723,38 @@ namespace Urho3D
 
 			Geometry* geo = chunk->GetGeometry(0);
             int indexEnd = end * 6; // 6 indexes per quad
-            ResizeIndexBuffer(slot->numQuads);
+			if (!ResizeIndexBuffer(slot->numQuads))
+			{
+				LOGERROR("Error resizing shared voxel index buffer");
+				return false;
+			}
 
             geo->SetIndexBuffer(sharedIndexBuffer_);
-            if (!geo->SetDrawRange(TRIANGLE_LIST, 0, indexEnd, false))
-                return false;
+			if (!geo->SetDrawRange(TRIANGLE_LIST, 0, indexEnd, false))
+			{
+				LOGERROR("Error setting voxel draw range");
+				return false;
+			}
         }
     }
 
     void VoxelBuilder::ProcessSlot(VoxelWorkSlot* slot)
     {
-        if (!slot->failed)
-            UploadGpuData(slot);
+		if (!slot->failed)
+			if (!UploadGpuData(slot))
+				LOGERROR("Could not upload voxel data to graphics card.");
+
+		VoxelChunk* chunk = slot->job->chunk;
         FreeWorkSlot(slot);
     }
 
-    void VoxelBuilder::HandleWorkItemCompleted(StringHash eventType, VariantMap& eventData)
+    void VoxelBuilder::HandleBeginFrame(StringHash eventType, VariantMap& eventData)
     {
-        using namespace WorkItemCompleted;
-        SharedPtr<WorkItem> workItem((WorkItem*)eventData[P_ITEM].GetPtr());
-        if (workItem->workFunction_ != BuildWorkloadHandler)
-            return;
-
-        VoxelWorkload* workload = (VoxelWorkload*)workItem->aux_;
-        VoxelWorkSlot* slot = workload->slot;
-        ProcessSlot(slot);
-        RunJobs();
+		frameTimer_.Reset();
+		while (frameTimer_.GetMSec(false) < maxFrameTime_ &&  RunJobs() > 0 )
+		{
+			Time::Sleep(0);
+		}
     }
 
     unsigned VoxelBuilder::DecrementWorkSlot(VoxelWorkSlot* slot, VoxelWorkload* workload)
@@ -597,24 +765,24 @@ namespace Urho3D
 
     void VoxelBuilder::FreeWorkSlot(VoxelWorkSlot* slot)
     {
-        slot->free = true;
+		MutexLock lock(slotMutex_);
         slot->failed = false;
         slot->workCounter = 0;
         slot->numQuads = 0;
         slot->box = BoundingBox();
-        for (unsigned i = 0; i < slot->workloads.Size(); ++i)
-            delete slot->workloads[i];
+		slot->numWorkloads = 0;
 
-        slot->workloads.Clear();
         if (slot->job)
         {
             delete slot->job;
             slot->job = 0;
         }
+        slot->free = true;
     }
 
     VoxelWorkSlot* VoxelBuilder::GetFreeWorkSlot()
     {
+		MutexLock lock(slotMutex_);
         VoxelWorkSlot* slot = 0;
         for (unsigned i = 0; i < slots_.Size(); ++i)
         {
@@ -626,5 +794,164 @@ namespace Urho3D
         }
         return slot;
     }
+
+#if 0
+	static inline long longPair(unsigned a, unsigned b)
+	{
+		return (long)a & ((long)b >> 32);
+	}
+
+	void VoxelBuilder::SimplifyMesh(VoxelWorkSlot* slot)
+	{
+	//int Polyhedron::MergeAdjacentPlanarFaces(bool snapVerticesToMergedPlanes, bool conservativeEnclose, float angleEpsilon, float distanceEpsilon)
+		Vector<Vector4> faceNormals(slot->numQuads);
+		// get quad normals
+
+		Vector<unsigned> faceGroups(slot->numQuads);
+		for (unsigned i = 0; i < slot->numQuads; ++i)
+			faceGroups[i] = i;
+
+		PODVector<Vector3> vertices(slot->numQuads * 4);
+		{
+			Vector3* ptr = &vertices.Front();
+			for (unsigned i = 0; slot->numWorkloads; ++i)
+			{
+				VoxelWorkload* workload = &slot->workloads[i];
+				unsigned* vertexData = (unsigned*)slot->workVertexBuffers[workload->threadIndex];
+				unsigned* faceData = (unsigned*)slot->workFaceBuffers[workload->threadIndex];
+				for (unsigned j = 0; j < workload->numQuads; ++j)
+				{
+					for (unsigned k = 0; k < 4; ++k)
+					{
+						unsigned data = *vertexData++;
+						Vector3 vertex((float)(data & 127u), (float)((data >> 14u) & 511u) / 2.0, (float)((data >> 7u) & 127u));
+						*ptr++ = vertex;
+					}
+				}
+			}
+		}
+		unsigned numMerges = 0;
+		unsigned numVertices = slot->numQuads * 4;
+		HashMap<long, int> verticesToFaces;
+		for (unsigned i = 0; i < slot->numQuads; ++i)
+		{
+			unsigned v0 = i + 4;
+			for (size_t j = 0; j < 4; ++j)
+			{
+				unsigned v1 = i + j;
+				long key = (long)v0 & ((long)v1 >> 32)
+				verticesToFaces[key] = i;
+				verticesToFaces.Find( )
+				std::map<std::pair<int, int>, int>::iterator neighbor = verticesToFaces.find(std::make_pair(v1, v0));
+
+				if (neighbor != verticesToFaces.end())
+				{
+					int nf = neighbor->second;
+					if (!f[nf].v.empty())
+					{
+						cv thisNormal = faceNormals[i];
+						cv nghbNormal = faceNormals[nf];
+						if (thisNormal.Dot(nghbNormal) >= 1.0 - angleEpsilon)
+						{
+							cs eNeg, ePos, nNeg, nPos;
+							PolyExtremeVertexOnFace(*this, i, nghbNormal, eNeg, ePos);
+							//						PolyExtremeVertexOnFace(*this, nf, nghbNormal, nNeg, nPos);
+							//						if (Max(ePos, nPos) - Min(eNeg, nNeg) <= distanceEpsilon)
+							PolyExtremeVertexOnFace(*this, nf, thisNormal, nNeg, nPos);
+							if (ePos - eNeg <= distanceEpsilon && nPos - nNeg <= distanceEpsilon)
+							{
+								++numMerges;
+								// Merge this face to neighboring face.
+								int fg = i;
+								while (faceGroups[fg] != fg)
+									fg = faceGroups[fg];
+								int nfgr = nf;
+								while (faceGroups[nfgr] != nfgr)
+									nfgr = faceGroups[nfgr];
+								faceGroups[fg] = nfgr;
+								break;
+							}
+						}
+					}
+				}
+				v0 = v1;
+			}
+		}
+
+		std::vector<std::set<std::pair<int, int> > > newEdgesPerFace(f.size());
+		for (size_t i = 0; i < f.size(); ++i)
+		{
+			Face &face = f[i];
+
+			int fg = i;
+			while (faceGroups[fg] != fg)
+				fg = faceGroups[fg];
+
+			int v0 = face.v.back();
+			for (size_t j = 0; j < face.v.size(); ++j)
+			{
+				int v1 = face.v[j];
+
+				if (newEdgesPerFace[fg].find(std::make_pair(v1, v0)) != newEdgesPerFace[fg].end())
+				{
+					newEdgesPerFace[fg].erase(std::make_pair(v1, v0));
+				}
+				else
+				{
+					newEdgesPerFace[fg].insert(std::make_pair(v0, v1));
+				}
+
+				v0 = v1;
+			}
+		}
+
+		for (size_t i = 0; i < f.size(); ++i)
+		{
+			Face &face = f[i];
+
+			std::vector<std::pair<int, int> > boundaryEdges(newEdgesPerFace[i].begin(), newEdgesPerFace[i].end());
+			for (size_t j = 0; j < boundaryEdges.size(); ++j)
+				for (size_t k = j + 1; k < boundaryEdges.size(); ++k)
+					if (boundaryEdges[j].second == boundaryEdges[k].first)
+					{
+						Swap(boundaryEdges[j + 1], boundaryEdges[k]);
+						break;
+					}
+			face.v.clear();
+			for (size_t j = 0; j < boundaryEdges.size(); ++j)
+				face.v.push_back(boundaryEdges[j].first);
+
+			// Snap all vertices to the plane of the face.
+			if (snapVerticesToMergedPlanes)
+			{
+				// If conservativeEnclose == true, compute the maximum distance for the plane
+				// so it encloses all the points. Otherwise, compute the average.
+				cs d = conservativeEnclose ? -FLOAT_INF : 0;
+				for (size_t j = 0; j < face.v.size(); ++j)
+				{
+					int vtx = face.v[j];
+					if (conservativeEnclose)
+						d = Max(d, faceNormals[i].Dot(POINT_TO_FLOAT4(vec(v[vtx]))));
+					else
+						d += faceNormals[i].Dot(POINT_TO_FLOAT4(vec(v[vtx])));
+				}
+				if (!conservativeEnclose)
+					d /= (cs)face.v.size();
+				for (size_t j = 0; j < face.v.size(); ++j)
+				{
+					cv vtx = POINT_TO_FLOAT4(vec(v[face.v[j]]));
+					v[face.v[j]] = FLOAT4_TO_POINT((vtx + (d - faceNormals[i].Dot(vtx)) * faceNormals[i]).ToFloat4());
+				}
+			}
+		}
+	RemoveDegenerateFaces();
+	RemoveRedundantVertices();
+	assume(IsClosed());
+	assume(IsConvex());
+
+	return numMerges;
+}
+#endif
+
 
 }

@@ -100,7 +100,7 @@ void VS()
 void PS()
 {
     float fragmentAlpha;
-    vec3 normal = normalize(vNormal);
+    vec3 normal = vNormal;
 
     // get data from textures
     uint tex1ID = vFacedata.x;
@@ -186,11 +186,11 @@ void PS()
         vec3 finalColor = vVertexLight * diffColor.rgb;
 
         // Voxel ambient light
-        vec3 voxAmbientColor = dot(normal, cAmbientTable[0].xyz) * cAmbientTable[1].xyz + cAmbientTable[2].xyz;
-        voxAmbientColor = clamp(voxAmbientColor, 0.0, 1.0);
-        voxAmbientColor *= vAmbOcc;
+        // vec3 voxAmbientColor = dot(normal, cAmbientTable[0].xyz) * cAmbientTable[1].xyz + cAmbientTable[2].xyz;
+        // voxAmbientColor = clamp(voxAmbientColor, 0.0, 1.0);
+        // voxAmbientColor *= vAmbOcc;
 
-        finalColor += voxAmbientColor * diffColor.rgb;
+        // finalColor += voxAmbientColor * diffColor.rgb;
 
         // gl_FragColor = vec4(0.0, 0.0, 0.0, fragmentAlpha * diffColor.a);
         gl_FragColor = vec4(GetFog(finalColor, fogFactor), fragmentAlpha * diffColor.a);

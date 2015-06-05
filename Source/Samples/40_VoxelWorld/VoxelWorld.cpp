@@ -96,13 +96,18 @@ void VoxelWorld::CreateScene()
     Node* zoneNode = scene_->CreateChild("Zone");
     Zone* zone = zoneNode->CreateComponent<Zone>();
     zone->SetBoundingBox(BoundingBox(-1000, 1000));
-    zone->SetAmbientColor(Color(0.2, 0.2, 0.2));
+    zone->SetAmbientColor(Color(0.4, 0.4, 0.4));
+	//zone->SetAmbientGradient(true);
+	zone->SetFogColor(Color(0.9f, 1.0f, 1.0f));
+	zone->SetFogStart(500.0f);
+	zone->SetFogEnd(750.0f);
+
 
 	// Create skybox. The Skybox component is used like StaticModel, but it will be always located at the camera, giving the
 	// illusion of the box planes being far away. Use just the ordinary Box model and a suitable material, whose shader will
 	// generate the necessary 3D texture coordinates for cube mapping
 	Node* skyNode = scene_->CreateChild("Sky");
-	skyNode->SetScale(500.0f); // The scale actually does not matter
+	skyNode->SetScale(1000.0f); // The scale actually does not matter
 	Skybox* skybox = skyNode->CreateComponent<Skybox>();
 	skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
 	skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
@@ -111,7 +116,7 @@ void VoxelWorld::CreateScene()
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
     cameraNode_ = scene_->CreateChild("Camera");
     Camera* camera = cameraNode_->CreateComponent<Camera>();
-    camera->SetFarClip(500.0);
+    camera->SetFarClip(1000.0);
 
     // Set an initial position for the camera scene node above the plane
     cameraNode_->SetPosition(Vector3(0.0f, 5.0f, 0.0f));
@@ -123,10 +128,11 @@ void VoxelWorld::CreateScene()
     Node* lightNode = scene_->CreateChild("DirectionalLight");
     lightNode->SetDirection(Vector3(0.6f, -1.0f, 0.8f)); // The direction vector does not need to be normalized
 
-    //Light* light = lightNode->CreateComponent<Light>();
-    //light->SetLightType(LIGHT_DIRECTIONAL);
-    //light->SetCastShadows(true);
-    //light->SetBrightness(0.7);
+    Light* light = lightNode->CreateComponent<Light>();
+    light->SetLightType(LIGHT_DIRECTIONAL);
+    light->SetCastShadows(true);
+    light->SetBrightness(0.7);
+	light->SetColor(Color(0.7, 1.0, 0.7));
 
     //Node* planeNode = scene_->CreateChild("Plane");
     //planeNode->SetScale(Vector3(100.0f, 1.0f, 100.0f));
@@ -137,77 +143,77 @@ void VoxelWorld::CreateScene()
 
     voxelNode_ = scene_->CreateChild("VoxelNode");
     //VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
-    voxelDefinition_ = new VoxelDefinition(context_);
-	unsigned char geoSolid = VoxelDefinition::EncodeGeometry(VOXEL_TYPE_SOLID);
-	unsigned char geoSlant = VoxelDefinition::EncodeGeometry(VOXEL_TYPE_SOLID);
+    voxelBlocktypeMap_ = new VoxelBlocktypeMap(context_);
+	unsigned char geoSolid = VoxelEncodeGeometry(VOXEL_TYPE_FLOOR_VHEIGHT_03);
+	unsigned char geoSlant = VoxelEncodeGeometry(VOXEL_TYPE_SLAB_LOWER);
 
     //unsigned char heightNormal = VoxelDefinition::EncodeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-	voxelDefinition_->blockTex1Face.Resize(5);
+	voxelBlocktypeMap_->blockTex1Face.Resize(5);
     //unsigned char heightSlope = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
     //unsigned char heightRoof = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0);
-    //voxelDefinition_->blockVHeight.Push(0);
-    //voxelDefinition_->blockVHeight.Push(heightNormal);
-    //voxelDefinition_->blockVHeight.Push(heightNormal);
+    //voxelBlocktypeMap_->blockVHeight.Push(0);
+    //voxelBlocktypeMap_->blockVHeight.Push(heightNormal);
+    //voxelBlocktypeMap_->blockVHeight.Push(heightNormal);
 
 	// empty
-	voxelDefinition_->blockTex1Face[0][1] = 1;
-	voxelDefinition_->blockTex1Face[0][2] = 1;
-	voxelDefinition_->blockTex1Face[0][3] = 1;
-	voxelDefinition_->blockTex1Face[0][4] = 1;
-	voxelDefinition_->blockTex1Face[0][5] = 1;
+	voxelBlocktypeMap_->blockTex1Face[0][1] = 0;
+	voxelBlocktypeMap_->blockTex1Face[0][2] = 0;
+	voxelBlocktypeMap_->blockTex1Face[0][3] = 0;
+	voxelBlocktypeMap_->blockTex1Face[0][4] = 0;
+	voxelBlocktypeMap_->blockTex1Face[0][5] = 0;
 
 	// grass
-	voxelDefinition_->blockTex1Face[1][0] = 0;
-	voxelDefinition_->blockTex1Face[1][1] = 0;
-	voxelDefinition_->blockTex1Face[1][2] = 0;
-	voxelDefinition_->blockTex1Face[1][3] = 0;
-	voxelDefinition_->blockTex1Face[1][4] = 0;
-	voxelDefinition_->blockTex1Face[1][5] = 0;
-
-	// grass
-	voxelDefinition_->blockTex1Face[3][0] = 0;
-	voxelDefinition_->blockTex1Face[3][1] = 0;
-	voxelDefinition_->blockTex1Face[3][2] = 0;
-	voxelDefinition_->blockTex1Face[3][3] = 0;
-	voxelDefinition_->blockTex1Face[3][4] = 0;
-	voxelDefinition_->blockTex1Face[3][5] = 0;
+	voxelBlocktypeMap_->blockTex1Face[1][0] = 0;
+	voxelBlocktypeMap_->blockTex1Face[1][1] = 0;
+	voxelBlocktypeMap_->blockTex1Face[1][2] = 0;
+	voxelBlocktypeMap_->blockTex1Face[1][3] = 0;
+	voxelBlocktypeMap_->blockTex1Face[1][4] = 0;
+	voxelBlocktypeMap_->blockTex1Face[1][5] = 0;
 
 	// dirt
-	voxelDefinition_->blockTex1Face[2][0] = 1;
-	voxelDefinition_->blockTex1Face[2][1] = 1;
-	voxelDefinition_->blockTex1Face[2][2] = 1;
-	voxelDefinition_->blockTex1Face[2][3] = 1;
-	voxelDefinition_->blockTex1Face[2][4] = 1;
-	voxelDefinition_->blockTex1Face[2][5] = 1;
+	voxelBlocktypeMap_->blockTex1Face[2][0] = 1;
+	voxelBlocktypeMap_->blockTex1Face[2][1] = 1;
+	voxelBlocktypeMap_->blockTex1Face[2][2] = 1;
+	voxelBlocktypeMap_->blockTex1Face[2][3] = 1;
+	voxelBlocktypeMap_->blockTex1Face[2][4] = 1;
+	voxelBlocktypeMap_->blockTex1Face[2][5] = 1;
 
-	// dirt
-	voxelDefinition_->blockTex1Face[4][0] = 1;
-	voxelDefinition_->blockTex1Face[4][1] = 1;
-	voxelDefinition_->blockTex1Face[4][2] = 1;
-	voxelDefinition_->blockTex1Face[4][3] = 1;
-	voxelDefinition_->blockTex1Face[4][4] = 1;
-	voxelDefinition_->blockTex1Face[4][5] = 1;
+	// brick
+	voxelBlocktypeMap_->blockTex1Face[3][0] = 2;
+	voxelBlocktypeMap_->blockTex1Face[3][1] = 2;
+	voxelBlocktypeMap_->blockTex1Face[3][2] = 2;
+	voxelBlocktypeMap_->blockTex1Face[3][3] = 2;
+	voxelBlocktypeMap_->blockTex1Face[3][4] = 2;
+	voxelBlocktypeMap_->blockTex1Face[3][5] = 2;
 
-	// voxelDefinition_->blockTex1Face.Push(empty);
-	// voxelDefinition_->blockTex1Face.Push(dirt);
-	// voxelDefinition_->blockTex1Face.Push(grass);
-    voxelDefinition_->blockGeometry.Push(0);
-    voxelDefinition_->blockGeometry.Push(geoSolid);
-    voxelDefinition_->blockGeometry.Push(geoSolid);
-    voxelDefinition_->blockGeometry.Push(geoSlant);
-    voxelDefinition_->blockGeometry.Push(geoSlant);
-    //voxelDefinition_->blocktype.Clear();
+	// fabric
+	voxelBlocktypeMap_->blockTex1Face[4][0] = 3;
+	voxelBlocktypeMap_->blockTex1Face[4][1] = 3;
+	voxelBlocktypeMap_->blockTex1Face[4][2] = 3;
+	voxelBlocktypeMap_->blockTex1Face[4][3] = 3;
+	voxelBlocktypeMap_->blockTex1Face[4][4] = 3;
+	voxelBlocktypeMap_->blockTex1Face[4][5] = 3;
 
-    voxelDefinition_->SetSize(w, h, d);
+	// voxelBlocktypeMap_->blockTex1Face.Push(empty);
+	// voxelBlocktypeMap_->blockTex1Face.Push(dirt);
+	// voxelBlocktypeMap_->blockTex1Face.Push(grass);
+    voxelBlocktypeMap_->blockGeometry.Push(0);
+    voxelBlocktypeMap_->blockGeometry.Push(geoSolid);
+    voxelBlocktypeMap_->blockGeometry.Push(geoSolid);
+    voxelBlocktypeMap_->blockGeometry.Push(geoSolid);
+    voxelBlocktypeMap_->blockGeometry.Push(geoSolid);
+    //voxelBlocktypeMap_->blocktype.Clear();
 
 	SharedPtr<Texture2DArray> texture(new Texture2DArray(context_));
 	Vector<SharedPtr<Image> > images;
-	images.Push(SharedPtr<Image>(cache->GetResource<Image>("Textures/grass.png")));
-	images.Push(SharedPtr<Image>(cache->GetResource<Image>("Textures/dirt.png")));
+	images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Bowling_grass_pxr128.png")));
+	images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Brown_dirt_pxr128.png")));
+	images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/brick/Blue_glazed_pxr128.png")));
+	images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/fabric/Flower_pattern_pxr128.png")));
 	if (!texture->SetData(images))
 		return;
 
-	voxelDefinition_->diffuse1Textures = texture;
+	voxelBlocktypeMap_->diffuse1Textures = texture;
 
     //Node* spotNode = cameraNode_->CreateChild("PointLight");
     //spotNode->SetPosition(Vector3(0.0, -5.0, -5.0));
@@ -263,6 +269,12 @@ void VoxelWorld::MoveCamera(float timeStep)
     pitch_ += MOUSE_SENSITIVITY * mouseMove.y_;
     pitch_ = Clamp(pitch_, -90.0f, 90.0f);
 
+    Node* lightNode = scene_->GetChild("DirectionalLight");
+	if (lightNode)
+	{
+		// lightNode->Rotate(Quaternion(0.0, 30.0 * timeStep, 0.0));
+	}
+
     // Construct new orientation for the camera scene node from yaw and pitch. Roll is fixed to zero
     cameraNode_->SetRotation(Quaternion(pitch_, yaw_, 0.0f));
 
@@ -297,31 +309,33 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
     // Move the camera, scale movement with time step
     MoveCamera(timeStep);
 
-    //if (counter_ != 0)
-    //    return;
-	if (counter_ == 0)
-	{
-		for (unsigned x = 0; x < 2; ++x)
-		{
-			for (unsigned y = 0; y < 2; ++y)
-			{
-				Node* node = voxelNode_->CreateChild("VoxelChunk_" + String(x) + "_" + String(y));
-				node->SetPosition(Vector3(x * 64, 0, y * 64));
-				VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
-				Material* material = chunk->GetMaterial(0);
-				material->SetTexture(TU_DIFFUSE, voxelDefinition_->diffuse1Textures);
-			}
-		}
-	}
+    if (counter_ != 0)
+        return;
+
+	//if (counter_ == 0)
+	//{
+	//	for (unsigned x = 0; x < 2; ++x)
+	//	{
+	//		for (unsigned y = 0; y < 2; ++y)
+	//		{
+	//			Node* node = voxelNode_->CreateChild("VoxelChunk_" + String(x) + "_" + String(y));
+	//			node->SetPosition(Vector3(x * 64, 0, y * 64));
+	//			VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
+	//			Material* material = chunk->GetMaterial(0);
+	//			material->SetTexture(TU_DIFFUSE, voxelDefinition_->diffuse1Textures);
+	//		}
+	//	}
+	//}
 
     counter_++;
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
 
+#if 0
     float offset = (float)h / 2.0 + ((counter_ % 10) - 5);
     float sphereSize = 25.0; // +((counter_ % 10) - 5);
     int counter = counter_ % h;
-	//voxelDefinition_->SetSize(w, h, d);
+	voxelDefinition_->SetSize(w, h, d);
 	voxelDefinition_->InitializeBlocktype();
     for (unsigned x = 0; x < w; ++x)
     {
@@ -347,73 +361,156 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
     		builder->BuildVoxelChunk(chunk, voxelDefinition_);
     	}
     }
+#endif
 
-  //  Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
-  //  SharedPtr<VoxelDefinition> definition(new VoxelDefinition(context_));
-  //  for (unsigned a = 0; a < heightMap->GetWidth() / 64; ++a)
-  //  {
-		//unsigned chunkX = a * 64;
-  //      for (unsigned b = 0; b < heightMap->GetHeight() / 64; ++b)
-  //      {
-		//	unsigned chunkZ = b * 64;
-		//	Node* node = voxelNode_->CreateChild();
-		//	node->SetPosition(Vector3(a * 64, 0, b * 64));
-		//	VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
-		//	definition->SetSize(64, 128, 64);
-		//	definition->InitializeBlocktype();
-		//	definition->InitializeVHeight();
-		//	definition->blockGeometry = voxelDefinition_->blockGeometry;
-		//	definition->blockTex1Face = voxelDefinition_->blockTex1Face;
-		//	for (unsigned x = 0; x < w; ++x)
-		//	{
-		//		for (unsigned z = 0; z < d; ++z)
-		//		{
-		//			Color c = heightMap->GetPixel(a * 64 + x, b * 64 + z);
-		//			int y =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z    ) & 0x0000FF00) >> 8));
-		//			int nw = (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z - 1) & 0x0000FF00) >> 8));
-		//			//unsigned n =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z - 1) & 0x0000FF00) >> 8));
-		//			int ne = (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z - 1) & 0x0000FF00) >> 8));
-		//			//unsigned w =  (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z    ) & 0x0000FF00) >> 8));
-		//			//unsigned e =  (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z    ) & 0x0000FF00) >> 8));
-		//			int sw = (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z + 1) & 0x0000FF00) >> 8));
-		//			//unsigned s =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z + 1) & 0x0000FF00) >> 8));
-		//			int se = (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z + 1) & 0x0000FF00) >> 8));
-		//			int height = y / 4;
+#if 1
+    Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
+    for (unsigned a = 0; a < heightMap->GetWidth() / 64; ++a)
+    {
+		unsigned chunkX = a * 64;
+        for (unsigned b = 0; b < heightMap->GetHeight() / 64; ++b)
+        {
+			unsigned chunkZ = b * 64;
+			//Node* node = voxelNode_->GetChild();
+			String chunkName = "VoxelChunk_" + String(a) + "_" + String(b);
+			Node* node = voxelNode_->CreateChild(chunkName);
+			node->SetPosition(Vector3(a * 64, 0, b * 64));
+			VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
+			SharedPtr<VoxelMap> voxelMap(new VoxelMap(context_));
+			chunk->SetVoxelMap(voxelMap);
+			voxelMap->SetSize(64, 128, 64);
+			voxelMap->InitializeBlocktype();
+			voxelMap->InitializeVHeight();
+			voxelMap->blocktypeMap = voxelBlocktypeMap_;
+			for (unsigned x = 0; x < w; ++x)
+			{
+				for (unsigned z = 0; z < d; ++z)
+				{
+					Color c = heightMap->GetPixel(a * 64 + x, b * 64 + z);
+					int y =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z    ) & 0x0000FF00) >> 8));
+					int nw = (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z - 1) & 0x0000FF00) >> 8));
+					//unsigned n =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z - 1) & 0x0000FF00) >> 8));
+					int ne = (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z - 1) & 0x0000FF00) >> 8));
+					//unsigned w =  (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z    ) & 0x0000FF00) >> 8));
+					//unsigned e =  (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z    ) & 0x0000FF00) >> 8));
+					int sw = (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z + 1) & 0x0000FF00) >> 8));
+					//unsigned s =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z + 1) & 0x0000FF00) >> 8));
+					int se = (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z + 1) & 0x0000FF00) >> 8));
+					int height = y / 4;
 
-		//			for (unsigned i = height - 4; i < height; ++i)
-		//			{
-		//				definition->SetBlocktype(x, i, z, c.Average() > 0.5 ? 1 : 2);
-		//				definition->SetVheight(x, i, z, VoxelHeight::VOXEL_HEIGHT_1, VoxelHeight::VOXEL_HEIGHT_1, VoxelHeight::VOXEL_HEIGHT_1, VoxelHeight::VOXEL_HEIGHT_1);
-		//			}
+					for (unsigned i = 0; i < height; ++i)
+					{
+						voxelMap->SetBlocktype(x, i, z, (int)(c.Average() * 8) % 4 + 1);
+						voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+					}
 
-		//			// gather nearby values to get height
-		//			VoxelHeight heights[4];
-		//			float heightValues[4] = {
-		//				(float)(y - sw) / 2.0,
-		//				(float)(y - se) / 2.0,
-		//				(float)(y - nw) / 2.0,
-		//				(float)(y - ne) / 2.0,
-		//			};
-		//			for (unsigned j = 0; j < 4; ++j)
-		//			{
-		//				float hv = heightValues[j];
-		//				if (hv < -0.5)
-		//					heights[j] = VoxelHeight::VOXEL_HEIGHT_0;
-		//				else if (hv < 0.0)
-		//					heights[j] = VoxelHeight::VOXEL_HEIGHT_HALF;
-		//				else if (hv < 0.5)
-		//					heights[j] = VoxelHeight::VOXEL_HEIGHT_1;
-		//				else
-		//					heights[j] = VoxelHeight::VOXEL_HEIGHT_1;
-		//			}
+					// gather nearby values to get height
+					VoxelHeight heights[4];
+					float heightValues[4] = {
+						(float)(y - sw) / 2.0,
+						(float)(y - se) / 2.0,
+						(float)(y - nw) / 2.0,
+						(float)(y - ne) / 2.0,
+					};
+					for (unsigned j = 0; j < 4; ++j)
+					{
+						float hv = heightValues[j];
+						if (hv < -0.5)
+							heights[j] = VoxelHeight::VOXEL_HEIGHT_0;
+						else if (hv < 0.0)
+							heights[j] = VoxelHeight::VOXEL_HEIGHT_HALF;
+						else if (hv < 0.5)
+							heights[j] = VoxelHeight::VOXEL_HEIGHT_1;
+						else
+							heights[j] = VoxelHeight::VOXEL_HEIGHT_1;
+					}
 
-		//			definition->SetBlocktype(x, height, z, c.Average() > 0.5 ? 3 : 4);
-		//			definition->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
-		//		}
-		//	}
-		//	builder->BuildVoxelChunk(chunk, definition);
-  //      }
-  //  }
+					voxelMap->SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
+					//voxelMap->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
+					voxelMap->SetVheight(x, height, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+				}
+			}
+        }
+    }
+
+	// loop through again and set neighbors
+	for (int a = 0; a < heightMap->GetWidth() / 64; ++a)
+	{
+		for (int b = 0; b < heightMap->GetHeight() / 64; ++b)
+		{
+			Node* node = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b));
+			Node* north = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b+1));
+			Node* south = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b-1));
+			Node* east  = voxelNode_->GetChild("VoxelChunk_" + String(a+1) + "_" + String(b));
+			Node* west  = voxelNode_->GetChild("VoxelChunk_" + String(a-1) + "_" + String(b));
+			VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
+			VoxelChunk* northChunk = north ? north->GetComponent<VoxelChunk>() : 0;
+			VoxelChunk* southChunk = south ? south->GetComponent<VoxelChunk>() : 0;
+			VoxelChunk* eastChunk = east ? east->GetComponent<VoxelChunk>() : 0;
+			VoxelChunk* westChunk = west ? west->GetComponent<VoxelChunk>() : 0;
+			chunk->SetNeighbors(northChunk, southChunk, eastChunk, westChunk);
+			chunk->BuildAsync();
+		}
+	}
+#endif
+
+#if 0
+	int btype = 1;
+    for (unsigned a = 0; a < 2; ++a)
+    {
+		unsigned chunkX = a * 64;
+        for (unsigned b = 0; b < 2; ++b)
+        {
+			unsigned chunkZ = b * 64;
+			String chunkName = "VoxelChunk_" + String(a) + "_" + String(b);
+			Node* node = voxelNode_->CreateChild(chunkName);
+			node->SetPosition(Vector3(a * 64, 0, b * 64));
+			VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
+			SharedPtr<VoxelMap> voxelMap(new VoxelMap(context_));
+			chunk->SetVoxelMap(voxelMap);
+			voxelMap->SetSize(64, 64, 64);
+			voxelMap->InitializeBlocktype();
+			//voxelMap->InitializeVHeight();
+			voxelMap->blocktypeMap = voxelBlocktypeMap_;
+			for (unsigned x = 0; x < 64; ++x)
+			{
+				for (unsigned y = 0; y < 10; ++y)
+				{ 
+					for (unsigned z = 0; z < 64; ++z)
+					{
+						voxelMap->SetBlocktype(x, y, z, btype);
+						//voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+					}
+				}
+			}
+			btype++;
+        }
+    }
+
+	// loop through again and set neighbors
+	for (int a = 0; a < 2; ++a)
+	{
+		for (int b = 0; b < 2; ++b)
+		{
+			Node* node = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b));
+			Node* north = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b+1));
+			Node* south = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b-1));
+			Node* east  = voxelNode_->GetChild("VoxelChunk_" + String(a+1) + "_" + String(b));
+			Node* west  = voxelNode_->GetChild("VoxelChunk_" + String(a-1) + "_" + String(b));
+			VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
+			VoxelChunk* northChunk = north ? north->GetComponent<VoxelChunk>() : 0;
+			VoxelChunk* southChunk = south ? south->GetComponent<VoxelChunk>() : 0;
+			VoxelChunk* eastChunk = east ? east->GetComponent<VoxelChunk>() : 0;
+			VoxelChunk* westChunk = west ? west->GetComponent<VoxelChunk>() : 0;
+			chunk->SetNeighbors(northChunk, southChunk, eastChunk, westChunk);
+			chunk->Build();
+		}
+	}
+#endif
+
+
+	// builder->CompleteWork();
+	//builder->BuildVoxelChunk(chunk, voxelMap);
 }
 
 void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData)

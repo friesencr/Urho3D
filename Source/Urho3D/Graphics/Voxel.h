@@ -55,21 +55,42 @@ enum VoxelHeight
 	VOXEL_HEIGHT_ONE_AND_HALF,
 };
 
-class URHO3D_API VoxelDefinition : public Object {
-	OBJECT(VoxelDefinition);
+unsigned char VoxelEncodeColor(Color c, bool tex1Enabled, bool tex2Enabled);
 
+unsigned char VoxelEncodeVHeight(VoxelHeight southWest, VoxelHeight southEast, VoxelHeight northWest, VoxelHeight northEast);
+
+unsigned char VoxelEncodeGeometry(VoxelGeometryType type, VoxelRotation rot, VoxelHeight height);
+
+unsigned char VoxelEncodeGeometry(VoxelGeometryType type, VoxelRotation rot);
+
+unsigned char VoxelEncodeGeometry(VoxelGeometryType type);
+
+class URHO3D_API VoxelBlocktypeMap : public Object {
+	OBJECT(VoxelBlocktypeMap);
+	
 public:
-	SharedPtr<Texture2DArray> diffuse1Textures;
-	SharedPtr<Texture2DArray> diffuse2Textures;
-	PODVector<unsigned char> blocktype;
 	PODVector<unsigned char> blockColor;
 	PODVector<unsigned char> blockGeometry;
 	PODVector<unsigned char> blockVHeight;
 	PODVector<unsigned char> blockTex1;
 	PODVector<unsigned char> blockTex2;
-	PODVector<unsigned char> color;
 	PODVector<unsigned char[6]> blockTex1Face;
 	PODVector<unsigned char[6]> blockTex2Face;
+	SharedPtr<Texture2DArray> diffuse1Textures;
+	SharedPtr<Texture2DArray> diffuse2Textures;
+
+	VoxelBlocktypeMap(Context* context) : Object(context) { }	~VoxelBlocktypeMap() { }
+};
+
+class URHO3D_API VoxelMap : public Object {
+	OBJECT(VoxelMap);
+
+public:
+	SharedPtr<VoxelBlocktypeMap> blocktypeMap;
+	//SharedPtr<Texture2DArray> diffuse1Textures;
+	//SharedPtr<Texture2DArray> diffuse2Textures;
+	PODVector<unsigned char> blocktype;
+	PODVector<unsigned char> color;
 	PODVector<unsigned char> geometry;
 	PODVector<unsigned char> vHeight;
 	unsigned height_;
@@ -80,47 +101,25 @@ public:
 	unsigned zStride;
 	float ambientLightFactor;
 
-	VoxelDefinition(Context* context) : Object(context) 
+	VoxelMap(Context* context) : Object(context) 
 	{
 		ambientLightFactor = 0.5;
 	}
 
-	~VoxelDefinition()
-	{
-
-	}
+	~VoxelMap() { }
 	
-	static unsigned char EncodeColor(Color c, bool tex1Enabled, bool tex2Enabled)
-	{
-		return STBVOX_MAKE_COLOR(c.ToUInt(), tex1Enabled, tex2Enabled);
-	}
 
-	static unsigned char EncodeVHeight(VoxelHeight southWest, VoxelHeight southEast, VoxelHeight northWest, VoxelHeight northEast)
-	{
-		return STBVOX_MAKE_VHEIGHT(southWest, southEast, northWest, northEast);
-	}
-
-	static unsigned char EncodeGeometry(VoxelGeometryType type, VoxelRotation rot, VoxelHeight height)
-	{
-		return STBVOX_MAKE_GEOMETRY(type, rot, height);
-	}
-
-	static unsigned char EncodeGeometry(VoxelGeometryType type, VoxelRotation rot)
-	{
-		return STBVOX_MAKE_GEOMETRY(type, rot, 0);
-	}
-
-	static unsigned char EncodeGeometry(VoxelGeometryType type)
-	{
-		return STBVOX_MAKE_GEOMETRY(type, VOXEL_FACE_EAST,0);
-	}
-
-	unsigned char GetBlocktype(unsigned x, unsigned y, unsigned z)
+	inline unsigned char GetBlocktype(int x, int y, int z)
 	{
 		return blocktype[GetIndex(x, y, z)];
 	}
 
-	unsigned GetIndex(unsigned x, unsigned y, unsigned z)
+	inline unsigned char GetVheight(int x, int y, int z)
+	{
+		return vHeight[GetIndex(x, y, z)];
+	}
+
+	inline unsigned GetIndex(int x, int y, int z)
 	{
 		return (y + 1) + ((z + 1) * zStride) + ((x + 1) * xStride);
 	}
@@ -130,33 +129,31 @@ public:
 		height_ = height;
 		width_ = width;
 		depth_ = depth;
-		size_ = (width_ + 2)*(height_ + 2)*(depth_ * 2);
 		zStride = height + 2;
 		xStride = (height + 2) * (depth + 2);
+		size_ = (width_ + 2)*(height_ + 2)*(depth_ + 2);
 	}
 
 	void InitializeBlocktype()
 	{
 		blocktype.Resize(size_);
-		for (unsigned i = 0; i < size_; ++i)
-			blocktype[i] = 0;
+		memset(&blocktype.Front(), 0, sizeof(char) * size_);
 	}
 
 	void InitializeVHeight()
 	{
 		vHeight.Resize(size_);
-		for (unsigned i = 0; i < size_; ++i)
-			vHeight[i] = 0;
+		memset(&vHeight.Front(), 0, sizeof(char) * size_);
 	}
 
-	void SetBlocktype(unsigned x, unsigned y, unsigned z, unsigned char val)
+	inline void SetBlocktype(int x, int y, int z, unsigned char val)
 	{
 		blocktype[GetIndex(x, y, z)] = val;
 	}
 
-	void SetVheight(unsigned x, unsigned y, unsigned z, VoxelHeight sw, VoxelHeight se, VoxelHeight nw, VoxelHeight ne)
+	inline void SetVheight(int x, int y, int z, VoxelHeight sw, VoxelHeight se, VoxelHeight nw, VoxelHeight ne)
 	{
-		vHeight[GetIndex(x, y, z)] = EncodeVHeight(sw, se, nw, ne);
+		vHeight[GetIndex(x, y, z)] = VoxelEncodeVHeight(sw, se, nw, ne);
 	}
 
 };
