@@ -19,7 +19,7 @@ class URHO3D_API VoxelChunk : public Drawable
     friend class VoxelSet;
     friend class VoxelBuilder;
 
-public:
+    public:
     VoxelChunk(Context* context);
     ~VoxelChunk();
 
@@ -45,17 +45,17 @@ public:
     /// Draw to occlusion buffer. Return true if did not run out of triangles.
     virtual bool DrawOcclusion(OcclusionBuffer* buffer);
 
-	bool GetHasShaderParameters(unsigned index);
-	void SetHasShaderParameters(unsigned index, bool isRequired);
+    bool GetHasShaderParameters(unsigned index);
+    void SetHasShaderParameters(unsigned index, bool isRequired);
 
     /// Set mesh selector material.
-	Material* GetMaterial(unsigned selector) const;
+    Material* GetMaterial(unsigned selector) const;
 
-	/// Gets the voxel definition
-	VoxelMap* GetVoxelMap() const;
+    /// Gets the voxel definition
+    VoxelMap* GetVoxelMap() const;
 
-	/// Sets the voxel definition
-	void SetVoxelMap(VoxelMap* voxelMap);
+    /// Sets the voxel definition
+    void SetVoxelMap(VoxelMap* voxelMap);
 
     /// Set owner terrain.
     void SetOwner(VoxelSet* voxelSet);
@@ -66,10 +66,10 @@ public:
     /// Set local-space bounding box.
     void SetBoundingBox(const BoundingBox& box);
 
-	void SetNumberOfMeshes(unsigned count);
+    void SetNumberOfMeshes(unsigned count);
 
-	void Build();
-	void BuildAsync();
+    void Build();
+    void BuildAsync();
 
     unsigned char GetIndexX();
     unsigned char GetIndexY();
@@ -79,39 +79,39 @@ public:
     unsigned char GetSizeZ();
     void SetIndex(unsigned char x, unsigned char y, unsigned char z);
     void SetSize(unsigned char x, unsigned char y, unsigned char z);
-	void SetNeighbors(VoxelChunk* north, VoxelChunk* south, VoxelChunk* east, VoxelChunk* west);
-	VoxelChunk* GetNeighborNorth() const;
-	VoxelChunk* GetNeighborSouth() const;
-	VoxelChunk* GetNeighborEast() const;
-	VoxelChunk* GetNeighborWest() const;
+    void SetNeighbors(VoxelChunk* north, VoxelChunk* south, VoxelChunk* east, VoxelChunk* west);
+    VoxelChunk* GetNeighborNorth() const;
+    VoxelChunk* GetNeighborSouth() const;
+    VoxelChunk* GetNeighborEast() const;
+    VoxelChunk* GetNeighborWest() const;
     unsigned GetLodLevel() const;
 
-protected:
+    protected:
     /// Recalculate the world-space bounding box.
     virtual void OnWorldBoundingBoxUpdate();
 
-private:
+    private:
     // Voxel chunk geometry
     unsigned char index_[3];
     unsigned char size_[3];
     float priority_;
     unsigned lodLevel_;
-	unsigned numberOfMeshes_;
+    unsigned numberOfMeshes_;
     WeakPtr<VoxelSet> owner_;
     WeakPtr<VoxelChunk> neighborNorth_;
-	WeakPtr<VoxelChunk> neighborWest_;
+    WeakPtr<VoxelChunk> neighborWest_;
     WeakPtr<VoxelChunk> neighborEast_;
     WeakPtr<VoxelChunk> neighborSouth_;
 
-	SharedPtr<VoxelMap> voxelMap_;
+    SharedPtr<VoxelMap> voxelMap_;
     Vector<SharedPtr<Geometry> > geometries_;
-	Vector<SharedPtr<Material> > materials_;
-	Vector<SharedPtr<VertexBuffer> > vertexData_;
-	Vector<SharedPtr<IndexBuffer> > faceData_;
-	Vector<SharedPtr<TextureBuffer> > faceBuffer_;
-	Vector<PODVector<unsigned> > rawData_;
-	Vector<unsigned> numQuads_;
-	Vector<bool> hasMaterialParameters_;
+    Vector<SharedPtr<Material> > materials_;
+    Vector<SharedPtr<VertexBuffer> > vertexData_;
+    Vector<SharedPtr<IndexBuffer> > faceData_;
+    Vector<SharedPtr<TextureBuffer> > faceBuffer_;
+    Vector<PODVector<unsigned> > rawData_;
+    Vector<unsigned> numQuads_;
+    Vector<bool> hasMaterialParameters_;
 };
 
 }

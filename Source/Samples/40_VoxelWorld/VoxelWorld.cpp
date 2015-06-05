@@ -144,7 +144,7 @@ void VoxelWorld::CreateScene()
     voxelNode_ = scene_->CreateChild("VoxelNode");
     //VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     voxelBlocktypeMap_ = new VoxelBlocktypeMap(context_);
-	unsigned char geoSolid = VoxelEncodeGeometry(VOXEL_TYPE_FLOOR_VHEIGHT_03);
+	unsigned char geoSolid = VoxelEncodeGeometry(VOXEL_TYPE_SOLID);
 	unsigned char geoSlant = VoxelEncodeGeometry(VOXEL_TYPE_SLAB_LOWER);
 
     //unsigned char heightNormal = VoxelDefinition::EncodeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
@@ -416,13 +416,13 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 					{
 						float hv = heightValues[j];
 						if (hv < -0.5)
-							heights[j] = VoxelHeight::VOXEL_HEIGHT_0;
+							heights[j] = VOXEL_HEIGHT_0;
 						else if (hv < 0.0)
-							heights[j] = VoxelHeight::VOXEL_HEIGHT_HALF;
+							heights[j] = VOXEL_HEIGHT_HALF;
 						else if (hv < 0.5)
-							heights[j] = VoxelHeight::VOXEL_HEIGHT_1;
+							heights[j] = VOXEL_HEIGHT_1;
 						else
-							heights[j] = VoxelHeight::VOXEL_HEIGHT_1;
+							heights[j] = VOXEL_HEIGHT_1;
 					}
 
 					voxelMap->SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
@@ -449,7 +449,7 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 			VoxelChunk* eastChunk = east ? east->GetComponent<VoxelChunk>() : 0;
 			VoxelChunk* westChunk = west ? west->GetComponent<VoxelChunk>() : 0;
 			chunk->SetNeighbors(northChunk, southChunk, eastChunk, westChunk);
-			chunk->BuildAsync();
+			chunk->Build();
 		}
 	}
 #endif
