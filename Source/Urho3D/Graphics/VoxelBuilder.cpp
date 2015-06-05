@@ -8,6 +8,8 @@
 #include "Material.h"
 #include "../IO/Log.h"
 #include "Core/CoreEvents.h"
+#include "../Container/ArrayPtr.h"
+#include "../IO/Compression.h"
 
 
 #define STB_VOXEL_RENDER_IMPLEMENTATION
@@ -224,13 +226,10 @@ namespace Urho3D
 	void VoxelBuilder::CompleteWork(unsigned priority)
 	{
 		completeAllWork_ = true;
-		while (RunJobs() > 0)
-		{
+		while (RunJobs())
 			Time::Sleep(0);
-		}
+
 		completeAllWork_ = false;
-		//WorkQueue* workQueue = GetSubsystem<WorkQueue>();
-		//workQueue->Complete(M_MAX_UNSIGNED);
 	}
 
 	// Decode to vertex buffer
@@ -303,11 +302,11 @@ namespace Urho3D
 			//}
 		}
 
-	{
-		MutexLock lock(slot->dataMutex);
-		slot->numQuads += numQuads;
-		slot->box.Merge(workload->box);
-	}
+		{
+			MutexLock lock(slot->dataMutex);
+			slot->numQuads += numQuads;
+			slot->box.Merge(workload->box);
+		}
 	}
 
 	void BuildWorkloadHandler(const WorkItem* workItem, unsigned threadIndex)
@@ -316,7 +315,7 @@ namespace Urho3D
 		workload->builder->BuildWorkload(workload);
 	}
 
-	VoxelJob* VoxelBuilder::BuildVoxelChunkAsync(SharedPtr<VoxelChunk> chunk)
+	VoxelJob* VoxelBuilder::BuildVoxelChunk(SharedPtr<VoxelChunk> chunk, bool async)
 	{
 		if (chunk.Null())
 			return 0;
@@ -333,40 +332,35 @@ namespace Urho3D
 			return 0;
 
 		VoxelJob* job = CreateJob(chunk);
-		job->async = true;
-		RunJobs();
-
-		return job;
-	}
-
-	VoxelJob* VoxelBuilder::BuildVoxelChunk(SharedPtr<VoxelChunk> chunk)
-	{
-		if (chunk.Null())
-			return 0;
-
-		SharedPtr<VoxelMap> voxelMap(chunk->GetVoxelMap());
-		if (voxelMap.Null())
-			return 0;
-
-		unsigned char width = voxelMap->width_;
-		unsigned char depth = voxelMap->depth_;
-		unsigned char height = voxelMap->height_;
-
-		if (!(width > 0 && depth > 0 && height > 0))
-			return 0;
-
-		VoxelJob* job = CreateJob(chunk);
-		job->async = false;
 
 		RunJobs();
-		CompleteWork();
+		if (!async)
+			CompleteWork();
 		return 0;
 	}
 
-	int VoxelBuilder::RunJobs()
+	bool VoxelBuilder::RunJobs()
 	{
 		if (!completeAllWork_ && frameTimer_.GetMSec(false) > maxFrameTime_)
-			return 0;
+			return false;
+
+		bool pendingWork = false;
+
+		if (!jobs_.Empty())
+		{
+			int slotId = GetFreeWorkSlot();
+			if (slotId != -1)
+			{
+				unsigned count = jobs_.Size();
+				VoxelJob* job = jobs_[0];
+				VoxelWorkSlot* slot = &slots_[slotId];
+				job->slot = slotId;
+				slot->job = job;
+				jobs_.Erase(0);
+				ProcessJob(job);
+				pendingWork = true;
+			}
+		}
 
 		for (unsigned i = 0; i < slots_.Size(); ++i)
 		{
@@ -375,46 +369,24 @@ namespace Urho3D
 			{
 				MutexLock lock(slot->workMutex);
 				process = !slot->free && slot->upload;
+				pendingWork = !slot->free || pendingWork;
 				slot->upload = false;
 			}
 			if (process)
 			{
 				ProcessSlot(slot);
-				return jobs_.Size();
 			}
 		}
-
-		for (;;)
-		{
-			if (!jobs_.Empty())
-			{
-				int slotId = GetFreeWorkSlot();
-				if (slotId == -1)
-					break;
-
-				unsigned count = jobs_.Size();
-				VoxelJob* job = jobs_[0];
-				VoxelWorkSlot* slot = &slots_[slotId];
-				job->slot = slotId;
-				slot->job = job;
-				jobs_.Erase(0);
-				ProcessJob(job);
-			}
-			else
-				break;
-		}
-
-		return jobs_.Size();
+		return pendingWork;
 	}
+
 
 	VoxelJob* VoxelBuilder::CreateJob(VoxelChunk* chunk)
 	{
 		VoxelJob* job = new VoxelJob();
 		job->chunk = chunk;
 		job->slot = 0;
-		unsigned size = jobs_.Size();
 		jobs_.Push(job);
-		size = jobs_.Size();
 		return job;
 	}
 
@@ -462,12 +434,6 @@ namespace Urho3D
 				}
 			}
 		}
-
-		//if (!async)
-		//{
-		//	workQueue->Complete(M_MAX_UNSIGNED);
-		//	ProcessSlot(slot);
-		//}
 	}
 
 	void VoxelBuilder::BuildWorkload(VoxelWorkload* workload)
@@ -476,21 +442,13 @@ namespace Urho3D
 		bool success = BuildMesh(workload);
 
 		if (success)
-		{
 			DecodeWorkBuffer(workload);
-		}
 		else
 		{
 			MutexLock lock(slot->workMutex);
 			slot->failed = true;
 		}
-
-		if (DecrementWorkSlot(slot) == 0)
-			slot->upload = true;
-		//{
-		//	if (workload->slot->job->async)
-		//		workload->workItem->sendEvent_ = true;
-		//}
+		DecrementWorkSlot(slot);
 	}
 
 	void VoxelBuilder::AbortSlot(VoxelWorkSlot* slot)
@@ -611,7 +569,7 @@ namespace Urho3D
 				workload->end[0],
 				workload->end[2],
 				Min(y + 16, workload->end[1])
-				);
+			);
 
 			if (stbvox_make_mesh(mm) == 0)
 			{
@@ -637,6 +595,13 @@ namespace Urho3D
 		return true;
 	}
 
+	bool VoxelBuilder::UploadGpuDataCompatibilityMode(VoxelWorkSlot* slot, bool append)
+	{
+		//if (!vb->SetSize(totalVertices, MASK_POSITION | MASK_TEXCOORD1 | MASK_NORMAL, true))
+		//    return false;
+		return false;
+	}
+
 	bool VoxelBuilder::UploadGpuData(VoxelWorkSlot* slot, bool append)
 	{
 		VoxelJob* job = slot->job;
@@ -648,26 +613,42 @@ namespace Urho3D
 		if (totalVertices == 0)
 			return true;
 
-		//if (!vb->SetSize(totalVertices, MASK_POSITION | MASK_TEXCOORD1 | MASK_NORMAL, true))
-		//    return false;
-
 		if (!vb->SetSize(totalVertices, MASK_DATA, false))
 			return false;
 
 		if (!faceData->SetSize(slot->numQuads, true, false))
 			return false;
 
+#if 0
+		{
+			Geometry* geo = chunk->GetGeometry(0);
+			PODVector<Vector3> shadowData(slot->numQuads * 4);
+			int index = 0;
+			for (int i = 0; i < slot->numWorkloads; ++i)
+			{
+				VoxelWorkload* workload = &slot->workloads[i];
+				int numVertices = workload->numQuads * 4;
+				unsigned int* workData = (unsigned int*)slot->workVertexBuffers[i];
+				for (int j = 0; j < numVertices; ++j)
+				{
+					unsigned int v1 = *workData++;
+					Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0, (float)((v1 >> 7u) & 127u));
+					shadowData[index++] = position;
+				}
+			}
+			SharedArrayPtr<unsigned char> arrayPtr((unsigned char*)&shadowData.Front());
+			geo->SetRawVertexData(arrayPtr, 3 * sizeof(float), MASK_POSITION);
+		}
+#endif
+
 		int end = 0;
 		int start = 0;
-		if (slot->numWorkloads < 4)
-			int missingworkloads = 0;
-
 		for (int i = 0; i < slot->numWorkloads; ++i)
 		{
 			VoxelWorkload* workload = &slot->workloads[i];
 			start = end;
 			end = start + workload->numQuads;
-			//if (!vb->SetDataRange(&workload->gpuData.Front(), start, workload->numQuads * 4))
+
 			unsigned char* vertexBuffer = (unsigned char*)slot->workVertexBuffers[workload->workloadIndex];
 			if (!vb->SetDataRange(vertexBuffer, start * 4, workload->numQuads * 4))
 			{
@@ -682,6 +663,9 @@ namespace Urho3D
 				return false;
 			}
 		}
+
+		//PODVector<unsigned char> compressed(EstimateCompressBound(chunk->GetVoxelMap()->blocktype.Size()));
+		//unsigned size = CompressData(&compressed.Front(), &chunk->GetVoxelMap()->blocktype.Front(), chunk->GetVoxelMap()->blocktype.Size());
 
 		if (!chunk->GetHasShaderParameters(0))
 		{
@@ -708,19 +692,9 @@ namespace Urho3D
 			material->SetTexture(TU_CUSTOM1, faceDataTexture);
 		}
 
-
-	{
-		//const unsigned char* vertexData = 0;
-		//const unsigned char* indexData = 0;
-		//unsigned vertexCount = 0;
-		//unsigned indexCount = 0;
-		//unsigned mask = 0;
-		//geo->GetRawData(vertexData, vertexCount, indexData, indexCount, mask);
-		//PODVector<unsigned char> cpuData(vertexData, vertexCount * 4);
-
 		Geometry* geo = chunk->GetGeometry(0);
 		int indexEnd = end * 6; // 6 indexes per quad
-		if (!ResizeIndexBuffer(VOXEL_CHUNK_SIZE))
+		if (!ResizeIndexBuffer(slot->numQuads))
 		{
 			LOGERROR("Error resizing shared voxel index buffer");
 			return false;
@@ -732,7 +706,7 @@ namespace Urho3D
 			LOGERROR("Error setting voxel draw range");
 			return false;
 		}
-	}
+		return true;
 	}
 
 	void VoxelBuilder::ProcessSlot(VoxelWorkSlot* slot)
@@ -747,7 +721,7 @@ namespace Urho3D
 	void VoxelBuilder::HandleBeginFrame(StringHash eventType, VariantMap& eventData)
 	{
 		frameTimer_.Reset();
-		while (frameTimer_.GetMSec(false) < maxFrameTime_ &&  RunJobs() > 0)
+		while (frameTimer_.GetMSec(false) < maxFrameTime_ &&  RunJobs())
 		{
 			Time::Sleep(0);
 		}
@@ -756,7 +730,7 @@ namespace Urho3D
 	unsigned VoxelBuilder::DecrementWorkSlot(VoxelWorkSlot* slot)
 	{
 		MutexLock lock(slot->workMutex);
-		slot->workCounter--;
+		slot->upload = --slot->workCounter == 0;
 		return slot->workCounter;
 	}
 
@@ -766,8 +740,8 @@ namespace Urho3D
 		slot->failed = false;
 		slot->workCounter = 0;
 		slot->numQuads = 0;
-		slot->box = BoundingBox();
 		slot->numWorkloads = 0;
+		slot->box = BoundingBox();
 		slot->upload = false;
 		slot->free = true;
 
@@ -793,164 +767,5 @@ namespace Urho3D
 		}
 		return -1;
 	}
-
-#if 0
-	static inline long longPair(unsigned a, unsigned b)
-	{
-		return (long)a & ((long)b >> 32);
-	}
-
-	void VoxelBuilder::SimplifyMesh(VoxelWorkSlot* slot)
-	{
-		//int Polyhedron::MergeAdjacentPlanarFaces(bool snapVerticesToMergedPlanes, bool conservativeEnclose, float angleEpsilon, float distanceEpsilon)
-		Vector<Vector4> faceNormals(slot->numQuads);
-		// get quad normals
-
-		Vector<unsigned> faceGroups(slot->numQuads);
-		for (unsigned i = 0; i < slot->numQuads; ++i)
-			faceGroups[i] = i;
-
-		PODVector<Vector3> vertices(slot->numQuads * 4);
-		{
-			Vector3* ptr = &vertices.Front();
-			for (unsigned i = 0; slot->numWorkloads; ++i)
-			{
-				VoxelWorkload* workload = &slot->workloads[i];
-				unsigned* vertexData = (unsigned*)slot->workVertexBuffers[workload->threadIndex];
-				unsigned* faceData = (unsigned*)slot->workFaceBuffers[workload->threadIndex];
-				for (unsigned j = 0; j < workload->numQuads; ++j)
-				{
-					for (unsigned k = 0; k < 4; ++k)
-					{
-						unsigned data = *vertexData++;
-						Vector3 vertex((float)(data & 127u), (float)((data >> 14u) & 511u) / 2.0, (float)((data >> 7u) & 127u));
-						*ptr++ = vertex;
-					}
-				}
-			}
-		}
-		unsigned numMerges = 0;
-		unsigned numVertices = slot->numQuads * 4;
-		HashMap<long, int> verticesToFaces;
-		for (unsigned i = 0; i < slot->numQuads; ++i)
-		{
-			unsigned v0 = i + 4;
-			for (size_t j = 0; j < 4; ++j)
-			{
-				unsigned v1 = i + j;
-				long key = (long)v0 & ((long)v1 >> 32)
-					verticesToFaces[key] = i;
-				verticesToFaces.Find( )
-					std::map<std::pair<int, int>, int>::iterator neighbor = verticesToFaces.find(std::make_pair(v1, v0));
-
-				if (neighbor != verticesToFaces.end())
-				{
-					int nf = neighbor->second;
-					if (!f[nf].v.empty())
-					{
-						cv thisNormal = faceNormals[i];
-						cv nghbNormal = faceNormals[nf];
-						if (thisNormal.Dot(nghbNormal) >= 1.0 - angleEpsilon)
-						{
-							cs eNeg, ePos, nNeg, nPos;
-							PolyExtremeVertexOnFace(*this, i, nghbNormal, eNeg, ePos);
-							//						PolyExtremeVertexOnFace(*this, nf, nghbNormal, nNeg, nPos);
-							//						if (Max(ePos, nPos) - Min(eNeg, nNeg) <= distanceEpsilon)
-							PolyExtremeVertexOnFace(*this, nf, thisNormal, nNeg, nPos);
-							if (ePos - eNeg <= distanceEpsilon && nPos - nNeg <= distanceEpsilon)
-							{
-								++numMerges;
-								// Merge this face to neighboring face.
-								int fg = i;
-								while (faceGroups[fg] != fg)
-									fg = faceGroups[fg];
-								int nfgr = nf;
-								while (faceGroups[nfgr] != nfgr)
-									nfgr = faceGroups[nfgr];
-								faceGroups[fg] = nfgr;
-								break;
-							}
-						}
-					}
-				}
-				v0 = v1;
-			}
-		}
-
-		std::vector<std::set<std::pair<int, int> > > newEdgesPerFace(f.size());
-		for (size_t i = 0; i < f.size(); ++i)
-		{
-			Face &face = f[i];
-
-			int fg = i;
-			while (faceGroups[fg] != fg)
-				fg = faceGroups[fg];
-
-			int v0 = face.v.back();
-			for (size_t j = 0; j < face.v.size(); ++j)
-			{
-				int v1 = face.v[j];
-
-				if (newEdgesPerFace[fg].find(std::make_pair(v1, v0)) != newEdgesPerFace[fg].end())
-				{
-					newEdgesPerFace[fg].erase(std::make_pair(v1, v0));
-				}
-				else
-				{
-					newEdgesPerFace[fg].insert(std::make_pair(v0, v1));
-				}
-
-				v0 = v1;
-			}
-		}
-
-		for (size_t i = 0; i < f.size(); ++i)
-		{
-			Face &face = f[i];
-
-			std::vector<std::pair<int, int> > boundaryEdges(newEdgesPerFace[i].begin(), newEdgesPerFace[i].end());
-			for (size_t j = 0; j < boundaryEdges.size(); ++j)
-				for (size_t k = j + 1; k < boundaryEdges.size(); ++k)
-					if (boundaryEdges[j].second == boundaryEdges[k].first)
-					{
-						Swap(boundaryEdges[j + 1], boundaryEdges[k]);
-						break;
-					}
-			face.v.clear();
-			for (size_t j = 0; j < boundaryEdges.size(); ++j)
-				face.v.push_back(boundaryEdges[j].first);
-
-			// Snap all vertices to the plane of the face.
-			if (snapVerticesToMergedPlanes)
-			{
-				// If conservativeEnclose == true, compute the maximum distance for the plane
-				// so it encloses all the points. Otherwise, compute the average.
-				cs d = conservativeEnclose ? -FLOAT_INF : 0;
-				for (size_t j = 0; j < face.v.size(); ++j)
-				{
-					int vtx = face.v[j];
-					if (conservativeEnclose)
-						d = Max(d, faceNormals[i].Dot(POINT_TO_FLOAT4(vec(v[vtx]))));
-					else
-						d += faceNormals[i].Dot(POINT_TO_FLOAT4(vec(v[vtx])));
-				}
-				if (!conservativeEnclose)
-					d /= (cs)face.v.size();
-				for (size_t j = 0; j < face.v.size(); ++j)
-				{
-					cv vtx = POINT_TO_FLOAT4(vec(v[face.v[j]]));
-					v[face.v[j]] = FLOAT4_TO_POINT((vtx + (d - faceNormals[i].Dot(vtx)) * faceNormals[i]).ToFloat4());
-				}
-			}
-		}
-		RemoveDegenerateFaces();
-		RemoveRedundantVertices();
-		assume(IsClosed());
-		assume(IsConvex());
-
-		return numMerges;
-	}
-#endif
-
 
 }

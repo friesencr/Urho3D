@@ -210,6 +210,9 @@ void VoxelChunk::SetNumberOfMeshes(unsigned count)
 		batches_[i].geometry_ = geometries_[i];
 		batches_[i].geometryType_ = GEOM_STATIC_NOINSTANCING;
 		numQuads_[i] = 0;
+
+		vertexData_[i]->SetShadowed(false);
+		faceData_[i]->SetShadowed(false);
 	}
 }
 
@@ -323,10 +326,6 @@ bool VoxelChunk::DrawOcclusion(OcclusionBuffer* buffer)
 			buffer->DrawTriangle(verticies);
 		}
 	}
-    /* if (geometry_->GetIndexBuffer()) */
-    /* { */
-    /* geometry_->GetIndexBuffer()->GetIndexCount() / 3 : 0; */
-    /* } */
     return true;
 }
 
@@ -341,7 +340,7 @@ void VoxelChunk::BuildAsync()
 {
 	VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
 	SharedPtr<VoxelMap> voxelMap(GetVoxelMap());
-	builder->BuildVoxelChunkAsync(SharedPtr<VoxelChunk>(this));
+	builder->BuildVoxelChunk(SharedPtr<VoxelChunk>(this), true);
 }
 
 Geometry* VoxelChunk::GetLodGeometry(unsigned batchIndex, unsigned level)

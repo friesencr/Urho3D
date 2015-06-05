@@ -365,10 +365,14 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 
 #if 1
     Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
-    for (unsigned a = 0; a < heightMap->GetWidth() / 64; ++a)
+	int numX = heightMap->GetWidth() / 64;
+	int numZ = heightMap->GetHeight() / 64;
+	numX = 16;
+	numZ = 16;
+    for (unsigned a = 0; a < numX; ++a)
     {
 		unsigned chunkX = a * 64;
-        for (unsigned b = 0; b < heightMap->GetHeight() / 64; ++b)
+        for (unsigned b = 0; b < numZ; ++b)
         {
 			unsigned chunkZ = b * 64;
 			//Node* node = voxelNode_->GetChild();
@@ -380,63 +384,63 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 			chunk->SetVoxelMap(voxelMap);
 			voxelMap->SetSize(64, 128, 64);
 			voxelMap->InitializeBlocktype();
-			voxelMap->InitializeVHeight();
+			//voxelMap->InitializeVHeight();
 			voxelMap->blocktypeMap = voxelBlocktypeMap_;
 			for (unsigned x = 0; x < w; ++x)
 			{
 				for (unsigned z = 0; z < d; ++z)
 				{
 					Color c = heightMap->GetPixel(a * 64 + x, b * 64 + z);
-					int y =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z    ) & 0x0000FF00) >> 8));
-					int nw = (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z - 1) & 0x0000FF00) >> 8));
+					int y =  (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+					//int nw = (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z - 1) & 0x0000FF00) >> 8));
 					//unsigned n =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z - 1) & 0x0000FF00) >> 8));
-					int ne = (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z - 1) & 0x0000FF00) >> 8));
+					//int ne = (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z - 1) & 0x0000FF00) >> 8));
 					//unsigned w =  (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z    ) & 0x0000FF00) >> 8));
 					//unsigned e =  (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z    ) & 0x0000FF00) >> 8));
-					int sw = (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z + 1) & 0x0000FF00) >> 8));
+					//int sw = (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z + 1) & 0x0000FF00) >> 8));
 					//unsigned s =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z + 1) & 0x0000FF00) >> 8));
-					int se = (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z + 1) & 0x0000FF00) >> 8));
+					//int se = (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z + 1) & 0x0000FF00) >> 8));
 					int height = y / 4;
 
 					for (unsigned i = 0; i < height; ++i)
 					{
 						voxelMap->SetBlocktype(x, i, z, (int)(c.Average() * 8) % 4 + 1);
-						voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+						//voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
 					}
 
 					// gather nearby values to get height
-					VoxelHeight heights[4];
-					float heightValues[4] = {
-						(float)(y - sw) / 2.0,
-						(float)(y - se) / 2.0,
-						(float)(y - nw) / 2.0,
-						(float)(y - ne) / 2.0,
-					};
-					for (unsigned j = 0; j < 4; ++j)
-					{
-						float hv = heightValues[j];
-						if (hv < -0.5)
-							heights[j] = VOXEL_HEIGHT_0;
-						else if (hv < 0.0)
-							heights[j] = VOXEL_HEIGHT_HALF;
-						else if (hv < 0.5)
-							heights[j] = VOXEL_HEIGHT_1;
-						else
-							heights[j] = VOXEL_HEIGHT_1;
-					}
+					//VoxelHeight heights[4];
+					//float heightValues[4] = {
+					//	(float)(y - sw) / 2.0,
+					//	(float)(y - se) / 2.0,
+					//	(float)(y - nw) / 2.0,
+					//	(float)(y - ne) / 2.0,
+					//};
+					//for (unsigned j = 0; j < 4; ++j)
+					//{
+					//	float hv = heightValues[j];
+					//	if (hv < -0.5)
+					//		heights[j] = VOXEL_HEIGHT_0;
+					//	else if (hv < 0.0)
+					//		heights[j] = VOXEL_HEIGHT_HALF;
+					//	else if (hv < 0.5)
+					//		heights[j] = VOXEL_HEIGHT_1;
+					//	else
+					//		heights[j] = VOXEL_HEIGHT_1;
+					//}
 
 					voxelMap->SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
 					//voxelMap->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
-					voxelMap->SetVheight(x, height, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+					//voxelMap->SetVheight(x, height, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
 				}
 			}
         }
     }
 
 	// loop through again and set neighbors
-	for (int a = 0; a < heightMap->GetWidth() / 64; ++a)
+	for (int a = 0; a < numX; ++a)
 	{
-		for (int b = 0; b < heightMap->GetHeight() / 64; ++b)
+		for (int b = 0; b < numZ; ++b)
 		{
 			Node* node = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b));
 			Node* north = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b+1));
@@ -449,7 +453,17 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 			VoxelChunk* eastChunk = east ? east->GetComponent<VoxelChunk>() : 0;
 			VoxelChunk* westChunk = west ? west->GetComponent<VoxelChunk>() : 0;
 			chunk->SetNeighbors(northChunk, southChunk, eastChunk, westChunk);
-			chunk->BuildAsync();
+			chunk->Build();
+		}
+	}
+
+	for (int a = 0; a < numX; ++a)
+	{
+		for (int b = 0; b < numZ; ++b)
+		{
+			Node* node = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b));
+			VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
+			chunk->SetVoxelMap(0);
 		}
 	}
 #endif

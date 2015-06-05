@@ -37,7 +37,6 @@ struct VoxelWorkload;
 struct VoxelJob {
     SharedPtr<VoxelChunk> chunk;
 	unsigned slot;
-	bool async;
 };
 
 struct VoxelWorkSlot
@@ -80,8 +79,7 @@ class URHO3D_API VoxelBuilder : public Object {
 public:
     VoxelBuilder(Context* context);
     ~VoxelBuilder();
-    VoxelJob* BuildVoxelChunk(SharedPtr<VoxelChunk> chunk);
-	VoxelJob* BuildVoxelChunkAsync(SharedPtr<VoxelChunk> chunk);
+    VoxelJob* BuildVoxelChunk(SharedPtr<VoxelChunk> chunk, bool async = false);
     // needs to be public for work item work method
     void BuildWorkload(VoxelWorkload* workload);
     void CompleteWork(unsigned = M_MAX_UNSIGNED);
@@ -100,9 +98,11 @@ private:
     bool BuildMesh(VoxelWorkload* workload);
     void DecodeWorkBuffer(VoxelWorkload* workload);
     bool UploadGpuData(VoxelWorkSlot* slot, bool append = false);
+    bool UploadGpuDataCompatibilityMode(VoxelWorkSlot* slot, bool append = false);
 	bool SetMaterialParameters(Material* material);
     void HandleBeginFrame(StringHash eventType, VariantMap& eventData);
 	void SimplifyMesh(VoxelWorkSlot* slot);
+	bool PendingWork();
 
     //
     // slot management
@@ -121,7 +121,7 @@ private:
     void QueueJob(VoxelJob* job);
     VoxelJob* CreateJob(VoxelChunk* chunk);
     void PurgeAllJobs();
-    int RunJobs();
+    bool RunJobs();
 
     // 
     // state
