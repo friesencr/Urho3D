@@ -1,0 +1,4 @@
+<material>
+    <technique name="Techniques/VoxelDiff.xml" />
+    <texture unit="diffuse" name="Textures/green_box.png" />
+</material>
