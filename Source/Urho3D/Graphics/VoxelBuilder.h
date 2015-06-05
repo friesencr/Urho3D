@@ -36,8 +36,7 @@ struct VoxelWorkload;
 
 struct VoxelJob {
     SharedPtr<VoxelChunk> chunk;
-    VoxelWorkSlot* slot;
-    bool append;
+	unsigned slot;
 	bool async;
 };
 
@@ -45,12 +44,13 @@ struct VoxelWorkSlot
 {
     Vector<VoxelWorkload> workloads;
     VoxelJob* job;
-    stbvox_mesh_maker meshMakers[8];
-    unsigned char workVertexBuffers[8][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
-    unsigned char workFaceBuffers[8][VOXEL_WORKER_FACE_BUFFER_SIZE];
+    stbvox_mesh_maker meshMakers[4];
+    unsigned char workVertexBuffers[4][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
+    unsigned char workFaceBuffers[4][VOXEL_WORKER_FACE_BUFFER_SIZE];
     int numQuads;
     bool failed;
     bool free;
+	bool upload;
     int workCounter;
 	int numWorkloads;
     BoundingBox box;
@@ -60,7 +60,7 @@ struct VoxelWorkSlot
 
 struct VoxelWorkload 
 {
-    VoxelWorkSlot* slot;
+    int slot;
     VoxelBuilder* builder;
     SharedPtr<WorkItem> workItem;
     //PODVector<unsigned char> gpuData;
@@ -69,7 +69,7 @@ struct VoxelWorkload
     unsigned char index[3];
     unsigned char start[3];
     unsigned char end[3];
-    unsigned threadIndex;
+    unsigned workloadIndex;
     int numQuads;
     BoundingBox box;
 };
@@ -101,16 +101,15 @@ private:
     void DecodeWorkBuffer(VoxelWorkload* workload);
     bool UploadGpuData(VoxelWorkSlot* slot, bool append = false);
 	bool SetMaterialParameters(Material* material);
-    void TransferDataToSlot(VoxelWorkload* workload);
     void HandleBeginFrame(StringHash eventType, VariantMap& eventData);
 	void SimplifyMesh(VoxelWorkSlot* slot);
 
     //
     // slot management
     //
-    VoxelWorkSlot* GetFreeWorkSlot();
+    int GetFreeWorkSlot();
     void AbortSlot(VoxelWorkSlot* slot);
-    unsigned DecrementWorkSlot(VoxelWorkSlot* slot, VoxelWorkload* workItem);
+    unsigned DecrementWorkSlot(VoxelWorkSlot* slot);
     void FreeWorkSlot(VoxelWorkSlot* slot);
     void ProcessSlot(VoxelWorkSlot* slot);
 

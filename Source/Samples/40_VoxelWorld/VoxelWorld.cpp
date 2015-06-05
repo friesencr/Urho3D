@@ -449,7 +449,7 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 			VoxelChunk* eastChunk = east ? east->GetComponent<VoxelChunk>() : 0;
 			VoxelChunk* westChunk = west ? west->GetComponent<VoxelChunk>() : 0;
 			chunk->SetNeighbors(northChunk, southChunk, eastChunk, westChunk);
-			chunk->Build();
+			chunk->BuildAsync();
 		}
 	}
 #endif
