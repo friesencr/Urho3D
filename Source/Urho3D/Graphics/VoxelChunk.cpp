@@ -33,8 +33,8 @@ VoxelChunk::VoxelChunk(Context* context) :
 	size_[0] = 0; size_[1] = 0; size_[2] = 0;
 	index_[0] = 0; index_[1] = 0; index_[2] = 0;
 	SetNumberOfMeshes(numberOfMeshes_);
-	//SetOccludee(true);
-	//SetOccluder(true);
+	SetOccludee(true);
+	SetOccluder(true);
 }
 
 VoxelChunk::~VoxelChunk()
@@ -211,8 +211,8 @@ void VoxelChunk::SetNumberOfMeshes(unsigned count)
 		batches_[i].geometryType_ = GEOM_STATIC_NOINSTANCING;
 		numQuads_[i] = 0;
 
-		vertexData_[i]->SetShadowed(false);
-		faceData_[i]->SetShadowed(false);
+		//vertexData_[i]->SetShadowed(false);
+		//faceData_[i]->SetShadowed(false);
 	}
 }
 
@@ -300,31 +300,23 @@ bool VoxelChunk::DrawOcclusion(OcclusionBuffer* buffer)
 
 		Geometry* geometry = geometries_[i];
 
-		const unsigned char* vb = 0;
-		const unsigned char* ib = 0;
+		const unsigned char* vertexData;
 		unsigned vertexSize;
-		unsigned indexCount;
+		const unsigned char* indexData;
+		unsigned indexSize;
 		unsigned elementMask;
-		geometry->GetRawData(vb, vertexSize, ib, indexCount, elementMask);
+		geometry->GetRawData(vertexData, vertexSize, indexData, indexSize, elementMask);
 
-		unsigned* vertexData = (unsigned*)vb;
-		for (int i = 0; i < indexCount; i += 3)
-		{
-			if (buffer->GetNumTriangles() >= buffer->GetMaxTriangles())
-				return false;
+		// Check for valid geometry data
+		if (!vertexData || !indexData)
+			continue;
 
-			unsigned int v1 = *vertexData++;
-			unsigned int v2 = *vertexData++;
-			unsigned int v3 = *vertexData++;
+		unsigned indexStart = geometry->GetIndexStart();
+		unsigned indexCount = geometry->GetIndexCount();
 
-			Vector4 verticies[3] = {
-				ModelTransform(modelViewProj, Vector3((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0, (float)((v1 >> 7u) & 127u))),
-				ModelTransform(modelViewProj, Vector3((float)(v2 & 127u), (float)((v2 >> 14u) & 511u) / 2.0, (float)((v2 >> 7u) & 127u))),
-				ModelTransform(modelViewProj, Vector3((float)(v3 & 127u), (float)((v3 >> 14u) & 511u) / 2.0, (float)((v3 >> 7u) & 127u)))
-			};
-
-			buffer->DrawTriangle(verticies);
-		}
+		// Draw and check for running out of triangles
+		if (!buffer->Draw(node_->GetWorldTransform(), vertexData, vertexSize, indexData, indexSize, indexStart, indexCount))
+			return false;
 	}
     return true;
 }

@@ -619,11 +619,11 @@ namespace Urho3D
 		if (!faceData->SetSize(slot->numQuads, true, false))
 			return false;
 
-#if 0
+#if 1
 		{
 			Geometry* geo = chunk->GetGeometry(0);
-			PODVector<Vector3> shadowData(slot->numQuads * 4);
-			int index = 0;
+			SharedArrayPtr<unsigned char> arrayPtr(new unsigned char[slot->numQuads * 4 * sizeof(Vector3)]);
+			Vector3* shadowData = (Vector3*)arrayPtr.Get();
 			for (int i = 0; i < slot->numWorkloads; ++i)
 			{
 				VoxelWorkload* workload = &slot->workloads[i];
@@ -633,10 +633,9 @@ namespace Urho3D
 				{
 					unsigned int v1 = *workData++;
 					Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0, (float)((v1 >> 7u) & 127u));
-					shadowData[index++] = position;
+					*shadowData++ = position;
 				}
 			}
-			SharedArrayPtr<unsigned char> arrayPtr((unsigned char*)&shadowData.Front());
 			geo->SetRawVertexData(arrayPtr, 3 * sizeof(float), MASK_POSITION);
 		}
 #endif
