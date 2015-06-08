@@ -64,8 +64,10 @@ private:
     /// Handle the logic update event.
     void HandleUpdate(StringHash eventType, VariantMap& eventData);
     void HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData);
+	void SpawnObject();
 
 	SharedPtr<VoxelBlocktypeMap> voxelBlocktypeMap_;
     SharedPtr<Node> voxelNode_;
     int counter_;
+	bool drawDebug_;
 };

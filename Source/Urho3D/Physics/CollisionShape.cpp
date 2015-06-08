@@ -38,6 +38,7 @@
 #include "../Scene/Scene.h"
 #include "../Graphics/Terrain.h"
 #include "../Graphics/VertexBuffer.h"
+#include "../Graphics/VoxelChunk.h"
 
 #include <Bullet/BulletCollision/CollisionDispatch/btInternalEdgeUtility.h>
 #include <Bullet/BulletCollision/CollisionShapes/btBoxShape.h>
@@ -169,6 +170,53 @@ public:
         }
     }
 
+	TriangleMeshInterface(VoxelChunk* voxelChunk) : btTriangleIndexVertexArray()
+	{
+		if (voxelChunk->GetTotalQuads() == 0)
+			return;
+
+		for (unsigned i = 0; i < voxelChunk->GetNumMeshes(); ++i)
+		{
+            Geometry* geometry = voxelChunk->GetGeometry(i);
+            if (!geometry)
+            {
+                LOGWARNING("Skipping null geometry for triangle mesh collision");
+                continue;
+            }
+
+            SharedArrayPtr<unsigned char> vertexData;
+            SharedArrayPtr<unsigned char> indexData;
+            unsigned vertexSize;
+            unsigned indexSize;
+            unsigned elementMask;
+
+            geometry->GetRawDataShared(vertexData, vertexSize, indexData, indexSize, elementMask);
+            if (!vertexData || !indexData)
+            {
+                LOGWARNING("Skipping geometry with no CPU-side geometry data for triangle mesh collision");
+                continue;
+            }
+
+            // Keep shared pointers to the vertex/index data so that if it's unloaded or changes size, we don't crash
+            dataArrays_.Push(vertexData);
+            dataArrays_.Push(indexData);
+
+            unsigned indexStart = geometry->GetIndexStart();
+            unsigned indexCount = geometry->GetIndexCount();
+
+            btIndexedMesh meshIndex;
+            meshIndex.m_numTriangles = indexCount / 3;
+            meshIndex.m_triangleIndexBase = &indexData[indexStart * indexSize];
+            meshIndex.m_triangleIndexStride = 3 * indexSize;
+            meshIndex.m_numVertices = 0;
+            meshIndex.m_vertexBase = vertexData;
+            meshIndex.m_vertexStride = vertexSize;
+            meshIndex.m_indexType = (indexSize == sizeof(unsigned short)) ? PHY_SHORT : PHY_INTEGER;
+            meshIndex.m_vertexType = PHY_FLOAT;
+            m_indexedMeshes.push_back(meshIndex);
+		}
+	}
+
 private:
     /// Shared vertex/index data used in the collision
     Vector<SharedArrayPtr<unsigned char> > dataArrays_;
@@ -192,6 +240,18 @@ TriangleMeshData::TriangleMeshData(CustomGeometry* custom) :
     infoMap_(0)
 {
     meshInterface_ = new TriangleMeshInterface(custom);
+    shape_ = new btBvhTriangleMeshShape(meshInterface_, true, true);
+
+    infoMap_ = new btTriangleInfoMap();
+    btGenerateInternalEdgeInfo(shape_, infoMap_);
+}
+
+TriangleMeshData::TriangleMeshData(VoxelChunk* voxelChunk) :
+    meshInterface_(0),
+    shape_(0),
+    infoMap_(0)
+{
+    meshInterface_ = new TriangleMeshInterface(voxelChunk);
     shape_ = new btBvhTriangleMeshShape(meshInterface_, true, true);
 
     infoMap_ = new btTriangleInfoMap();
@@ -398,6 +458,7 @@ CollisionShape::CollisionShape(Context* context) :
     cachedWorldScale_(Vector3::ONE),
     lodLevel_(0),
     customGeometryID_(0),
+	voxelTypeEnabled_(false),
     margin_(DEFAULT_COLLISION_MARGIN),
     recreateShape_(true)
 {
@@ -424,6 +485,7 @@ void CollisionShape::RegisterObject(Context* context)
     ATTRIBUTE("LOD Level", int, lodLevel_, 0, AM_DEFAULT);
     ATTRIBUTE("Collision Margin", float, margin_, DEFAULT_COLLISION_MARGIN, AM_DEFAULT);
     ATTRIBUTE("CustomGeometry NodeID", int, customGeometryID_, 0, AM_DEFAULT | AM_NODEID);
+    ATTRIBUTE("Voxel Type Enabled", int, voxelTypeEnabled_, 0, AM_DEFAULT | AM_NODEID);
 }
 
 void CollisionShape::OnSetAttribute(const AttributeInfo& attr, const Variant& src)
@@ -498,6 +560,7 @@ void CollisionShape::SetBox(const Vector3& size, const Vector3& position, const 
     rotation_ = rotation;
     model_.Reset();
     customGeometryID_ = 0;
+	voxelTypeEnabled_ = false;
 
     UpdateShape();
     NotifyRigidBody();
@@ -515,6 +578,7 @@ void CollisionShape::SetSphere(float diameter, const Vector3& position, const Qu
     rotation_ = rotation;
     model_.Reset();
     customGeometryID_ = 0;
+    voxelTypeEnabled_ = false;
 
     UpdateShape();
     NotifyRigidBody();
@@ -531,6 +595,7 @@ void CollisionShape::SetStaticPlane(const Vector3& position, const Quaternion& r
     rotation_ = rotation;
     model_.Reset();
     customGeometryID_ = 0;
+    voxelTypeEnabled_ = false;
 
     UpdateShape();
     NotifyRigidBody();
@@ -548,6 +613,7 @@ void CollisionShape::SetCylinder(float diameter, float height, const Vector3& po
     rotation_ = rotation;
     model_.Reset();
     customGeometryID_ = 0;
+    voxelTypeEnabled_ = false;
 
     UpdateShape();
     NotifyRigidBody();
@@ -565,6 +631,7 @@ void CollisionShape::SetCapsule(float diameter, float height, const Vector3& pos
     rotation_ = rotation;
     model_.Reset();
     customGeometryID_ = 0;
+    voxelTypeEnabled_ = false;
 
     UpdateShape();
     NotifyRigidBody();
@@ -582,6 +649,7 @@ void CollisionShape::SetCone(float diameter, float height, const Vector3& positi
     rotation_ = rotation;
     model_.Reset();
     customGeometryID_ = 0;
+    voxelTypeEnabled_ = false;
 
     UpdateShape();
     NotifyRigidBody();
@@ -606,6 +674,7 @@ void CollisionShape::SetTriangleMesh(Model* model, unsigned lodLevel, const Vect
     position_ = position;
     rotation_ = rotation;
     customGeometryID_ = 0;
+    voxelTypeEnabled_ = false;
 
     UpdateShape();
     NotifyRigidBody();
@@ -635,6 +704,36 @@ void CollisionShape::SetCustomTriangleMesh(CustomGeometry* custom, const Vector3
     position_ = position;
     rotation_ = rotation;
     customGeometryID_ = custom->GetNode()->GetID();
+    voxelTypeEnabled_ = false;
+
+    UpdateShape();
+    NotifyRigidBody();
+    MarkNetworkUpdate();
+}
+
+void CollisionShape::SetVoxelTriangleMesh(bool voxelMeshEnabled, const Vector3& scale, const Vector3& position, const Quaternion& rotation)
+{
+	if (voxelMeshEnabled)
+	{
+		VoxelChunk* voxelChunk = GetComponent<VoxelChunk>();
+		if (!voxelChunk)
+		{
+			LOGERROR("Null voxel chunk, can not set triangle mesh");
+			return;
+		}
+	}
+
+    if (model_)
+        UnsubscribeFromEvent(model_, E_RELOADFINISHED);
+
+    shapeType_ = SHAPE_TRIANGLEMESH;
+    model_.Reset();
+    lodLevel_ = 0;
+    size_ = scale;
+    position_ = position;
+    rotation_ = rotation;
+    customGeometryID_ = 0;
+	voxelTypeEnabled_ = voxelMeshEnabled;
 
     UpdateShape();
     NotifyRigidBody();
@@ -659,6 +758,7 @@ void CollisionShape::SetConvexHull(Model* model, unsigned lodLevel, const Vector
     position_ = position;
     rotation_ = rotation;
     customGeometryID_ = 0;
+    voxelTypeEnabled_ = false;
 
     UpdateShape();
     NotifyRigidBody();
@@ -688,6 +788,7 @@ void CollisionShape::SetCustomConvexHull(CustomGeometry* custom, const Vector3& 
     position_ = position;
     rotation_ = rotation;
     customGeometryID_ = custom->GetNode()->GetID();
+    voxelTypeEnabled_ = false;
 
     UpdateShape();
     NotifyRigidBody();
@@ -915,6 +1016,9 @@ void CollisionShape::OnNodeSet(Node* node)
 
         // Terrain collision shape depends on the terrain component's geometry updates. Subscribe to them
         SubscribeToEvent(node, E_TERRAINCREATED, HANDLER(CollisionShape, HandleTerrainCreated));
+
+        // Voxel chunk collision depends on the voxel componenet's geometry udpates.  Subscribe to them.
+        SubscribeToEvent(node, E_VOXELCHUNKCREATED, HANDLER(CollisionShape, HandleVoxelChunkCreated));
     }
 }
 
@@ -1052,6 +1156,22 @@ void CollisionShape::UpdateShape()
                 // Watch for live reloads of the collision model to reload the geometry if necessary
                 SubscribeToEvent(model_, E_RELOADFINISHED, HANDLER(CollisionShape, HandleModelReloadFinished));
             }
+			else if (voxelTypeEnabled_ && GetScene())
+			{
+                VoxelChunk* voxelChunk = GetComponent<VoxelChunk>();
+                if (voxelChunk)
+                { 
+					// TODO doesn't account for missing raw cpu data
+					if (voxelChunk->GetTotalQuads() > 0)
+					{
+						geometry_ = new TriangleMeshData(voxelChunk);
+						TriangleMeshData* triMesh = static_cast<TriangleMeshData*>(geometry_.Get());
+						shape_ = new btScaledBvhTriangleMeshShape(triMesh->shape_, ToBtVector3(newWorldScale * size_));
+					}
+                }
+                else
+                    LOGWARNING("Could not find voxel chunk component on the node for triangle mesh shape creation");
+			}
             break;
 
         case SHAPE_CONVEXHULL:
@@ -1137,6 +1257,15 @@ void CollisionShape::HandleTerrainCreated(StringHash eventType, VariantMap& even
         UpdateShape();
         NotifyRigidBody();
     }
+}
+
+void CollisionShape::HandleVoxelChunkCreated(StringHash eventType, VariantMap& eventData)
+{
+	if (shapeType_ == SHAPE_TRIANGLEMESH || shapeType_ == SHAPE_CONVEXHULL)
+	{
+		UpdateShape();
+        NotifyRigidBody();
+	}
 }
 
 void CollisionShape::HandleModelReloadFinished(StringHash eventType, VariantMap& eventData)

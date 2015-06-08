@@ -71,6 +71,9 @@ class URHO3D_API VoxelChunk : public Drawable
     void Build();
     void BuildAsync();
 
+	unsigned GetNumMeshes() const { return numMeshes_; }
+	unsigned GetTotalQuads() const;
+	unsigned GetNumQuads(unsigned index) const { return numQuads_[index]; }
     unsigned char GetIndexX();
     unsigned char GetIndexY();
     unsigned char GetIndexZ();
@@ -91,12 +94,13 @@ class URHO3D_API VoxelChunk : public Drawable
     virtual void OnWorldBoundingBoxUpdate();
 
     private:
+    void OnVoxelChunkCreated();
     // Voxel chunk geometry
     unsigned char index_[3];
     unsigned char size_[3];
     float priority_;
     unsigned lodLevel_;
-    unsigned numberOfMeshes_;
+    unsigned numMeshes_;
     WeakPtr<VoxelSet> owner_;
     WeakPtr<VoxelChunk> neighborNorth_;
     WeakPtr<VoxelChunk> neighborWest_;

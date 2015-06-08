@@ -43,9 +43,11 @@
 #include <Urho3D/Graphics/VoxelBuilder.h>
 #include <Urho3D/Graphics/Skybox.h>
 #include <Urho3D/Graphics/Texture2D.h>
+#include <Urho3D/Physics/PhysicsWorld.h>
+#include <Urho3D/Physics/CollisionShape.h>
+#include <Urho3D/Physics/RigidBody.h>
 
 #include "VoxelWorld.h"
-#
 
 #include <Urho3D/DebugNew.h>
 
@@ -83,6 +85,8 @@ void VoxelWorld::Start()
 void VoxelWorld::CreateScene()
 {
     ResourceCache* cache = GetSubsystem<ResourceCache>();
+	Renderer* renderer = GetSubsystem<Renderer>();
+	renderer->SetMaxOccluderTriangles(10000);
 
     scene_ = new Scene(context_);
 
@@ -92,6 +96,7 @@ void VoxelWorld::CreateScene()
     // optimizing manner
     scene_->CreateComponent<Octree>();
     DebugRenderer* debug = scene_->CreateComponent<DebugRenderer>();
+    scene_->CreateComponent<PhysicsWorld>();
 
     Node* zoneNode = scene_->CreateChild("Zone");
     Zone* zone = zoneNode->CreateComponent<Zone>();
@@ -125,14 +130,14 @@ void VoxelWorld::CreateScene()
      //Create a directional light to the world so that we can see something. The light scene node's orientation controls the
      //light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
      //The light will use default settings (white light, no shadows)
-    Node* lightNode = scene_->CreateChild("DirectionalLight");
-    lightNode->SetDirection(Vector3(0.6f, -1.0f, 0.8f)); // The direction vector does not need to be normalized
+ //   Node* lightNode = scene_->CreateChild("DirectionalLight");
+ //   lightNode->SetDirection(Vector3(0.6f, -1.0f, 0.8f)); // The direction vector does not need to be normalized
 
-    Light* light = lightNode->CreateComponent<Light>();
-    light->SetLightType(LIGHT_DIRECTIONAL);
-    light->SetCastShadows(true);
-    light->SetBrightness(0.7);
-	light->SetColor(Color(0.7, 1.0, 0.7));
+ //   Light* light = lightNode->CreateComponent<Light>();
+ //   light->SetLightType(LIGHT_DIRECTIONAL);
+ //   light->SetCastShadows(true);
+ //   light->SetBrightness(0.7);
+	//light->SetColor(Color(0.7, 1.0, 0.7));
 
     //Node* planeNode = scene_->CreateChild("Plane");
     //planeNode->SetScale(Vector3(100.0f, 1.0f, 100.0f));
@@ -237,6 +242,7 @@ void VoxelWorld::CreateInstructions()
     instructionText->SetHorizontalAlignment(HA_CENTER);
     instructionText->SetVerticalAlignment(VA_CENTER);
     instructionText->SetPosition(0, ui->GetRoot()->GetHeight() / 4);
+
 }
 
 void VoxelWorld::SetupViewport()
@@ -278,6 +284,10 @@ void VoxelWorld::MoveCamera(float timeStep)
     // Construct new orientation for the camera scene node from yaw and pitch. Roll is fixed to zero
     cameraNode_->SetRotation(Quaternion(pitch_, yaw_, 0.0f));
 
+	// "Shoot" a physics object with left mousebutton
+	if (input->GetMouseButtonPress(MOUSEB_LEFT))
+		SpawnObject();
+
     // Read WASD keys and move the camera scene node to the corresponding direction if they are pressed
     // Use the Translate() function (default local space) to move relative to the node's orientation.
     if (input->GetKeyDown('W'))
@@ -288,6 +298,38 @@ void VoxelWorld::MoveCamera(float timeStep)
         cameraNode_->Translate(Vector3::LEFT * MOVE_SPEED * timeStep);
     if (input->GetKeyDown('D'))
         cameraNode_->Translate(Vector3::RIGHT * MOVE_SPEED * timeStep);
+
+	// Toggle physics debug geometry with space
+	if (input->GetKeyPress(KEY_SPACE))
+		drawDebug_ = !drawDebug_;
+}
+
+void VoxelWorld::SpawnObject()
+{
+	ResourceCache* cache = GetSubsystem<ResourceCache>();
+
+	// Create a smaller box at camera position
+	Node* boxNode = scene_->CreateChild("SmallBox");
+	boxNode->SetPosition(cameraNode_->GetPosition());
+	boxNode->SetRotation(cameraNode_->GetRotation());
+	boxNode->SetScale(0.25f);
+	StaticModel* boxObject = boxNode->CreateComponent<StaticModel>();
+	boxObject->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
+	boxObject->SetMaterial(cache->GetResource<Material>("Materials/StoneEnvMapSmall.xml"));
+	boxObject->SetCastShadows(true);
+
+	// Create physics components, use a smaller mass also
+	RigidBody* body = boxNode->CreateComponent<RigidBody>();
+	body->SetMass(0.25f);
+	body->SetFriction(0.75f);
+	CollisionShape* shape = boxNode->CreateComponent<CollisionShape>();
+	shape->SetBox(Vector3::ONE);
+
+	const float OBJECT_VELOCITY = 10.0f;
+
+	// Set initial velocity for the RigidBody based on camera forward vector. Add also a slight up component
+	// to overcome gravity better
+	body->SetLinearVelocity(cameraNode_->GetRotation() * Vector3(0.0f, 0.25f, 1.0f) * OBJECT_VELOCITY);
 }
 
 void VoxelWorld::SubscribeToEvents()
@@ -380,6 +422,12 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 			Node* node = voxelNode_->CreateChild(chunkName);
 			node->SetPosition(Vector3(a * 64, 0, b * 64));
 			VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
+			chunk->SetOccludee(true);
+			chunk->SetOccluder(true);
+			node->CreateComponent<RigidBody>();
+			CollisionShape* shape = node->CreateComponent<CollisionShape>();
+			shape->SetVoxelTriangleMesh(chunk);
+
 			SharedPtr<VoxelMap> voxelMap(new VoxelMap(context_));
 			chunk->SetVoxelMap(voxelMap);
 			voxelMap->SetSize(64, 128, 64);
@@ -537,6 +585,10 @@ void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventD
     //for (unsigned i = 0; i < voxelChunks.Size(); ++i)
     //	voxelChunks[i]->DrawDebugGeometry(debug, true);
     //scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
+
+	if (drawDebug_)
+		scene_->GetComponent<PhysicsWorld>()->DrawDebugGeometry(true);
+
 }
 
 

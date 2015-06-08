@@ -113,6 +113,14 @@ static float URHO3D_default_texgen[64][3] =
 namespace Urho3D
 {
 
+	static struct Quad {
+		Vector3 a;
+		Vector3 b;
+		Vector3 c;
+		Vector3 d;
+		Vector3 normal;
+	};
+
 	VoxelBuilder::VoxelBuilder(Context* context)
 		: Object(context),
 		compatibilityMode(false),
@@ -621,22 +629,34 @@ namespace Urho3D
 
 #if 1
 		{
-			Geometry* geo = chunk->GetGeometry(0);
 			SharedArrayPtr<unsigned char> arrayPtr(new unsigned char[slot->numQuads * 4 * sizeof(Vector3)]);
 			Vector3* shadowData = (Vector3*)arrayPtr.Get();
+			PODVector<Vector3> normals(totalVertices);
+			Geometry* geo = chunk->GetGeometry(0);
 			for (int i = 0; i < slot->numWorkloads; ++i)
 			{
 				VoxelWorkload* workload = &slot->workloads[i];
 				int numVertices = workload->numQuads * 4;
-				unsigned int* workData = (unsigned int*)slot->workVertexBuffers[i];
+				unsigned int* vertData = (unsigned int*)slot->workVertexBuffers[i];
 				for (int j = 0; j < numVertices; ++j)
 				{
-					unsigned int v1 = *workData++;
+					unsigned int v1 = *vertData++;
 					Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0, (float)((v1 >> 7u) & 127u));
 					*shadowData++ = position;
 				}
+
+				unsigned int* faceData = (unsigned int*)slot->workFaceBuffers[i];
+				for (int j = 0; j < workload->numQuads; ++j)
+				{
+					unsigned int v2 = *faceData++;
+					unsigned char face_info = (v2 >> 24) & 0xFF;
+					unsigned char normal = face_info >> 2u;
+					Vector3 normalf(URHO3D_default_normals[normal]);
+					normals[j] = normalf;
+				}
 			}
 			geo->SetRawVertexData(arrayPtr, 3 * sizeof(float), MASK_POSITION);
+			SimplifyMesh(slot, shadowData, &normals.Front());
 		}
 #endif
 
@@ -713,7 +733,8 @@ namespace Urho3D
 		if (!slot->failed)
 			if (!UploadGpuData(slot))
 				LOGERROR("Could not upload voxel data to graphics card.");
-
+			else
+				slot->job->chunk->OnVoxelChunkCreated();
 		FreeWorkSlot(slot);
 	}
 
@@ -765,6 +786,32 @@ namespace Urho3D
 			}
 		}
 		return -1;
+	}
+
+	void VoxelBuilder::SimplifyMesh(VoxelWorkSlot* slot, Vector3* vertices, Vector3* normals)
+	{
+		return;
+		int minY = slot->box.min_.y_;
+		int maxY = slot->box.max_.y_;
+		int numVertices = slot->numQuads * 4;
+
+		Vector<PODVector<Quad> > quads(maxY);
+
+		// cache height by lower left corner
+		for (unsigned i = 0; i < slot->numQuads; ++i)
+		{
+			Quad quad;
+			quad.a = *++vertices;
+			quad.b = *++vertices;
+			quad.c = *++vertices;
+			quad.d = *++vertices;
+			quad.normal = *++normals;
+			int height = quad.a.y_ * 2; // multiplying by 2 will restore it to 0-512 to account for half height 
+			quads[height].Push(quad);
+		}
+
+		// go through all the heights
+		// for (unsigned h = 0; )
 	}
 
 }

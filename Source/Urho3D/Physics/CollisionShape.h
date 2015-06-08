@@ -44,6 +44,7 @@ class PhysicsWorld;
 class RigidBody;
 class Terrain;
 class TriangleMeshInterface;
+class VoxelChunk;
 
 /// Collision shape type.
 enum ShapeType
@@ -71,6 +72,8 @@ struct TriangleMeshData : public CollisionGeometryData
     TriangleMeshData(Model* model, unsigned lodLevel);
     /// Construct from a custom geometry.
     TriangleMeshData(CustomGeometry* custom);
+    /// Construct from a voxel chunk.
+    TriangleMeshData(VoxelChunk* voxelChunk);
     /// Destruct. Free geometry data.
     ~TriangleMeshData();
 
@@ -89,6 +92,8 @@ struct ConvexData : public CollisionGeometryData
     ConvexData(Model* model, unsigned lodLevel);
     /// Construct from a custom geometry.
     ConvexData(CustomGeometry* custom);
+    /// Construct from a voxel chunk.
+    ConvexData(VoxelChunk* voxelChunk);
     /// Destruct. Free geometry data.
     ~ConvexData();
 
@@ -163,10 +168,14 @@ public:
     void SetTriangleMesh(Model* model, unsigned lodLevel = 0, const Vector3& scale = Vector3::ONE, const Vector3& position = Vector3::ZERO, const Quaternion& rotation = Quaternion::IDENTITY);
     /// Set as a triangle mesh from CustomGeometry.
     void SetCustomTriangleMesh(CustomGeometry* custom, const Vector3& scale = Vector3::ONE, const Vector3& position = Vector3::ZERO, const Quaternion& rotation = Quaternion::IDENTITY);
+    /// Set as a triangle mesh from VoxelChunk.
+	void SetVoxelTriangleMesh(bool voxelMeshEnabled, const Vector3& scale = Vector3::ONE, const Vector3& position = Vector3::ZERO, const Quaternion& rotation = Quaternion::IDENTITY);
     /// Set as a convex hull from Model.
     void SetConvexHull(Model* model, unsigned lodLevel = 0, const Vector3& scale = Vector3::ONE, const Vector3& position = Vector3::ZERO, const Quaternion& rotation = Quaternion::IDENTITY);
     /// Set as a convex hull from CustomGeometry.
     void SetCustomConvexHull(CustomGeometry* custom, const Vector3& scale = Vector3::ONE, const Vector3& position = Vector3::ZERO, const Quaternion& rotation = Quaternion::IDENTITY);
+    /// Set as a convex hull from CustomGeometry.
+    void SetVoxelConvexHull(VoxelChunk* custom, const Vector3& scale = Vector3::ONE, const Vector3& position = Vector3::ZERO, const Quaternion& rotation = Quaternion::IDENTITY);
     /// Set as a terrain. Only works if the same scene node contains a Terrain component.
     void SetTerrain(unsigned lodLevel = 0);
     /// Set shape type.
@@ -231,6 +240,8 @@ private:
     void UpdateShape();
     /// Update terrain collision shape from the terrain component.
     void HandleTerrainCreated(StringHash eventType, VariantMap& eventData);
+    /// Update voxel chunk collision shape from the voxel chunk component.
+    void HandleVoxelChunkCreated(StringHash eventType, VariantMap& eventData);
     /// Update trimesh or convex shape after a model has reloaded itself.
     void HandleModelReloadFinished(StringHash eventType, VariantMap& eventData);
 
@@ -258,6 +269,8 @@ private:
     unsigned lodLevel_;
     /// CustomGeometry component ID for convex hull mode. 0 if not creating the convex hull from a CustomGeometry.
     int customGeometryID_;
+    /// VoxelChunk component ID.
+	bool voxelTypeEnabled_;;
     /// Collision margin.
     float margin_;
     /// Recrease collision shape flag.
