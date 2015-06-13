@@ -10,6 +10,7 @@
 #include "Core/CoreEvents.h"
 #include "../Container/ArrayPtr.h"
 #include "../IO/Compression.h"
+#include "../Math/Plane.h"
 
 
 #define STB_VOXEL_RENDER_IMPLEMENTATION
@@ -112,14 +113,6 @@ static float URHO3D_default_texgen[64][3] =
 
 namespace Urho3D
 {
-
-	static struct Quad {
-		Vector3 a;
-		Vector3 b;
-		Vector3 c;
-		Vector3 d;
-		Vector3 normal;
-	};
 
 	VoxelBuilder::VoxelBuilder(Context* context)
 		: Object(context),
@@ -629,9 +622,14 @@ namespace Urho3D
 
 #if 1
 		{
-			SharedArrayPtr<unsigned char> arrayPtr(new unsigned char[slot->numQuads * 4 * sizeof(Vector3)]);
-			Vector3* shadowData = (Vector3*)arrayPtr.Get();
-			PODVector<Vector3> normals(totalVertices);
+			// raw vertices
+			PODVector<Vector3> rawVerticies(slot->numQuads * 4);
+			Vector3* vertexPtr = &rawVerticies.Front();
+
+			// normal memory
+			SharedArrayPtr<unsigned char> normalData(new unsigned char[slot->numQuads * sizeof(unsigned char)]);
+			unsigned char* normals = normalData.Get();
+
 			Geometry* geo = chunk->GetGeometry(0);
 			for (int i = 0; i < slot->numWorkloads; ++i)
 			{
@@ -642,7 +640,7 @@ namespace Urho3D
 				{
 					unsigned int v1 = *vertData++;
 					Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0, (float)((v1 >> 7u) & 127u));
-					*shadowData++ = position;
+					*vertexPtr++ = position;
 				}
 
 				unsigned int* faceData = (unsigned int*)slot->workFaceBuffers[i];
@@ -651,12 +649,22 @@ namespace Urho3D
 					unsigned int v2 = *faceData++;
 					unsigned char face_info = (v2 >> 24) & 0xFF;
 					unsigned char normal = face_info >> 2u;
-					Vector3 normalf(URHO3D_default_normals[normal]);
-					normals[j] = normalf;
+					*normals++ = normal;
 				}
 			}
-			geo->SetRawVertexData(arrayPtr, 3 * sizeof(float), MASK_POSITION);
-			SimplifyMesh(slot, shadowData, &normals.Front());
+
+
+#if 1
+			// vertex memory
+			PODVector<Vector3> reducedMesh;
+			SimplifyMesh(slot, &rawVerticies.Front(), normalData.Get(), &reducedMesh);
+			unsigned reducedVertexCount = reducedMesh.Size();
+			unsigned reducedQuadCount =  reducedMesh.Size() / 4;
+			chunk->reducedQuadCount_[0] = reducedQuadCount;
+			SharedArrayPtr<unsigned char> cloneData(new unsigned char[reducedVertexCount* sizeof(Vector3)]);
+			memcpy(cloneData.Get(), &reducedMesh.Front(), sizeof(Vector3) * reducedVertexCount);
+			geo->SetRawVertexData(cloneData, sizeof(Vector3), MASK_POSITION);
+#endif
 		}
 #endif
 
@@ -788,30 +796,163 @@ namespace Urho3D
 		return -1;
 	}
 
-	void VoxelBuilder::SimplifyMesh(VoxelWorkSlot* slot, Vector3* vertices, Vector3* normals)
+	// QUAD
+	// [d,c]
+	// [a,b]
+	struct Quad {
+		int id;
+		Vector3 a;
+		Vector3 b;
+		Vector3 c;
+		Vector3 d;
+		unsigned char normal;
+		float cmp = M_EPSILON;
+		bool keep;
+
+		Vector3 GetNormal() {
+			return Vector3(
+				URHO3D_default_normals[normal][0],
+				URHO3D_default_normals[normal][2],
+				URHO3D_default_normals[normal][1]
+			);
+		}
+
+		bool Merge(Quad quad)
+		{
+			if (normal != quad.normal)
+				return false;
+
+			// QUAD
+			// [d,c]
+			// [a,b]
+			float d1 = (quad.a - d).Length();
+			float d2 = (quad.b - c).Length();
+			if ((quad.a - d).Length() < cmp && (quad.b - c).Length() < cmp) // up
+			{
+				d = quad.d;
+				c = quad.c;
+				return true;
+			}
+			else if ((quad.d - c).Length() < cmp && (quad.a - b).Length() < cmp) // right
+			{
+				c = quad.c;
+				b = quad.b;
+				return true;
+			}
+			else if ((quad.c - b).Length() < cmp && (quad.d - a).Length() < cmp) // down
+			{
+				b = quad.b;
+				a = quad.a;
+				return true;
+			}
+			else if ((quad.b - a).Length() < cmp && (quad.c - d).Length() < cmp) // left
+			{
+				a = quad.a;
+				d = quad.d;
+				return true;
+			}
+			return false;
+		}
+	};
+
+	void VoxelBuilder::SimplifyMesh(VoxelWorkSlot* slot, Vector3* vertices, unsigned char* normals, PODVector<Vector3>* newMesh)
 	{
-		return;
-		int minY = slot->box.min_.y_;
-		int maxY = slot->box.max_.y_;
+		int minY = (int)slot->box.min_.y_;
+		int maxY = (int)slot->box.max_.y_;
 		int numVertices = slot->numQuads * 4;
 
-		Vector<PODVector<Quad> > quads(maxY);
+		PODVector<Quad> quads(slot->numQuads);
+		Vector<PODVector<int> > normalLookup(32);
 
-		// cache height by lower left corner
+		// cache all the corners and normals
 		for (unsigned i = 0; i < slot->numQuads; ++i)
 		{
 			Quad quad;
-			quad.a = *++vertices;
-			quad.b = *++vertices;
-			quad.c = *++vertices;
-			quad.d = *++vertices;
-			quad.normal = *++normals;
-			int height = quad.a.y_ * 2; // multiplying by 2 will restore it to 0-512 to account for half height 
-			quads[height].Push(quad);
+			quad.id = i;
+			quad.a = *vertices++;
+			quad.b = *vertices++;
+			quad.c = *vertices++;
+			quad.d = *vertices++;
+			quad.normal = normals[i];
+			quad.keep = true;
+			quads[i] = quad;
+			Vector3 vNormal = URHO3D_default_normals[quad.normal];
+			normalLookup[quad.normal].Push(i);
 		}
 
-		// go through all the heights
-		// for (unsigned h = 0; )
+		for (unsigned n = 0; n < normalLookup.Size(); ++n)
+		{
+			PODVector<int>* byNormal = &normalLookup[n];
+			PODVector<Plane> planes;
+			Vector<PODVector<int> > byPlane;
+
+			// bucket all of the quads by plane
+			for (unsigned i = 0; i < byNormal->Size(); ++i)
+			{
+				Quad* quad = &quads[byNormal->At(i)];
+				bool makePlane = true;
+				for (unsigned p = 0; p < planes.Size(); ++p)
+				{
+					Plane plane = planes[p];
+					float d = Abs(plane.Distance(quad->a));
+					if (d < M_EPSILON)
+					{
+						byPlane[p].Push(quad->id);
+						makePlane = false;
+						break;
+					}
+				}
+
+				if (makePlane)
+				{
+					planes.Push(Plane(quad->GetNormal(), quad->a));
+					byPlane.Resize(planes.Size());
+					byPlane[planes.Size() - 1].Push(quad->id);
+				}
+			}
+
+			for (unsigned p = 0; p < planes.Size(); ++p)
+			{
+				for (;;)
+				{
+					bool aMerge = false;
+					for (unsigned q1 = 0; q1 < byPlane[p].Size(); ++q1)
+					{
+						Quad* quad1 = &quads[byPlane[p][q1]];
+						if (!quad1->keep)
+							continue;
+
+						bool keep = false;
+						for (unsigned q2 = 0; q2 < byPlane[p].Size(); ++q2)
+						{
+							Quad* quad2 = &quads[byPlane[p][q2]];
+							if (quad1->id == quad2->id)
+								continue;
+
+							if (quad2->keep && quad1->Merge(*quad2))
+							{
+								aMerge = true;
+								quad2->keep = false;
+							}
+						}
+					}
+					if (!aMerge)
+						break;
+				}
+			}
+		}
+
+		for (unsigned i = 0; i < quads.Size(); ++i)
+		{
+			Quad* quad = &quads[i];
+			if (quad->keep)
+			{
+				newMesh->Push(quad->a);
+				newMesh->Push(quad->b);
+				newMesh->Push(quad->c);
+				newMesh->Push(quad->d);
+			}
+		}
 	}
 
 }

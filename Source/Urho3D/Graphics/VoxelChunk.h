@@ -74,6 +74,7 @@ class URHO3D_API VoxelChunk : public Drawable
 	unsigned GetNumMeshes() const { return numMeshes_; }
 	unsigned GetTotalQuads() const;
 	unsigned GetNumQuads(unsigned index) const { return numQuads_[index]; }
+	unsigned GetReducedNumQuads(unsigned index) const { return reducedQuadCount_[index]; }
     unsigned char GetIndexX();
     unsigned char GetIndexY();
     unsigned char GetIndexZ();
@@ -113,7 +114,7 @@ class URHO3D_API VoxelChunk : public Drawable
     Vector<SharedPtr<VertexBuffer> > vertexData_;
     Vector<SharedPtr<IndexBuffer> > faceData_;
     Vector<SharedPtr<TextureBuffer> > faceBuffer_;
-    Vector<PODVector<unsigned> > rawData_;
+    Vector<unsigned > reducedQuadCount_;
     Vector<unsigned> numQuads_;
     Vector<bool> hasMaterialParameters_;
 };

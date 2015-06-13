@@ -265,7 +265,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 300.0f;
+    const float MOVE_SPEED = 25.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
@@ -354,55 +354,64 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
     if (counter_ != 0)
         return;
 
-	//if (counter_ == 0)
-	//{
-	//	for (unsigned x = 0; x < 2; ++x)
-	//	{
-	//		for (unsigned y = 0; y < 2; ++y)
-	//		{
-	//			Node* node = voxelNode_->CreateChild("VoxelChunk_" + String(x) + "_" + String(y));
-	//			node->SetPosition(Vector3(x * 64, 0, y * 64));
-	//			VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
-	//			Material* material = chunk->GetMaterial(0);
-	//			material->SetTexture(TU_DIFFUSE, voxelDefinition_->diffuse1Textures);
-	//		}
-	//	}
-	//}
-
-    counter_++;
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
 
 #if 0
+
+	if (counter_ == 0)
+	{
+		for (unsigned x = 0; x < 1; ++x)
+		{
+			for (unsigned y = 0; y < 1; ++y)
+			{
+				Node* node = voxelNode_->CreateChild("VoxelChunk_" + String(x) + "_" + String(y));
+				node->SetPosition(Vector3(x * 64, 0, y * 64));
+				VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
+			}
+		}
+	}
+
+
     float offset = (float)h / 2.0 + ((counter_ % 10) - 5);
     float sphereSize = 25.0; // +((counter_ % 10) - 5);
     int counter = counter_ % h;
-	voxelDefinition_->SetSize(w, h, d);
-	voxelDefinition_->InitializeBlocktype();
-    for (unsigned x = 0; x < w; ++x)
-    {
-    	for (unsigned z = 0; z < d; ++z)
-    	{
-    		for (unsigned y = 0; y < h; ++y)
-    		{
-    			//voxelDefinition_->SetBlocktype(x, y, z, Rand() % 100 ? 0 : 1);
-    			Vector3 v(x, y, z);
-    			v = v - Vector3(w/2.0, h/2.0, offset);
-    			voxelDefinition_->SetBlocktype(x,y,z,v.Length() < sphereSize && v.Length() > sphereSize - 5.0 ? 1 : 0);
-    		}
-    		counter++;
-    	}
-    }
+	SharedPtr<VoxelMap> map(new VoxelMap(context_));
+	map->SetSize(2, 2, 2);
+	map->InitializeBlocktype();
+
+	Node* node = voxelNode_->GetChild("VoxelChunk_" + String(0) + "_" + String(0));
+	node->CreateComponent<RigidBody>();
+	VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
+	chunk->SetVoxelMap(map);
 
     for (unsigned x = 0; x < 2; ++x)
     {
-    	for (unsigned y = 0; y < 2; ++y)
+    	for (unsigned z = 0; z < 2; ++z)
     	{
-			Node* node = voxelNode_->GetChild("VoxelChunk_" + String(x) + "_" + String(y));
-			VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
-    		builder->BuildVoxelChunk(chunk, voxelDefinition_);
+    		for (unsigned y = 0; y < 2; ++y)
+    		{
+				map->SetBlocktype(x, y, z, 1);
+				
+    			//Vector3 v(x, y, z);
+    			//v = v - Vector3(w/2.0, h/2.0, offset);
+    			//voxelDefinition_->SetBlocktype(x,y,z,v.Length() < sphereSize && v.Length() > sphereSize - 5.0 ? 1 : 0);
+    		}
     	}
     }
+	chunk->Build();
+	CollisionShape* shape = node->CreateComponent<CollisionShape>();
+	shape->SetVoxelTriangleMesh(chunk);
+
+   // for (unsigned x = 0; x < 2; ++x)
+   // {
+   // 	for (unsigned y = 0; y < 2; ++y)
+   // 	{
+			//Node* node = voxelNode_->GetChild("VoxelChunk_" + String(x) + "_" + String(y));
+			//VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
+   // 		builder->BuildVoxelChunk(chunk, voxelDefinition_);
+   // 	}
+   // }
 #endif
 
 #if 1
@@ -571,6 +580,7 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 #endif
 
 
+    counter_++;
 	// builder->CompleteWork();
 	//builder->BuildVoxelChunk(chunk, voxelMap);
 }
