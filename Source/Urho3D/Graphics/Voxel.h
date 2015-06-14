@@ -74,6 +74,7 @@ public:
 	PODVector<unsigned char> blockVHeight;
 	PODVector<unsigned char> blockTex1;
 	PODVector<unsigned char> blockTex2;
+	PODVector<unsigned char> blockSelector;
 	PODVector<unsigned char[6]> blockTex1Face;
 	PODVector<unsigned char[6]> blockTex2Face;
 	SharedPtr<Texture2DArray> diffuse1Textures;
@@ -87,12 +88,12 @@ class URHO3D_API VoxelMap : public Object {
 
 public:
 	SharedPtr<VoxelBlocktypeMap> blocktypeMap;
-	//SharedPtr<Texture2DArray> diffuse1Textures;
-	//SharedPtr<Texture2DArray> diffuse2Textures;
 	PODVector<unsigned char> blocktype;
 	PODVector<unsigned char> color;
 	PODVector<unsigned char> geometry;
 	PODVector<unsigned char> vHeight;
+	PODVector<unsigned char> lighting;
+	PODVector<unsigned char> rotate;
 	unsigned height_;
 	unsigned width_;
 	unsigned depth_;
@@ -103,7 +104,7 @@ public:
 
 	VoxelMap(Context* context) : Object(context) 
 	{
-		ambientLightFactor = 0.5;
+		ambientLightFactor = 1.0;
 	}
 
 	~VoxelMap() { }
@@ -146,6 +147,13 @@ public:
 		memset(&vHeight.Front(), 0, sizeof(char) * size_);
 	}
 
+	void InitializeLighting()
+	{
+		lighting.Resize(size_);
+		memset(&lighting.Front(), 0, sizeof(char) * size_);
+	}
+
+
 	inline void SetBlocktype(int x, int y, int z, unsigned char val)
 	{
 		blocktype[GetIndex(x, y, z)] = val;
@@ -156,6 +164,37 @@ public:
 		vHeight[GetIndex(x, y, z)] = VoxelEncodeVHeight(sw, se, nw, ne);
 	}
 
+	inline void SetLighting(int x, int y, int z, unsigned char val)
+	{
+		lighting[GetIndex(x, y, z)] = val;
+	}
+
+};
+
+class Voxel
+{
+private:
+	unsigned index_;
+	VoxelMap* map_;
+
+public:
+	
+	Voxel(){
+
+	}
+	Voxel(VoxelMap* map, int x, int y, int z)
+	{
+		map_ = map;
+		index_ = map->GetIndex(x, y, z);
+	}
+	inline void SetBlocktype(int x, int y, int z, unsigned char val)
+	{
+		map_->blocktype[index_] = val;
+	}
+	inline void SetVheight(int x, int y, int z, VoxelHeight sw, VoxelHeight se, VoxelHeight nw, VoxelHeight ne)
+	{
+		map_->vHeight[index_] = VoxelEncodeVHeight(sw, se, nw, ne);
+	}
 };
 
 }

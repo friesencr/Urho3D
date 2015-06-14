@@ -134,6 +134,7 @@ private:
 	Vector<Variant> ambientTable_;
 	Vector<Variant> texscaleTable_;
 	Vector<Variant> texgenTable_;
+	Vector<Variant> colorTable_;
 	Mutex slotMutex_;
 	Timer frameTimer_;
 	unsigned maxFrameTime_;
