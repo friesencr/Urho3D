@@ -101,7 +101,7 @@ private:
     bool UploadGpuDataCompatibilityMode(VoxelWorkSlot* slot, bool append = false);
 	bool SetMaterialParameters(Material* material);
     void HandleBeginFrame(StringHash eventType, VariantMap& eventData);
-	void SimplifyMesh(VoxelWorkSlot* slot, Vector3* verticies, unsigned char* normals, PODVector<Vector3>* newMesh);
+	unsigned SimplifyMesh(VoxelWorkSlot* slot, unsigned char* verticies, unsigned char* normals, unsigned char** newMesh);
 	bool PendingWork();
 
     //

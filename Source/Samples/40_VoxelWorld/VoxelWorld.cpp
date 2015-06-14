@@ -355,7 +355,7 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
 
-#if 1
+#if 0
 
 	if (counter_ == 0)
 	{
@@ -369,12 +369,14 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 				SharedPtr<VoxelMap> map(new VoxelMap(context_));
 				map->SetSize(w, h, d);
 				chunk->SetVoxelMap(map);
-				//node->CreateComponent<RigidBody>();
-				//CollisionShape* shape = node->CreateComponent<CollisionShape>();
-				//shape->SetVoxelTriangleMesh(chunk);
+				node->CreateComponent<RigidBody>();
+				CollisionShape* shape = node->CreateComponent<CollisionShape>();
+				shape->SetVoxelTriangleMesh(chunk);
 			}
 		}
 	}
+	else
+		return;
 
 
     float offset = (float)h / 2.0 + ((counter_ % 10) - 5);
@@ -413,14 +415,14 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
    // }
 #endif
 
-#if 0
+#if 1
 	if (counter_ != 0)
 		return;
 
     Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
 	int numX = heightMap->GetWidth() / 64;
 	int numZ = heightMap->GetHeight() / 64;
-	const int heightFactor = 2;
+	const int heightFactor = 12;
 	numX = 16;
 	numZ = 16;
     for (unsigned a = 0; a < numX; ++a)
@@ -436,9 +438,9 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 			VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
 			//chunk->SetOccludee(true);
 			//chunk->SetOccluder(true);
-			//node->CreateComponent<RigidBody>();
-			//CollisionShape* shape = node->CreateComponent<CollisionShape>();
-			//shape->SetVoxelTriangleMesh(chunk);
+			node->CreateComponent<RigidBody>();
+			CollisionShape* shape = node->CreateComponent<CollisionShape>();
+			shape->SetVoxelTriangleMesh(chunk);
 
 			SharedPtr<VoxelMap> voxelMap(new VoxelMap(context_));
 			chunk->SetVoxelMap(voxelMap);
