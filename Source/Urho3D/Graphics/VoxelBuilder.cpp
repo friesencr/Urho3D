@@ -507,8 +507,8 @@ namespace Urho3D
 		stbvox_mesh_maker* mm = &slot->meshMakers[workload->workloadIndex];
 		stbvox_set_input_stride(mm, voxelMap->xStride, voxelMap->zStride);
 
-		stbvox_input_description *map;
-		map = stbvox_get_input_description(mm);
+		stbvox_input_description *stbvox_map;
+		stbvox_map = stbvox_get_input_description(mm);
 
 		VoxelChunk* northChunk = chunk->GetNeighborNorth();
 		VoxelChunk* southChunk = chunk->GetNeighborSouth();
@@ -521,75 +521,95 @@ namespace Urho3D
 
 		if (voxelBlocktypeMap)
 		{
-			map->block_tex1 = &voxelBlocktypeMap->blockTex1.Front();
-			map->block_tex1_face = &voxelBlocktypeMap->blockTex1Face.Front();
-			map->block_tex2 = &voxelBlocktypeMap->blockTex2.Front();
-			map->block_tex2_face = &voxelBlocktypeMap->blockTex2Face.Front();
-			map->block_geometry = &voxelBlocktypeMap->blockGeometry.Front();
-			map->block_vheight = &voxelBlocktypeMap->blockVHeight.Front();
+			stbvox_map->block_tex1 = &voxelBlocktypeMap->blockTex1.Front();
+			stbvox_map->block_tex1_face = &voxelBlocktypeMap->blockTex1Face.Front();
+			stbvox_map->block_tex2 = &voxelBlocktypeMap->blockTex2.Front();
+			stbvox_map->block_tex2_face = &voxelBlocktypeMap->blockTex2Face.Front();
+			stbvox_map->block_geometry = &voxelBlocktypeMap->blockGeometry.Front();
+			stbvox_map->block_vheight = &voxelBlocktypeMap->blockVHeight.Front();
 		}
 
-		if (voxelMap->blocktype.Size())
 		{
-			map->blocktype = &voxelMap->blocktype[voxelMap->GetIndex(0, 0, 0)];
+			int zero = voxelMap->GetIndex(0, 0, 0);
+			stbvox_map->blocktype = voxelMap->blocktype.Empty() ? 0 : &voxelMap->blocktype[zero];
+			stbvox_map->vheight =  voxelMap->vHeight.Empty() ? 0 : &voxelMap->vHeight[zero];
+			stbvox_map->color =  voxelMap->color.Empty() ? 0 : &voxelMap->color[zero];
+			stbvox_map->geometry =  voxelMap->geometry.Empty() ? 0 : &voxelMap->geometry[zero];
+			stbvox_map->rotate =  voxelMap->rotate.Empty() ? 0 : &voxelMap->rotate[zero];
+			stbvox_map->lighting =  voxelMap->lighting.Empty() ? 0 : &voxelMap->lighting[zero];
+			stbvox_map->tex2 =  voxelMap->tex2.Empty() ? 0 : &voxelMap->tex2[zero];
 
-			// transfer data from nearby blocks
-			// we are assuming same size 
-			if (northMap)
-				for (unsigned x = 0; x < voxelMap->width_; ++x)
-					for (unsigned y = 0; y < voxelMap->height_; ++y)
-						voxelMap->SetBlocktype(x, y, voxelMap->depth_, northMap->GetBlocktype(x, y, 0));
+			const int TYPE_BLOCKTYPE = 0;
+			const int TYPE_VHEIGHT = 1;
+			const int TYPE_COLOR = 2;
+			const int TYPE_GEOMETRY = 3;
+			const int TYPE_ROTATE = 4;
+			const int TYPE_LIGHTING = 5;
+			const int TYPE_TEX2 = 6;
 
-			if (southMap)
-				for (unsigned x = 0; x < voxelMap->width_; ++x)
-					for (unsigned y = 0; y < voxelMap->height_; ++y)
-						voxelMap->SetBlocktype(x, y, -1, southMap->GetBlocktype(x, y, southMap->depth_ - 1));
+			const int NUM_TRANSFERS = 7;
 
-			if (eastMap)
-				for (unsigned z = 0; z < voxelMap->depth_; ++z)
-					for (unsigned y = 0; y < voxelMap->height_; ++y)
-						voxelMap->SetBlocktype(voxelMap->width_, y, z, eastMap->GetBlocktype(0, y, z));
-			if (westMap)
-				for (unsigned z = 0; z < voxelMap->depth_; ++z)
-					for (unsigned y = 0; y < voxelMap->height_; ++y)
-						voxelMap->SetBlocktype(-1, y, z, westMap->GetBlocktype(westMap->width_ - 1, y, z));
+			const int MAP_NORTH = 0;
+			const int MAP_SOUTH = 1;
+			const int MAP_EAST = 2;
+			const int MAP_WEST = 3;
+			VoxelMap* maps[4] = { northMap, southMap, eastMap, westMap };
+			for (unsigned i = 0; i < NUM_TRANSFERS; ++i)
+			{
+				for (unsigned m = 0; m < 4; ++m)
+				{
+					VoxelMap* srcMap = maps[m];
+
+					if (!srcMap)
+						continue;
+
+					PODVector<unsigned char>* src;
+					PODVector<unsigned char>* dst;
+					switch (i)
+					{
+						case TYPE_BLOCKTYPE: src = &srcMap->blocktype; dst = &voxelMap->blocktype; break;
+						case TYPE_VHEIGHT: src = &srcMap->vHeight; dst = &voxelMap->vHeight; break;
+						case TYPE_COLOR: src = &srcMap->color; dst = &voxelMap->color; break;
+						case TYPE_GEOMETRY: src = &srcMap->geometry; dst = &voxelMap->geometry; break;
+						case TYPE_LIGHTING: src = &srcMap->lighting; dst = &voxelMap->lighting; break;
+						case TYPE_ROTATE: src = &srcMap->rotate; dst = &voxelMap->rotate; break;
+						case TYPE_TEX2: src = &srcMap->tex2; dst = &voxelMap->tex2; break;
+						default: src = 0; dst = 0; break;
+					}
+
+					if (!(src && src->Size() > 0 && dst && dst->Size() > 0))
+						continue;
+
+					unsigned char* srcPtr = &src->Front();
+					unsigned char* dstPtr = &dst->Front();
+
+					if (m == MAP_NORTH)
+					{
+						for (unsigned x = 0; x < voxelMap->width_; ++x)
+							for (unsigned y = 0; y < voxelMap->height_; ++y)
+								dstPtr[voxelMap->GetIndex(x, y, voxelMap->depth_)] = srcPtr[srcMap->GetIndex(x, y, 0)];
+					}
+					else if (m == MAP_SOUTH)
+					{
+						for (unsigned x = 0; x < voxelMap->width_; ++x)
+							for (unsigned y = 0; y < voxelMap->height_; ++y)
+								dstPtr[voxelMap->GetIndex(x, y, -1)] = srcPtr[srcMap->GetIndex(x, y, srcMap->depth_ - 1)];
+					}
+					else if (m == MAP_EAST)
+					{
+						for (unsigned z = 0; z < voxelMap->depth_; ++z)
+							for (unsigned y = 0; y < voxelMap->height_; ++y)
+								dstPtr[voxelMap->GetIndex(voxelMap->width_, y, z)] = srcPtr[srcMap->GetIndex(0, y, z)];
+					}
+					else if (m == MAP_WEST)
+					{
+						for (unsigned z = 0; z < voxelMap->depth_; ++z)
+							for (unsigned y = 0; y < voxelMap->height_; ++y)
+								dstPtr[voxelMap->GetIndex(-1, y, z)] = srcPtr[srcMap->GetIndex(westMap->width_ - 1, y, z)];
+					}
+				}
+			}
 		}
-
-		if (voxelMap->geometry.Size())
-		{
-			map->geometry = &voxelMap->geometry[voxelMap->GetIndex(0, 0, 0)];
-		}
-
-		if (voxelMap->lighting.Size())
-		{
-			map->lighting = &voxelMap->lighting[voxelMap->GetIndex(0, 0, 0)];
-		}
-
-		if (voxelMap->vHeight.Size())
-		{
-			map->vheight = &voxelMap->vHeight[voxelMap->GetIndex(0, 0, 0)];
-
-			if (northMap)
-				for (unsigned x = 0; x < voxelMap->width_; ++x)
-					for (unsigned y = 0; y < voxelMap->height_; ++y)
-						voxelMap->vHeight[voxelMap->GetIndex(x, y, voxelMap->depth_)] = northMap->GetVheight(x, y, 0);
-
-			if (southMap)
-				for (unsigned x = 0; x < voxelMap->width_; ++x)
-					for (unsigned y = 0; y < voxelMap->height_; ++y)
-						voxelMap->vHeight[voxelMap->GetIndex(x, y, -1)] = southMap->GetVheight(x, y, southMap->depth_ - 1);
-
-			if (eastMap)
-				for (unsigned z = 0; z < voxelMap->depth_; ++z)
-					for (unsigned y = 0; y < voxelMap->height_; ++y)
-						voxelMap->vHeight[voxelMap->GetIndex(voxelMap->width_, y, z)] = eastMap->GetVheight(0, y, z);
-			if (westMap)
-				for (unsigned z = 0; z < voxelMap->depth_; ++z)
-					for (unsigned y = 0; y < voxelMap->height_; ++y)
-						voxelMap->vHeight[voxelMap->GetIndex(-1, y, z)] = westMap->GetVheight(westMap->width_ - 1, y, z);
-		}
-
-
 
 		stbvox_reset_buffers(mm);
 		stbvox_set_buffer(mm, 0, 0, slot->workVertexBuffers[workload->workloadIndex], VOXEL_WORKER_VERTEX_BUFFER_SIZE);
@@ -691,14 +711,14 @@ namespace Urho3D
 			LOGERROR("Error uploading voxel face data.");
 			return false;
 		}
-#if 1
+#if 0
 		unsigned char* newMeshPtr = 0;
 		unsigned reducedSize = SimplifyMesh(slot, vertexData.Get(), normalData.Get(), &newMeshPtr);
 		chunk->reducedQuadCount_[0] = reducedSize;
 		geo->SetRawVertexData(SharedArrayPtr<unsigned char>(newMeshPtr), sizeof(Vector3), MASK_POSITION);
 #else
-		//chunk->reducedQuadCount_[0] = slot->numQuads;
-		//geo->SetRawVertexData(rawVerticies, sizeof(Vector3), MASK_POSITION);
+		chunk->reducedQuadCount_[0] = slot->numQuads;
+		geo->SetRawVertexData(vertexData, sizeof(Vector3), MASK_POSITION);
 #endif
 
 

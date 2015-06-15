@@ -94,32 +94,21 @@ public:
 	PODVector<unsigned char> vHeight;
 	PODVector<unsigned char> lighting;
 	PODVector<unsigned char> rotate;
+	PODVector<unsigned char> tex2;
 	unsigned height_;
 	unsigned width_;
 	unsigned depth_;
 	unsigned size_;
 	unsigned xStride;
 	unsigned zStride;
-	float ambientLightFactor;
 
 	VoxelMap(Context* context) : Object(context) 
 	{
-		ambientLightFactor = 1.0;
+
 	}
 
 	~VoxelMap() { }
 	
-
-	inline unsigned char GetBlocktype(int x, int y, int z)
-	{
-		return blocktype[GetIndex(x, y, z)];
-	}
-
-	inline unsigned char GetVheight(int x, int y, int z)
-	{
-		return vHeight[GetIndex(x, y, z)];
-	}
-
 	inline unsigned GetIndex(int x, int y, int z)
 	{
 		return (y + 1) + ((z + 1) * zStride) + ((x + 1) * xStride);
@@ -153,6 +142,22 @@ public:
 		memset(&lighting.Front(), 0, sizeof(char) * size_);
 	}
 
+	void InitializeColor()
+	{
+		color.Resize(size_);
+		memset(&color.Front(), 0, sizeof(char) * size_);
+	}
+
+	void InitializeTex2()
+	{
+		tex2.Resize(size_);
+		memset(&tex2.Front(), 0, sizeof(char) * size_);
+	}
+
+	inline void SetColor(int x, int y, int z, unsigned char val)
+	{
+		color[GetIndex(x, y, z)] = val;
+	}
 
 	inline void SetBlocktype(int x, int y, int z, unsigned char val)
 	{
@@ -167,6 +172,11 @@ public:
 	inline void SetLighting(int x, int y, int z, unsigned char val)
 	{
 		lighting[GetIndex(x, y, z)] = val;
+	}
+
+	inline void SetTex2(int x, int y, int z, unsigned char val)
+	{
+		tex2[GetIndex(x, y, z)] = val;
 	}
 
 };

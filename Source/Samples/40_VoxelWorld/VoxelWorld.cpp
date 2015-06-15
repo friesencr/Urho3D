@@ -221,12 +221,13 @@ void VoxelWorld::CreateScene()
 
 	voxelBlocktypeMap_->diffuse1Textures = texture;
 
-    //Node* spotNode = cameraNode_->CreateChild("PointLight");
-    //spotNode->SetPosition(Vector3(0.0, -5.0, -5.0));
-    //Light* spotLight = spotNode->CreateComponent<Light>();
-    //spotLight->SetLightType(LIGHT_POINT);
-    //spotLight->SetCastShadows(true);
-    //spotLight->SetRange(100.0);
+ //   Node* spotNode = cameraNode_->CreateChild("PointLight");
+ //   spotNode->SetPosition(Vector3(0.0, -5.0, -5.0));
+ //   Light* spotLight = spotNode->CreateComponent<Light>();
+ //   spotLight->SetLightType(LIGHT_POINT);
+ //   spotLight->SetCastShadows(true);
+ //   spotLight->SetRange(100.0);
+	//spotLight->SetBrightness(0.7);
 }
 
 void VoxelWorld::CreateInstructions()
@@ -279,7 +280,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Node* lightNode = scene_->GetChild("DirectionalLight");
 	if (lightNode)
 	{
-		// lightNode->Rotate(Quaternion(0.0, 30.0 * timeStep, 0.0));
+		lightNode->Rotate(Quaternion(0.0, 30.0 * timeStep, 0.0));
 	}
 
     // Construct new orientation for the camera scene node from yaw and pitch. Roll is fixed to zero
@@ -422,7 +423,7 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
     Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
 	int numX = heightMap->GetWidth() / 64;
 	int numZ = heightMap->GetHeight() / 64;
-	const int heightFactor = 12;
+	const int heightFactor = 2;
 	numX = 16;
 	numZ = 16;
     for (unsigned a = 0; a < numX; ++a)
@@ -438,16 +439,18 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 			VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
 			//chunk->SetOccludee(true);
 			//chunk->SetOccluder(true);
-			node->CreateComponent<RigidBody>();
-			CollisionShape* shape = node->CreateComponent<CollisionShape>();
-			shape->SetVoxelTriangleMesh(chunk);
+			//node->CreateComponent<RigidBody>();
+			//CollisionShape* shape = node->CreateComponent<CollisionShape>();
+			//shape->SetVoxelTriangleMesh(chunk);
 
 			SharedPtr<VoxelMap> voxelMap(new VoxelMap(context_));
 			chunk->SetVoxelMap(voxelMap);
 			voxelMap->SetSize(64, 128, 64);
 			voxelMap->InitializeBlocktype();
-			voxelMap->InitializeVHeight();
+			//voxelMap->InitializeVHeight();
 			voxelMap->InitializeLighting();
+			voxelMap->InitializeColor();
+			voxelMap->InitializeTex2();
 			voxelMap->blocktypeMap = voxelBlocktypeMap_;
 			for (unsigned x = 0; x < w; ++x)
 			{
@@ -468,7 +471,7 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 					for (unsigned i = 0; i < height; ++i)
 					{
 						voxelMap->SetBlocktype(x, i, z, (int)(c.Average() * 8) % 4 + 1);
-						voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+						//voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
 						voxelMap->SetLighting(x, i, z, 0);
 					}
 
@@ -494,7 +497,9 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 					}
 
 					voxelMap->SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
-					voxelMap->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
+					//voxelMap->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
+					voxelMap->SetTex2(x, height, z, Rand() % 4);
+					voxelMap->SetColor(x, height, z, Rand() % 64);
 					{
 						int lightHeight = y / heightFactor;
 						int heights[9] = { y, nw, n, ne, w, e, sw, s, se };

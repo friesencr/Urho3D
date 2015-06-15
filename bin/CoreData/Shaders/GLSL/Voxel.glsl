@@ -6,6 +6,7 @@
 #include "Fog.glsl"
 
 uniform sampler2DArray sDiffArray0;
+uniform sampler2DArray sDiffArray1;
 uniform usamplerBuffer sFaceArray6;
 uniform vec3 cTransform[3];
 uniform vec3 cAmbientTable[4];
@@ -118,6 +119,7 @@ void VS()
 
 void PS()
 {
+    vec4 diffColor;
     float fragmentAlpha;
     vec3 normal = vNormal;
 
@@ -134,20 +136,40 @@ void PS()
     vec3 textureSpacePos = vVoxelSpacePos.xzy; // change to y up
 
     // texture 1
-    vec2 texcoord;
-    texcoord.s = dot(textureSpacePos, texgenS);
-    texcoord.t = dot(textureSpacePos, texgenT);
-    vec2 texcoord1 = tex1Scale * texcoord;
-
-    // diffuse color
-    vec4 diffTex1 = texture(sDiffArray0, vec3(texcoord1, float(tex1ID)));
-    vec4 diffColor = cMatDiffColor * diffTex1;
-
+    vec2 texCoord;
+    texCoord.s = dot(textureSpacePos, texgenS);
+    texCoord.t = dot(textureSpacePos, texgenT);
+    vec2 texCoord1 = tex1Scale * texCoord;
+    vec4 diffTex1 = texture(sDiffArray0, vec3(texCoord1, float(tex1ID)));
     fragmentAlpha = diffTex1.a;
 
-    // voxel color
-    // vec4 color = cColorTable[colorId & 63u];
+    // texture 2
+    vec4 tex2Props = cTexScale[tex2ID & 63u];
+    float tex2Scale = tex2Props.y;
+    bool texBlendMode = tex2Props.z != 0.0;
+    vec2 texCoord2 = tex2Scale * texCoord;
+    vec4 diffTex2 = texture(sDiffArray0, vec3(texCoord2, float(tex2ID)));
 
+    // voxel color
+    vec4 color = cColorTable[colorId & 63u];
+    if ((colorId & 64u) != 0u) {
+        diffTex1.rgba *= color.rgba;
+    }
+    if ((colorId & 128u) != 0u) {
+        diffTex2.rgba *= color.rgba;
+    }
+
+    diffTex2.a *= vTexLerp;
+
+    if (texBlendMode)
+        diffColor.rgb = cMatDiffColor.rgb * diffTex1.rgb * mix(vec3(1.0, 1.0, 1.0), 2.0 * diffTex2.xyz, diffTex2.a);
+    else {
+        diffColor.rgb = cMatDiffColor.rgb * mix(diffTex1.xyz, diffTex2.xyz, 0.5);
+        fragmentAlpha = diffTex1.a * (1 - diffTex2.a) + diffTex2.a;
+    }
+
+    // diffColor.rgb = cMatDiffColor.rgb * diffTex1.rgb;
+    
     // built in lighting
     // vec3 voxLightColor;
     // vec3 voxLightDir = lightSource[0] - vWorldPos;
@@ -202,16 +224,15 @@ void PS()
         #endif
     #else
         // Voxel ambient light
-        vec3 voxAmbientColor = dot(normal, cAmbientTable[0].xyz) * cAmbientTable[1].xyz + cAmbientTable[2].xyz;
-        voxAmbientColor = clamp(voxAmbientColor, 0.0, 1.0);
-        voxAmbientColor *= (1 - vAmbOcc*2);
-        vec3 voxLitColor = diffColor.xyz * voxAmbientColor;
+        // vec3 voxAmbientColor = dot(normal, cAmbientTable[0].xyz) * cAmbientTable[1].xyz + cAmbientTable[2].xyz;
+        // voxAmbientColor = clamp(voxAmbientColor, 0.0, 1.0);
+        // voxAmbientColor *= (1 - vAmbOcc*2);
+        //vec3 voxLitColor = diffColor.xyz * (1.0 - vAmbOcc*2);
 
         //vec3 voxLitColor = ComputeLighting(vWorldPos.xyz, vNormal, diffColor.xyz, voxAmbientColor);
 
         // Ambient & per-vertex lighting
-        vec3 finalColor = vVertexLight * diffColor.rgb + voxLitColor;
-        finalColor = voxLitColor;
+        vec3 finalColor = vVertexLight * (1.0 - vAmbOcc*2.0) * diffColor.rgb;
 
         //vec3 finalColor = vec3(1.0, 1.0, 1.0) * (1 - vAmbOcc);
 
