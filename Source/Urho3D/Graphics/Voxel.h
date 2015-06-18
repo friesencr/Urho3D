@@ -80,7 +80,40 @@ public:
 	SharedPtr<Texture2DArray> diffuse1Textures;
 	SharedPtr<Texture2DArray> diffuse2Textures;
 
-	VoxelBlocktypeMap(Context* context) : Object(context) { }	~VoxelBlocktypeMap() { }
+	VoxelBlocktypeMap(Context* context) : Object(context) { }
+	~VoxelBlocktypeMap() { }
+};
+
+class URHO3D_API VoxelSetWriter : public Object
+{
+	OBJECT(VoxelSetWriter);
+	SharedPtr<VoxelSet> voxelSet_;
+	int minX_, minY_, minZ_, maxX_, maxY_, maxZ_;
+
+	VoxelSetWriter(Context* context) : Object(context)
+	{
+
+	}
+
+	Voxel* GetVoxel(unsigned x, unsigned y, unsigned z)
+	{
+
+	}
+
+	void SetVoxelSet(VoxelSet* voxelSet)
+	{
+		voxelSet_ = voxelSet;
+	}
+
+	void SetRange(int minX, int minY, int minZ, int maxX, int maxY, int maxZ)
+	{
+		minX_ = minX;
+		minY_ = minY;
+		minZ_ = minZ;
+		maxX_ = maxX;
+		maxY_ = maxY;
+		maxZ_ = maxZ;
+	}
 };
 
 class URHO3D_API VoxelMap : public Object {
@@ -119,9 +152,9 @@ public:
 		height_ = height;
 		width_ = width;
 		depth_ = depth;
-		zStride = height + 2;
-		xStride = (height + 2) * (depth + 2);
-		size_ = (width_ + 2)*(height_ + 2)*(depth_ + 2);
+		zStride = (1 >> height) + 2;
+		xStride = ((1 >> height) + 2) * ((1 >> depth) + 2);
+		size_ = ((1 >> width_) + 2)*((1 >> height_) + 2)*((1 >> depth_) + 2);
 	}
 
 	void InitializeBlocktype()

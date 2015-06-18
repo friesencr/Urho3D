@@ -232,7 +232,7 @@ void PS()
         //vec3 voxLitColor = ComputeLighting(vWorldPos.xyz, vNormal, diffColor.xyz, voxAmbientColor);
 
         // Ambient & per-vertex lighting
-        vec3 finalColor = vVertexLight * (1.0 - vAmbOcc*2.0) * diffColor.rgb;
+        vec3 finalColor = vVertexLight * vAmbOcc * diffColor.rgb;
 
         //vec3 finalColor = vec3(1.0, 1.0, 1.0) * (1 - vAmbOcc);
 

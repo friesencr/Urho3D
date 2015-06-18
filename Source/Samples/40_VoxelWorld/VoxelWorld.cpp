@@ -450,7 +450,7 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 			//voxelMap->InitializeVHeight();
 			voxelMap->InitializeLighting();
 			voxelMap->InitializeColor();
-			voxelMap->InitializeTex2();
+			//voxelMap->InitializeTex2();
 			voxelMap->blocktypeMap = voxelBlocktypeMap_;
 			for (unsigned x = 0; x < w; ++x)
 			{
@@ -498,7 +498,7 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 
 					voxelMap->SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
 					//voxelMap->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
-					voxelMap->SetTex2(x, height, z, Rand() % 4);
+					//voxelMap->SetTex2(x, height, z, Rand() % 4);
 					voxelMap->SetColor(x, height, z, Rand() % 64);
 					{
 						int lightHeight = y / heightFactor;
