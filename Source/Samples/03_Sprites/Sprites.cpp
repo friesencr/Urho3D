@@ -29,6 +29,8 @@
 #include <Urho3D/UI/Sprite.h>
 #include <Urho3D/Graphics/Texture2D.h>
 #include <Urho3D/UI/UI.h>
+#include <Urho3D/IO/Generator.h>
+#include <Urho3D/IO/MemoryBuffer.h>
 
 #include "Sprites.h"
 
@@ -39,6 +41,20 @@ static const unsigned NUM_SPRITES = 100;
 
 // Custom variable identifier for storing sprite velocity within the UI element
 static const StringHash VAR_VELOCITY("Velocity");
+
+static unsigned SmokeReader(Context* context, MemoryBuffer& buffer, unsigned size, unsigned position, VariantMap& parameters)
+{
+    ResourceCache* cache = context->GetSubsystem<ResourceCache>();
+    SharedPtr<File> smoke = cache->GetFile("Textures/Smoke.dds");
+    if (smoke->IsOpen())
+    {
+        void* dest = buffer.GetData();
+        smoke->Seek(position);
+        smoke->Read(dest, size);
+        return size;
+    }
+    return 0;
+}
 
 DEFINE_APPLICATION_MAIN(Sprites)
 
@@ -68,6 +84,31 @@ void Sprites::CreateSprites()
     // Get rendering window size as floats
     float width = (float)graphics->GetWidth();
     float height = (float)graphics->GetHeight();
+
+    {
+        Generator::RegisterGeneratorFunction("SmokeReader", SmokeReader);
+
+        SharedPtr<Generator> noisyGenerator(new Generator(context_));
+        noisyGenerator->SetName("SmokeReader");
+        SharedPtr<File> file = cache->GetFile("Textures/Smoke.dds");
+        unsigned size = file->GetSize();
+        noisyGenerator->SetSize(file->GetSize());
+        VariantMap parameters;
+        noisyGenerator->SetParameters(parameters);
+
+        // Create a new sprite, set it to use the texture
+        SharedPtr<Sprite> sprite(new Sprite(context_));
+        SharedPtr<Image> image(new Image(context_));
+        image->Load(*noisyGenerator);
+        SharedPtr<Texture2D> texture(new Texture2D(context_));
+        texture->SetData(image, true);
+        sprite->SetTexture(texture);
+        sprite->SetSize(IntVector2(512, 512));
+        sprite->SetBlendMode(BLEND_ALPHA);
+        ui->GetRoot()->AddChild(sprite);
+        sprites_.Push(sprite);
+    }
+
 
     // Get the Urho3D fish texture
     Texture2D* decalTex = cache->GetResource<Texture2D>("Textures/UrhoDecal.dds");
@@ -149,3 +190,5 @@ void Sprites::HandleUpdate(StringHash eventType, VariantMap& eventData)
     // Move sprites, scale movement with time step
     MoveSprites(timeStep);
 }
+
+
