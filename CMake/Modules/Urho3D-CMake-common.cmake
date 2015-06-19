@@ -93,6 +93,14 @@ cmake_dependent_option (URHO3D_SSE "Enable SSE instruction set" ${URHO3D_DEFAULT
 if (CMAKE_PROJECT_NAME STREQUAL Urho3D)
     cmake_dependent_option (URHO3D_LUAJIT_AMALG "Enable LuaJIT amalgamated build (LuaJIT only)" FALSE "URHO3D_LUAJIT" FALSE)
     cmake_dependent_option (URHO3D_SAFE_LUA "Enable Lua C++ wrapper safety checks (Lua/LuaJIT only)" FALSE "URHO3D_LUA OR URHO3D_LUAJIT" FALSE)
+
+    if (CMAKE_BUILD_TYPE STREQUAL Release OR CMAKE_CONFIGURATION_TYPES)
+        set (URHO3D_DEFAULT_LUA_RAW FALSE)
+    else ()
+        set (URHO3D_DEFAULT_LUA_RAW TRUE)
+    endif ()
+    cmake_dependent_option (URHO3D_LUA_RAW_SCRIPT_LOADER "Prefer loading raw script files from the file system before falling back on Urho3D resource cache. Useful for debugging (e.g. breakpoints), but less performant (Lua/LuaJIT only)" ${URHO3D_DEFAULT_LUA_RAW} "URHO3D_LUA OR URHO3D_LUAJIT" FALSE)
+ 
     option (URHO3D_SAMPLES "Build sample applications")
     cmake_dependent_option (URHO3D_TOOLS "Build tools (native and RPI only)" TRUE "NOT IOS AND NOT ANDROID AND NOT EMSCRIPTEN" FALSE)
     cmake_dependent_option (URHO3D_EXTRAS "Build extras (native and RPI only)" FALSE "NOT IOS AND NOT ANDROID AND NOT EMSCRIPTEN" FALSE)
@@ -320,6 +328,9 @@ if (URHO3D_LUA)
         add_definitions (-DTOLUA_RELEASE)
     endif ()
 endif ()
+if (URHO3D_LUA_RAW_SCRIPT_LOADER)
+    add_definitions (-DURHO3D_LUA_RAW_SCRIPT_LOADER)
+endif ()
 
 # Add definition for Navigation
 if (URHO3D_NAVIGATION)
@@ -350,15 +361,15 @@ if (NOT URHO3D_LIB_TYPE STREQUAL SHARED)
     add_definitions (-DURHO3D_STATIC_DEFINE)
 endif ()
 
-# Find DirectX SDK include & library directories for Visual Studio. It is also possible to compile
-# without if a recent Windows SDK is installed. The SDK is not searched for with MinGW as it is
-# incompatible; rather, it is assumed that MinGW itself comes with the necessary headers & libraries.
+# Find Direct3D include & library directories for Visual Studio in MS Windows SDK or DirectX SDK.
+# The SDK is not searched for with MinGW as it is incompatible, rather, it is assumed that MinGW
+# itself comes with the necessary headers & libraries.
 # Note that when building for OpenGL, any libraries are not used, but the include directory may
 # be necessary for DirectInput & DirectSound headers, if those are not present in the compiler's own
 # default includes.
 if (WIN32)
-    find_package (Direct3D)
-    if (DIRECT3D_FOUND)
+    find_package (Direct3D REQUIRED)
+    if (DIRECT3D_INCLUDE_DIRS)
         include_directories (${DIRECT3D_INCLUDE_DIRS})
     endif ()
 endif ()
@@ -596,7 +607,7 @@ macro (enable_pch HEADER_PATHNAME)
                         # Precompiling header file
                         set_property (SOURCE ${FILE} APPEND_STRING PROPERTY COMPILE_FLAGS " /Fp$(IntDir)${PCH_FILENAME} /Yc${HEADER_FILENAME}")     # Need a leading space for appending
                     else ()
-                        # Use the precompiled header file
+                        # Using precompiled header file
                         get_property (NO_PCH SOURCE ${FILE} PROPERTY NO_PCH)
                         if (NOT NO_PCH)
                             set_property (SOURCE ${FILE} APPEND_STRING PROPERTY COMPILE_FLAGS " /Fp$(IntDir)${PCH_FILENAME} /Yu${HEADER_FILENAME} /FI${HEADER_FILENAME}")
@@ -620,10 +631,19 @@ macro (enable_pch HEADER_PATHNAME)
                 list (APPEND SOURCE_FILES ${CXX_FILENAME})
             endif ()
         endif ()
+    elseif (XCODE)
+        if (TARGET ${TARGET_NAME})
+            # Precompiling and using precompiled header file
+            set_target_properties (${TARGET_NAME} PROPERTIES XCODE_ATTRIBUTE_GCC_PRECOMPILE_PREFIX_HEADER YES XCODE_ATTRIBUTE_GCC_PREFIX_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/${HEADER_PATHNAME})
+            unset (${TARGET_NAME}_HEADER_PATHNAME)
+        else ()
+            # The target has not been created yet, so set an internal variable to come back here again later
+            set (${TARGET_NAME}_HEADER_PATHNAME ${HEADER_PATHNAME})
+        endif ()
     else ()
         # GCC or Clang
         if (TARGET ${TARGET_NAME})
-            # Cache the compiler flags setup for the current scope so far
+            # Precompiling header file
             get_directory_property (COMPILE_DEFINITIONS COMPILE_DEFINITIONS)
             get_directory_property (INCLUDE_DIRECTORIES INCLUDE_DIRECTORIES)
             get_target_property (TYPE ${TARGET_NAME} TYPE)
@@ -663,15 +683,12 @@ macro (enable_pch HEADER_PATHNAME)
                     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${HEADER_FILENAME}.${CONFIG}.pch.rsp ${DEPS}
                     COMMENT "Precompiling header file '${HEADER_FILENAME}' for ${CONFIG} configuration")
             endforeach ()
-            # Use the precompiled header file
+            # Using precompiled header file
             if ($ENV{COVERITY_SCAN_BRANCH})
                 # Coverity scan does not support PCH so workaround by including the actual header file
                 set (ABS_PATH_PCH ${CMAKE_CURRENT_SOURCE_DIR}/${HEADER_PATHNAME})
             else ()
-                if (NOT XCODE)
-                    set (PCH_DIR ${CMAKE_CURRENT_BINARY_DIR}/)
-                endif ()
-                set (ABS_PATH_PCH ${PCH_DIR}${HEADER_FILENAME})
+                set (ABS_PATH_PCH ${CMAKE_CURRENT_BINARY_DIR}/${HEADER_FILENAME})
             endif ()
             foreach (FILE ${SOURCE_FILES})
                 if (FILE MATCHES \\.cpp$)
@@ -815,6 +832,10 @@ macro (setup_executable)
         add_custom_command (TARGET ${TARGET_NAME} POST_BUILD COMMAND scp $<TARGET_FILE:${TARGET_NAME}> ${URHO3D_SCP_TO_TARGET} || exit 0
             COMMENT "Scp-ing ${TARGET_NAME} executable to target system")
     endif ()
+    if (DIRECT3D_DLL)
+        # Make a copy of the D3D DLL to the runtime directory in the build tree
+        add_custom_command (TARGET ${TARGET_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DIRECT3D_DLL} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    endif ()
     # Need to check if the destination variable is defined first because this macro could be called by external project that does not wish to install anything
     if (DEST_RUNTIME_DIR)
         if (EMSCRIPTEN)
@@ -832,6 +853,11 @@ macro (setup_executable)
             install (FILES ${FILES} DESTINATION ${DEST_BUNDLE_DIR} OPTIONAL)    # We get html.map or html.mem depend on the build configuration
         else ()
             install (TARGETS ${TARGET_NAME} RUNTIME DESTINATION ${DEST_RUNTIME_DIR} BUNDLE DESTINATION ${DEST_BUNDLE_DIR})
+            if (DIRECT3D_DLL AND NOT DIRECT3D_DLL_INSTALLED)
+                # Make a copy of the D3D DLL to the runtime directory in the installed location
+                install (FILES ${DIRECT3D_DLL} DESTINATION ${DEST_RUNTIME_DIR})
+                set (DIRECT3D_DLL_INSTALLED TRUE)
+            endif ()
         endif ()
     endif ()
 endmacro ()
@@ -1091,7 +1117,7 @@ macro (setup_main_executable)
                 else ()
                     set (OUTPUT_COMMAND true)   # Nothing to output
                 endif ()
-                list (APPEND COMMANDS COMMAND echo Checking ${DIR}... && \(\( `find ${DIR} -newer ${DIR} |wc -l` \)\) && touch -cm ${DIR} ${PACKAGING_COMMAND} || ${OUTPUT_COMMAND})
+                list (APPEND COMMANDS COMMAND echo Checking ${DIR}... && bash -c \"\(\( `find ${DIR} -newer ${DIR} |wc -l` \)\)\" && touch -cm ${DIR} ${PACKAGING_COMMAND} || ${OUTPUT_COMMAND})
             endif ()
         endforeach ()
         string (MD5 MD5ALL ${MD5ALL})
@@ -1117,7 +1143,7 @@ macro (setup_main_executable)
             get_filename_component (NAME ${FILE} NAME)
             list (APPEND PAK_NAMES ${NAME})
         endforeach ()
-        if (CMAKE_BUILD_TYPE STREQUAL Debug AND NOT EMCC_VERSION VERSION_LESS 1.31.4)
+        if (CMAKE_BUILD_TYPE STREQUAL Debug AND EMCC_VERSION VERSION_GREATER 1.32.2)
             set (SEPARATE_METADATA --separate-metadata)
         endif ()
         add_custom_command (OUTPUT ${SHARED_RESOURCE_JS}.data
@@ -1149,9 +1175,10 @@ macro (setup_test)
                 # The latency on Travis CI server could be very high at time, so add some adjustment
                 # If it is not enough causing a test case failure then so be it because it is better that than wait for it and still ends up in build error due to time limit
                 set (EMRUN_TIMEOUT_ADJUSTMENT + 8 * \\${URHO3D_TEST_TIMEOUT})
+                set (EMRUN_TIMEOUT_RETURNCODE --timeout_returncode 0)
             endif ()
             math (EXPR EMRUN_TIMEOUT "2 * ${URHO3D_TEST_TIMEOUT} ${EMRUN_TIMEOUT_ADJUSTMENT}")
-            add_test (NAME ${ARG_NAME} COMMAND ${EMRUN} --browser ${EMSCRIPTEN_EMRUN_BROWSER} --timeout ${EMRUN_TIMEOUT} --timeout_returncode 1 --kill_exit ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}.html ${ARG_OPTIONS})
+            add_test (NAME ${ARG_NAME} COMMAND ${EMRUN} --browser ${EMSCRIPTEN_EMRUN_BROWSER} --timeout ${EMRUN_TIMEOUT} ${EMRUN_TIMEOUT_RETURNCODE} --kill_exit ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}.html ${ARG_OPTIONS})
         else ()
             add_test (NAME ${ARG_NAME} COMMAND ${TARGET_NAME} ${ARG_OPTIONS})
         endif ()
@@ -1218,11 +1245,13 @@ macro (define_dependency_libs TARGET)
             elseif (NOT APPLE AND NOT RPI)
                 list (APPEND LIBS GL)
             endif ()
-        else ()
-            if (DIRECT3D_FOUND)
+        elseif (DIRECT3D_LIBRARIES)
+            # Check if the libs are using absolute path
+            list (GET DIRECT3D_LIBRARIES 0 FIRST_LIB)
+            if (IS_ABSOLUTE ${FIRST_LIB})
                 list (APPEND ABSOLUTE_PATH_LIBS ${DIRECT3D_LIBRARIES})
             else ()
-                # If SDK not found, assume the libraries are found from default directories
+                # Assume the libraries are found from default directories
                 list (APPEND LIBS ${DIRECT3D_LIBRARIES})
             endif ()
         endif ()
@@ -1463,8 +1492,13 @@ elseif (EMSCRIPTEN)
     endif ()
 elseif (NOT CMAKE_CROSSCOMPILING AND NOT CMAKE_HOST_WIN32 AND "$ENV{USE_CCACHE}")
     # Warn user if PATH environment variable has not been correctly set for using ccache
-    execute_process (COMMAND whereis -b ccache COMMAND grep -o \\S*lib\\S* RESULT_VARIABLE EXIT_CODE OUTPUT_VARIABLE CCACHE_SYMLINK ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if (EXIT_CODE EQUAL 0 AND NOT ${CMAKE_C_COMPILER} MATCHES ${CCACHE_SYMLINK})
+    if (APPLE)
+        set (WHEREIS brew info ccache)
+    else ()
+        set (WHEREIS whereis -b ccache)
+    endif ()
+    execute_process (COMMAND ${WHEREIS} COMMAND grep -o \\S*lib\\S* RESULT_VARIABLE EXIT_CODE OUTPUT_VARIABLE CCACHE_SYMLINK ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (EXIT_CODE EQUAL 0 AND NOT $ENV{PATH} MATCHES "${CCACHE_SYMLINK}")  # Need to stringify because CCACHE_SYMLINK variable could be empty when the command failed
         message (WARNING "The lib directory containing the ccache symlinks (${CCACHE_SYMLINK}) has not been added in the PATH environment variable. "
             "This is required to enable ccache support for native compiler toolchain. CMake has been configured to use the actual compiler toolchain instead of ccache. "
             "In order to rectify this, the build tree must be regenerated after the PATH environment variable has been adjusted accordingly.")

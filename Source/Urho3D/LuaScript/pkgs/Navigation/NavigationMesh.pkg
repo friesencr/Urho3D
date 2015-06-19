@@ -1,5 +1,11 @@
 $#include "Navigation/NavigationMesh.h"
 
+enum NavmeshPartitionType
+{
+    NAVMESH_PARTITION_WATERSHED = 0,
+    NAVMESH_PARTITION_MONOTONE
+};
+
 struct NavigationGeometryInfo
 {
     Component* component_ @ component;
@@ -25,16 +31,20 @@ class NavigationMesh : public Component
     void SetDetailSampleDistance(float distance);
     void SetDetailSampleMaxError(float error);
     void SetPadding(const Vector3& padding);
+    void SetAreaCost(unsigned areaID, float cost);
     bool Build();
     bool Build(const BoundingBox& boundingBox);
-    
+    void SetPartitionType(NavmeshPartitionType aType);
+    void SetDrawOffMeshConnections(bool enable);
+    void SetDrawNavAreas(bool enable);
+
     Vector3 FindNearestPoint(const Vector3& point, const Vector3& extents = Vector3::ONE);
     Vector3 MoveAlongSurface(const Vector3& start, const Vector3& end, const Vector3& extents=Vector3::ONE, int maxVisited=3);
     // void FindPath(PODVector<Vector3>& dest, const Vector3& start, const Vector3& end, const Vector3& extents = Vector3::ONE);
     tolua_outside const PODVector<Vector3>& NavigationMeshFindPath @ FindPath(const Vector3& start, const Vector3& end, const Vector3& extents = Vector3::ONE);
-    
+
     Vector3 GetRandomPoint();
-    
+
     Vector3 GetRandomPointInCircle(const Vector3& center, float radius, const Vector3& extents = Vector3::ONE);
     float GetDistanceToWall(const Vector3& point, float radius, const Vector3& extents = Vector3::ONE);
     Vector3 Raycast(const Vector3& start, const Vector3& end, const Vector3& extents = Vector3::ONE);
@@ -54,11 +64,15 @@ class NavigationMesh : public Component
     float GetDetailSampleDistance() const;
     float GetDetailSampleMaxError() const;
     const Vector3& GetPadding() const;
+    float GetAreaCost(unsigned areaID) const;
     bool IsInitialized() const;
     const BoundingBox& GetBoundingBox() const;
     BoundingBox GetWorldBoundingBox() const;
     IntVector2 GetNumTiles() const;
-    
+    NavmeshPartitionType GetPartitionType();
+    bool GetDrawOffMeshConnections() const;
+    bool GetDrawNavAreas() const;
+
     tolua_property__get_set int tileSize;
     tolua_property__get_set float cellSize;
     tolua_property__get_set float cellHeight;
@@ -73,6 +87,9 @@ class NavigationMesh : public Component
     tolua_property__get_set float detailSampleDistance;
     tolua_property__get_set float detailSampleMaxError;
     tolua_property__get_set Vector3& padding;
+    tolua_property__get_set NavmeshPartitionType partitionType;
+    tolua_property__get_set bool drawOffMeshConnections;
+    tolua_property__get_set bool drawNavAreas;
     tolua_readonly tolua_property__is_set bool initialized;
     tolua_readonly tolua_property__get_set BoundingBox& boundingBox;
     tolua_readonly tolua_property__get_set BoundingBox worldBoundingBox;

@@ -233,26 +233,44 @@ namespace Urho3D
 - %Mesh : NavigationMesh pointer
 
 ### NavigationAreaRebuilt
+- %Node : Node pointer
+- %Mesh : NavigationMesh pointer
 - %BoundsMin : Vector3
 - %BoundsMax : Vector3
 
 ### CrowdAgentReposition
+- %Node : Node pointer
+- %CrowdAgent : CrowdAgent pointer
 - %Position : Vector3
 - %Velocity : Vector3
+- %Arrived : bool
+
+### CrowdAgentFailure
+- %Node : Node pointer
+- %CrowdAgent : CrowdAgent pointer
+- %Position : Vector3
+- %Velocity : Vector3
+- %CrowdAgentState : int
+- %CrowdTargetState : int
 
 ### CrowdAgentStateChanged
+- %Node : Node pointer
+- %CrowdAgent : CrowdAgent pointer
 - %Position : Vector3
 - %Velocity : Vector3
-- %State : int
+- %CrowdAgentState : int
+- %CrowdTargetState : int
 
 ### NavigationObstacleAdded
 - %Node : Node pointer
+- %Obstacle : Obstacle pointer
 - %Position : Vector3
 - %Radius : float
 - %Height : float
 
 ### NavigationObstacleRemoved
 - %Node : Node pointer
+- %Obstacle : Obstacle pointer
 - %Position : Vector3
 - %Radius : float
 - %Height : float
@@ -1103,6 +1121,7 @@ namespace Urho3D
 - %Max %Speed : float
 - %Radius : float
 - %Height : float
+- %Target %Position : Vector3
 - %Navigation %Filter : int
 - %Navigation %Pushiness : int
 - %Navigation %Quality : int
@@ -1246,7 +1265,10 @@ namespace Urho3D
 - %Detail %Sample %Max %Error : float
 - %Bounding %Box %Padding : Vector3
 - %Partition %Type : int
+- %Draw %OffMeshConnections : bool
+- %Draw %NavAreas : bool
 - %Max %Obstacles : int
+- %Draw %Obstacles : bool
 
 ### Light
 - %Is %Enabled : bool
@@ -1431,7 +1453,7 @@ namespace Urho3D
 ### NavArea
 - %Bounding %Box %Min : Vector3
 - %Bounding %Box %Max : Vector3
-- %Area %Type : int
+- %Area %ID : int
 
 ### Navigable
 - %Is %Enabled : bool
@@ -1453,6 +1475,8 @@ namespace Urho3D
 - %Detail %Sample %Max %Error : float
 - %Bounding %Box %Padding : Vector3
 - %Partition %Type : int
+- %Draw %OffMeshConnections : bool
+- %Draw %NavAreas : bool
 
 ### NetworkPriority
 - %Base %Priority : float
@@ -2626,6 +2650,7 @@ Methods:
 - float GetSpeed(const String&) const
 - float GetTime(const String&) const
 - float GetWeight(const String&) const
+- bool IsAtEnd(const String&) const
 - bool IsFadingIn(const String&) const
 - bool IsFadingOut(const String&) const
 - bool IsPlaying(const String&) const
@@ -5000,14 +5025,15 @@ Methods:
 - void SetAttributeAnimationSpeed(const String&, float)
 - void SetAttributeAnimationWrapMode(const String&, WrapMode)
 - void SetInterceptNetworkUpdate(const String&, bool)
-- bool SetMoveTarget(const Vector3&)
-- bool SetMoveVelocity(const Vector3&)
+- void SetMoveTarget(const Vector3&)
+- void SetMoveVelocity(const Vector3&)
 
 Properties:
 
 - Vector3 actualVelocity // readonly
 - CrowdAgentState agentState // readonly
 - bool animationEnabled
+- bool arrived // readonly
 - Variant[] attributeDefaults // readonly
 - AttributeInfo[] attributeInfos // readonly
 - Variant[] attributes
@@ -5520,8 +5546,9 @@ Methods:
 - void ApplyAttributes()
 - void CreateCrowd()
 - void DrawDebugGeometry(DebugRenderer@, bool)
+- void DrawDebugGeometry(bool)
 - CrowdAgent@[]@ GetActiveAgents()
-- float GetAreaTypeCost(uint, uint)
+- float GetAreaCost(uint, uint)
 - Variant GetAttribute(const String&) const
 - ValueAnimation@ GetAttributeAnimation(const String&) const
 - float GetAttributeAnimationSpeed(const String&) const
@@ -5534,16 +5561,19 @@ Methods:
 - void MarkNetworkUpdate() const
 - void Remove()
 - void RemoveInstanceDefault()
+- void ResetCrowdTarget(int = 0, int = M_MAX_INT)
 - void ResetToDefault()
 - bool Save(File@) const
 - bool Save(VectorBuffer&) const
 - bool SaveXML(XMLElement&) const
 - void SendEvent(const String&, VariantMap& = VariantMap ( ))
-- void SetAreaTypeCost(uint, uint, float)
+- void SetAreaCost(uint, uint, float)
 - bool SetAttribute(const String&, const Variant&)
 - void SetAttributeAnimation(const String&, ValueAnimation@, WrapMode = WM_LOOP, float = 1.0f)
 - void SetAttributeAnimationSpeed(const String&, float)
 - void SetAttributeAnimationWrapMode(const String&, WrapMode)
+- void SetCrowdTarget(const Vector3&, int = 0, int = M_MAX_INT)
+- void SetCrowdVelocity(const Vector3&, int = 0, int = M_MAX_INT)
 - void SetInterceptNetworkUpdate(const String&, bool)
 
 Properties:
@@ -5928,6 +5958,7 @@ Methods:
 - void DrawDebugGeometry(bool)
 - Vector3 FindNearestPoint(const Vector3&, const Vector3& = Vector3 ( 1.0 , 1.0 , 1.0 ))
 - Vector3[]@ FindPath(const Vector3&, const Vector3&, const Vector3& = Vector3 ( 1.0 , 1.0 , 1.0 ))
+- float GetAreaCost(uint) const
 - Variant GetAttribute(const String&) const
 - ValueAnimation@ GetAttributeAnimation(const String&) const
 - float GetAttributeAnimationSpeed(const String&) const
@@ -5950,7 +5981,7 @@ Methods:
 - bool Save(VectorBuffer&) const
 - bool SaveXML(XMLElement&) const
 - void SendEvent(const String&, VariantMap& = VariantMap ( ))
-- void SetAreaTypeCost(uint, float)
+- void SetAreaCost(uint, float)
 - bool SetAttribute(const String&, const Variant&)
 - void SetAttributeAnimation(const String&, ValueAnimation@, WrapMode = WM_LOOP, float = 1.0f)
 - void SetAttributeAnimationSpeed(const String&, float)
@@ -5974,17 +6005,22 @@ Properties:
 - float cellSize
 - float detailSampleDistance
 - float detailSampleMaxError
+- bool drawNavAreas
+- bool drawObstacles
+- bool drawOffMeshConnections
 - float edgeMaxError
 - float edgeMaxLength
 - bool enabled
 - bool enabledEffective // readonly
 - uint id // readonly
 - bool initialized // readonly
+- uint maxObstacles
 - Node@ node // readonly
 - uint numAttributes // readonly
 - IntVector2 numTiles // readonly
 - ObjectAnimation@ objectAnimation
 - Vector3 padding
+- NavmeshPartitionType partitionType
 - int refs // readonly
 - float regionMergeSize
 - float regionMinSize
@@ -7616,7 +7652,7 @@ Methods:
 Properties:
 
 - bool animationEnabled
-- uint areaType
+- uint areaID
 - Variant[] attributeDefaults // readonly
 - AttributeInfo[] attributeInfos // readonly
 - Variant[] attributes
@@ -7701,6 +7737,7 @@ Methods:
 - void DrawDebugGeometry(bool)
 - Vector3 FindNearestPoint(const Vector3&, const Vector3& = Vector3 ( 1.0 , 1.0 , 1.0 ))
 - Vector3[]@ FindPath(const Vector3&, const Vector3&, const Vector3& = Vector3 ( 1.0 , 1.0 , 1.0 ))
+- float GetAreaCost(uint) const
 - Variant GetAttribute(const String&) const
 - ValueAnimation@ GetAttributeAnimation(const String&) const
 - float GetAttributeAnimationSpeed(const String&) const
@@ -7723,7 +7760,7 @@ Methods:
 - bool Save(VectorBuffer&) const
 - bool SaveXML(XMLElement&) const
 - void SendEvent(const String&, VariantMap& = VariantMap ( ))
-- void SetAreaTypeCost(uint, float)
+- void SetAreaCost(uint, float)
 - bool SetAttribute(const String&, const Variant&)
 - void SetAttributeAnimation(const String&, ValueAnimation@, WrapMode = WM_LOOP, float = 1.0f)
 - void SetAttributeAnimationSpeed(const String&, float)
@@ -7747,6 +7784,8 @@ Properties:
 - float cellSize
 - float detailSampleDistance
 - float detailSampleMaxError
+- bool drawNavAreas
+- bool drawOffMeshConnections
 - float edgeMaxError
 - float edgeMaxLength
 - bool enabled
@@ -7758,6 +7797,7 @@ Properties:
 - IntVector2 numTiles // readonly
 - ObjectAnimation@ objectAnimation
 - Vector3 padding
+- NavmeshPartitionType partitionType
 - int refs // readonly
 - float regionMergeSize
 - float regionMinSize
@@ -8209,6 +8249,7 @@ Methods:
 Properties:
 
 - bool animationEnabled
+- uint areaID
 - Variant[] attributeDefaults // readonly
 - AttributeInfo[] attributeInfos // readonly
 - Variant[] attributes
@@ -8219,6 +8260,7 @@ Properties:
 - bool enabledEffective // readonly
 - Node@ endPoint
 - uint id // readonly
+- uint mask
 - Node@ node // readonly
 - uint numAttributes // readonly
 - ObjectAnimation@ objectAnimation
@@ -8813,6 +8855,7 @@ Properties:
 - Vector3 normal
 - Vector3 position
 - uint subObject
+- Vector2 textureUV
 
 <a name="Class_Rect"></a>
 
@@ -8893,6 +8936,7 @@ Methods:
 
 Properties:
 
+- BlendMode blendMode
 - Color clearColor
 - float clearDepth
 - uint clearFlags
@@ -9514,6 +9558,8 @@ Methods:
 - WrapMode GetAttributeAnimationWrapMode(const String&) const
 - Variant GetAttributeDefault(const String&) const
 - bool GetInterceptNetworkUpdate(const String&) const
+- bool HasMethod(const String&) const
+- bool IsA(const String&) const
 - bool Load(File@, bool = false)
 - bool Load(VectorBuffer&, bool = false)
 - bool LoadXML(const XMLElement&, bool = false)
@@ -11543,6 +11589,7 @@ Properties:
 - StringHash baseType // readonly
 - Color borderColor
 - String category // readonly
+- uint components // readonly
 - bool compressed // readonly
 - bool dataLost // readonly
 - TextureFilterMode filterMode
@@ -11586,6 +11633,7 @@ Properties:
 - StringHash baseType // readonly
 - Color borderColor
 - String category // readonly
+- uint components // readonly
 - bool compressed // readonly
 - bool dataLost // readonly
 - TextureFilterMode filterMode
@@ -11630,6 +11678,7 @@ Properties:
 - StringHash baseType // readonly
 - Color borderColor
 - String category // readonly
+- uint components // readonly
 - bool compressed // readonly
 - bool dataLost // readonly
 - TextureFilterMode filterMode
@@ -11674,6 +11723,7 @@ Properties:
 - StringHash baseType // readonly
 - Color borderColor
 - String category // readonly
+- uint components // readonly
 - bool compressed // readonly
 - bool dataLost // readonly
 - TextureFilterMode filterMode
@@ -13235,9 +13285,9 @@ Properties:
 
 ### CrowdAgentState
 
-- NAV_AGENT_INVALID
-- NAV_AGENT_READY
-- NAV_AGENT_TRAVERSINGLINK
+- CROWD_AGENT_INVALID
+- CROWD_AGENT_READY
+- CROWD_AGENT_TRAVERSINGLINK
 
 
 ### CrowdTargetState
@@ -13246,10 +13296,9 @@ Properties:
 - CROWD_AGENT_TARGET_FAILED
 - CROWD_AGENT_TARGET_VALID
 - CROWD_AGENT_TARGET_REQUESTING
-- CROWD_AGENT_TARGET_WAITINGFORPATH
 - CROWD_AGENT_TARGET_WAITINGFORQUEUE
+- CROWD_AGENT_TARGET_WAITINGFORPATH
 - CROWD_AGENT_TARGET_VELOCITY
-- CROWD_AGENT_TARGET_ARRIVED
 
 
 ### CubeMapFace
@@ -13430,6 +13479,12 @@ Properties:
 - PUSHINESS_HIGH
 
 
+### NavmeshPartitionType
+
+- NAVMESH_PARTITION_WATERSHED
+- NAVMESH_PARTITION_MONOTONE
+
+
 ### Orientation
 
 - O_HORIZONTAL
@@ -13465,6 +13520,7 @@ Properties:
 - RAY_AABB
 - RAY_OBB
 - RAY_TRIANGLE
+- RAY_TRIANGLE_UV
 
 
 ### RenderCommandSortMode

@@ -33,14 +33,16 @@ class Scene;
 
 }
 
-/// Navigation example.
+/// CrowdNavigation example.
 /// This sample demonstrates:
-///     - Generating a navigation mesh into the scene
+///     - Generating a dynamic navigation mesh into the scene
 ///     - Performing path queries to the navigation mesh
-///     - Rebuilding the navigation mesh partially when adding or removing objects
-///     - Visualizing custom debug geometry
+///     - Adding and removing obstacles/agents at runtime
 ///     - Raycasting drawable components
-///     - Making a node follow the Detour path
+///     - Crowd movement management
+///     - Accessing crowd agents with the crowd manager
+///     - Using off-mesh connections to make boxes climbable
+///     - Using agents to simulate moving obstacles
 class CrowdNavigation : public Sample
 {
     OBJECT(CrowdNavigation);
@@ -136,29 +138,29 @@ private:
     void SubscribeToEvents();
     /// Read input and moves the camera.
     void MoveCamera(float timeStep);
-    /// Set path start or end point.
-    void SetPathPoint();
-    /// Add or remove object.
+    /// Set crowd agents target or spawn another jack.
+    void SetPathPoint(bool spawning);
+    /// Add new obstacle or remove existing obstacle/agent.
     void AddOrRemoveObject();
-    /// Create a "Jack" object at position
-    void CreateJack(const Vector3& pos);
+    /// Create a "Jack" object at position.
+    void SpawnJack(const Vector3& pos);
     /// Create a mushroom object at position.
-    Node* CreateMushroom(const Vector3& pos);
-    /// Utility function to raycast to the cursor position. Return true if hit
+    void CreateMushroom(const Vector3& pos);
+    /// Create an off-mesh connection for each box to make it climbable.
+    void CreateBoxOffMeshConnections(DynamicNavigationMesh* navMesh, Node* boxGroup);
+    /// Create some movable barrels as crowd agents.
+    void CreateMovingBarrels(DynamicNavigationMesh* navMesh);
+    /// Utility function to raycast to the cursor position. Return true if hit.
     bool Raycast(float maxDistance, Vector3& hitPos, Drawable*& hitDrawable);
     /// Handle the logic update event.
     void HandleUpdate(StringHash eventType, VariantMap& eventData);
     /// Handle the post-render update event.
     void HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData);
+    /// Handle problems with crowd agent placement.
+    void HandleCrowdAgentFailure(StringHash eventType, VariantMap& eventData);
+    /// Handle crowd agent reposition.
+    void HandleCrowdAgentReposition(StringHash eventType, VariantMap& eventData);
 
-    /// Last calculated path.
-    PODVector<Vector3> currentPath_;
-    /// Path end position.
-    Vector3 endPos_;
-    /// Jack scene node.
-    Vector< SharedPtr<Node> > jackNodes_;
-    /// Mushroom nodes
-    Vector< Node* > mushroomNodes_;
     /// Flag for drawing debug geometry.
     bool drawDebug_;
 };

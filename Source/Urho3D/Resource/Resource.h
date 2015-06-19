@@ -66,7 +66,7 @@ public:
     virtual bool Save(Serializer& dest) const;
     
     /// Set name.
-    void SetName(const String& name);
+    virtual void SetName(const String& name);
     /// Set memory use in bytes, possibly approximate.
     void SetMemoryUse(unsigned size);
     /// Reset last used timer.

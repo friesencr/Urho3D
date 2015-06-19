@@ -422,6 +422,8 @@ parameters.Push(Variant(100)); // Add an int parameter
 file->Execute("void MyFunction(int)", parameters); // Execute
 \endcode
 
+If the function being called has void return type and no parameters, its name can alternatively be given instead of the full declaration.
+
 \ref ScriptFile::Execute "Execute()" also has an overload which takes a function pointer instead of querying by declaration. Using a pointer is naturally faster than a query, but also more risky: in case the ScriptFile resource is unloaded or reloaded, any function pointers will be invalidated.
 
 \section Scripting_Object Instantiating a script object
@@ -501,9 +503,11 @@ class Test : ScriptObject
 }
 \endcode
 
-Delayed method calls can be removed by full declaration using the ClearDelayedExecute() function. If an empty declaration (default) is given as parameter, all delayed calls are removed.
+Delayed method calls can be removed by declaration using the ClearDelayedExecute() function. If an empty declaration (default) is given as parameter, all delayed calls are removed.
 
-When a scene is saved/loaded, any pending delayed calls are also saved and restored properly.
+If the method being called has void return type and no parameters, its name can alternatively be given instead of the full declaration.
+
+When a scene is saved/loaded, any pending delayed calls are also saved and restored.
 
 \section Script_ScriptAPI The script API
 
@@ -602,6 +606,18 @@ Use \ref LuaScript::ExecuteString "ExecuteString()" to compile and run a line of
 In contrast to AngelScript modules, which exist as separate entities and do not share functions or variables unless explicitly marked shared, in the Lua subsystem everything is loaded and executed in one Lua state, so scripts can naturally access everything  loaded so far. To load and execute a Lua script file, call \ref LuaScript::ExecuteFile "ExecuteFile()".
 
 After that, the functions in the script file are available for calling. Use \ref LuaScript::GetFunction "GetFunction()" to get a Lua function by name. This returns a LuaFunction object, on which you should call \ref LuaFunction::BeginCall "BeginCall()" first, followed by pushing the function parameters if any, and finally execute the function with \ref LuaFunction::EndCall "EndCall()".
+
+\subsection LuaScripting_Debugging Debugging script files
+
+Debugging Lua scripts embedded in an application can be done by attaching to a remote debugger, after first injecting a client into the application (for example, see <a href="https://wiki.eclipse.org/LDT/User_Area/User_Guides/User_Guide_1.2#Attach_session">eclipse LDT's remote debugger</a>). 
+
+However, Lua script files in Urho3D are loaded into the interpreter via Urho3D's resource cache, which loads the script file into a memory buffer before passing that buffer to the interpreter. This is good for performance and cross platform compatibility, but means that the source file is not available to debuggers and so, for example, breakpoints may not work and the code cannot be meaningfully stepped through.
+
+For a single script that you wish to step through, you can use \ref LuaScript::ExecuteRawFile "ExecuteRawFile()", which will load the script from the file system directly into the Lua interpreter, making the source available to debuggers that rely on it. There are a couple of caveats with this: 
+- The file has has to be on the file system, within a resource directory, and not packaged.
+- If the script uses `require()` to import a second script, then that second script will not be available for the debugger in the same way, since internally the second script is passed to Lua via the resource cache.
+
+To get around the second caveat, and avoid changing method calls, use the CMake flag `URHO3D_LUA_RAW_SCRIPT_LOADER`.  This will force Urho3D to attempt to load scripts from the file system by default, before falling back on the resource cache.  You can then use \ref LuaScript::ExecuteFile "ExecuteFile()", as above, and disable the CMake option for production if required.
 
 \section LuaScripting_ScriptObjects Script objects
 
@@ -1170,7 +1186,7 @@ The available commands are:
 
 - clear: Clear any of color, depth and stencil. Color clear can optionally use the fog color from the Zone visible at the far clip distance.
 - scenepass: Render scene objects whose \ref Materials "material technique" contains the specified pass. Will either be front-to-back ordered with state sorting, or back-to-front ordered with no state sorting. For deferred rendering, object lightmasks can be optionally marked to the stencil buffer. Vertex lights can optionally be handled during a pass, if it has the necessary shader combinations. Textures global to the pass can be bound to free texture units; these can either be the viewport, a named rendertarget, or a texture resource identified with its pathname.
-- quad: Render a viewport-sized quad using the specified shaders and compilation defines. Textures can be bound and additionally shader parameters can be specified.
+- quad: Render a viewport-sized quad using the specified shaders and compilation defines. Textures can be bound and additionally shader parameters and the blend mode (default=replace) can be specified.
 - forwardlights: Render per-pixel forward lighting for opaque objects with the specified pass name. Shadow maps are also rendered as necessary.
 - lightvolumes: Render deferred light volumes using the specified shaders. G-buffer textures can be bound as necessary.
 - renderui: Render the UI into the output rendertarget. Using this will cause the default %UI render to the backbuffer to be skipped.
@@ -1192,7 +1208,7 @@ The render path XML definition looks like this:
         <output index="2" name="RTName3" />
         <texture unit="unit" name="viewport|RTName|TextureName" />
     </command>
-    <command type="quad" vs="VertexShaderName" ps="PixelShaderName" vsdefines="DEFINE1 DEFINE2" psdefines="DEFINE3 DEFINE4" output="viewport|RTName" depthstencil="DSName" />
+    <command type="quad" vs="VertexShaderName" ps="PixelShaderName" vsdefines="DEFINE1 DEFINE2" psdefines="DEFINE3 DEFINE4" blend="replace|add|multiply|alpha|addalpha|premulalpha|invdestalpha|subtract|subtractalpha" output="viewport|RTName" depthstencil="DSName" />
         <texture unit="unit" name="viewport|RTName|TextureName" />
         <parameter name="ParameterName" value="x y z w" />
     </command>
@@ -1699,9 +1715,33 @@ To query for a path between start and end points on the navigation mesh, call \r
 
 For a demonstration of the navigation capabilities, check the related sample application (15_Navigation), which features partial navigation mesh rebuilds (objects can be created and deleted) and querying paths.
 
+Navigation meshes may be generated using either Watershed or Monotone triangulation. Watershed will typically produce more polygons that produce more natural paths while monotone is faster to generate but may produce undesirable path artifacts.
+
+\section PathfindingWeights Pathfinding weights
+
+Axis-aligned box regions of the navigation mesh may marked as belonging to specific 'area types' using NavArea components. The weight for a given area type is assigned using the SetAreaCost(unsigned, float) method of the NavigationMesh (or DynamicNavigationMesh).
+
+\section DynamicNavMesh Dynamic Navigation Mesh
+
+The DetourTileCache library is used to provide a variant of the NavigationMesh that supports the addition and removal of dynamic obstacles, the trade-off for which is almost twice the memory consumption. However, the addition and removal of obstacles is significantly faster than partially rebuilding a NavigationMesh.
+
+Obstacles are limited to cylindrical shapes consisting of a radius and height. When an obstacle is added (or enabled) DetourTileCache will use a stored copy of the obstacle free DynamicNavigationMesh to regenerate the relevant tiles.
+
+Changes that cannot be represented in the form of obstacles will require a partial rebuild using the Build() method and have no advantages over rebuilds of the standard NavigationMesh.
+
+In all other facets the usage of the DynamicNavigationMesh is identical to that of the regular NavigationMesh. See the 39_CrowdNavigation sample application for usage of Obstacles and the DynamicNavigationMesh.
+
 \section CrowdNavigation Crowd navigation
 
-In addition to the basic pathfinding, additional navigation components use the DetourCrowd library for pathfinding between crowd agents and possibility to add dynamic obstacles. These components are DynamicNavigationMesh, DetourCrowdManager, CrowdAgent, NavArea & Obstacle. See the 39_CrowdNavigation sample application for an example on how to use these.
+In addition to the basic pathfinding, additional navigation components use the DetourCrowd library for pathfinding between crowd agents and possibility to add dynamic obstacles. These components are DynamicNavigationMesh, DetourCrowdManager, CrowdAgent, NavArea & Obstacle.
+
+CrowdAgent's navigate using "targets" which is assigned with the SetMoveTarget(Vector3) method. The agent will halt upon reaching its' destination. To halt an agent in progress set it's move target to its current position.
+
+CrowdAgent's will fire events under different circumstances. The most important of which is the CrowdAgentFailureEvent which will be sent if the CrowdAgent is either in an invalid state (such as off of the NavigationMesh) or if the target destination is no longer reachable through the NavigationMesh. As the CrowdAgent moves through space it may send other events regarding it's current state using the CrowdAgentStateChanged event which will include state as CROWD_AGENT_TARGET_ARRIVED when the agent has reach the target destination.
+
+CrowdAgents' handle navigation areas differently. The DetourCrowdManager can contains 16 different "Filter types" (0 - 15) which have different settings for area costs. These costs are assigned in the DetourCrowdManager using the SetAreaCost(unsigned filterTypeID, unsigned areaID, float weight) method. The filter the CrowdAgent will use is assigned to the agent using its' SetNavigationFilterType(unsigned filterTypeID) method.
+
+See the 39_CrowdNavigation sample application for an example on how to use CrowdAgents and the DetourCrowdManager.
 
 \page UI User interface
 
@@ -1933,6 +1973,11 @@ One interesting feature is the ability to flip/mirror animations on both axes, u
 
 For a demonstration, check examples 33_Urho2DSpriterAnimation and 24_Urho2DSprite.
 
+Tip for naming your files:
+- if an xml file has the same name as an image file in the same repository, it is assumed that it is a texture parameter file
+- if an xml file has the same name as a Spriter scml file in the same repository, it is assumed that it is a spritesheet file
+So to prevent conflicts, scml and image files shouldn't have the exact same name.
+
 \section Urho2D_Particle Particle emitters
 A 2D particle emitter is built from a *.pex file (a format used by many 2D engines).
 A *.pex file is loaded using ParticleEffect2D class (Resource) and rendered using ParticleEmitter2D class (Drawable component):
@@ -2015,6 +2060,8 @@ Check Box2D manual - Chapter 4 Collision Module and Chapter 7 Fixtures for full 
 - Polygon shapes <=> CollisionPolygon2D: defines 2D physics collision polygon. Polygon shapes are solid convex polygons. A polygon is convex when all line segments connecting two points in the interior do not cross any edge of the polygon. A polygon must have 3 or more vertices (\ref CollisionPolygon2D::SetVertices "SetVertices()"). Polygons vertices winding doesn't matter.
 - Edge shapes <=> CollisionEdge2D: defines 2D physics collision edge. Edge shapes are line segments defined by 2 vertices (\ref CollisionEdge2D::SetVertex1 "SetVertex1()" and \ref CollisionEdge2D::SetVertex2 "SetVertex2()" or globaly \ref CollisionEdge2D::SetVertices "SetVertices()"). They are provided to assist in making a free-form static environment for your game. A major limitation of edge shapes is that they can collide with circles and polygons but not with themselves. The collision algorithms used by Box2D require that at least one of two colliding shapes have volume. Edge shapes have no volume, so edge-edge collision is not possible.
 - Chain shapes <=> CollisionChain2D: defines 2D physics collision chain. The chain shape provides an efficient way to connect many edges together (\ref CollisionChain2D::SetVertices "SetVertices()") to construct your static game worlds. You can connect chains together using ghost vertices. Self-intersection of chain shapes is not supported.
+
+Several collision shapes may exist in the same node to create compound shapes. This can be handy to approximate complex or concave shapes.
 
 Important: collision shapes must match your textures in order to be accurate. You can use Tiled's objects to create your shapes (see \ref Urho2D_TMX_Objects "Tile map objects"). Or you can use tools like Physics Body Editor (https://code.google.com/p/box2d-editor/), RUBE (https://www.iforce2d.net/rube/), LevelHelper (http://www.gamedevhelper.com/levelhelper/), PhysicsEditor (http://www.codeandweb.com/physicseditor), ... to help you. Other interesting tool is BisonKick (https://bisonkick.com/app/518195d06927101d38a83b66/).
 

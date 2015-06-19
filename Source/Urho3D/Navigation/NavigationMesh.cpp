@@ -26,11 +26,11 @@
 #include "../Core/Context.h"
 #include "../Graphics/DebugRenderer.h"
 #include "../Graphics/Drawable.h"
+#include "../Navigation/DynamicNavigationMesh.h"
 #include "../Graphics/Geometry.h"
 #include "../IO/Log.h"
 #include "../IO/MemoryBuffer.h"
 #include "../Graphics/Model.h"
-#include "../Navigation/DynamicNavigationMesh.h"
 #include "../Navigation/NavArea.h"
 #include "../Navigation/NavBuildData.h"
 #include "../Navigation/Navigable.h"
@@ -122,7 +122,9 @@ NavigationMesh::NavigationMesh(Context* context) :
     numTilesX_(0),
     numTilesZ_(0),
     partitionType_(NAVMESH_PARTITION_WATERSHED),
-    keepInterResults_(false)
+    keepInterResults_(false),
+    drawOffMeshConnections_(false),
+    drawNavAreas_(false)
 {
 }
 
@@ -157,6 +159,8 @@ void NavigationMesh::RegisterObject(Context* context)
     ACCESSOR_ATTRIBUTE("Bounding Box Padding", GetPadding, SetPadding, Vector3, Vector3::ONE, AM_DEFAULT);
     MIXED_ACCESSOR_ATTRIBUTE("Navigation Data", GetNavigationDataAttr, SetNavigationDataAttr, PODVector<unsigned char>, Variant::emptyBuffer, AM_FILE | AM_NOEDIT);
     ENUM_ACCESSOR_ATTRIBUTE("Partition Type", GetPartitionType, SetPartitionType, NavmeshPartitionType, navmeshPartitionTypeNames, NAVMESH_PARTITION_WATERSHED, AM_DEFAULT);
+    ACCESSOR_ATTRIBUTE("Draw OffMeshConnections", GetDrawOffMeshConnections, SetDrawOffMeshConnections, bool, false, AM_DEFAULT);
+    ACCESSOR_ATTRIBUTE("Draw NavAreas", GetDrawNavAreas, SetDrawNavAreas, bool, false, AM_DEFAULT);
 }
 
 void NavigationMesh::DrawDebugGeometry(DebugRenderer* debug, bool depthTest)
@@ -172,22 +176,55 @@ void NavigationMesh::DrawDebugGeometry(DebugRenderer* debug, bool depthTest)
     {
         for (int x = 0; x < numTilesX_; ++x)
         {
-            const dtMeshTile* tile = navMesh->getTileAt(x, z, 0);
-            if (!tile)
-                continue;
-
-            for (int i = 0; i < tile->header->polyCount; ++i)
+            for (int i = 0; i < 128; ++i)
             {
-                dtPoly* poly = tile->polys + i;
-                for (unsigned j = 0; j < poly->vertCount; ++j)
+                const dtMeshTile* tile = navMesh->getTileAt(x, z, i);
+                if (!tile)
+                    continue;
+
+                for (int i = 0; i < tile->header->polyCount; ++i)
                 {
-                    debug->AddLine(
-                        worldTransform * *reinterpret_cast<const Vector3*>(&tile->verts[poly->verts[j] * 3]),
-                        worldTransform * *reinterpret_cast<const Vector3*>(&tile->verts[poly->verts[(j + 1) % poly->vertCount] * 3]),
-                        Color::YELLOW,
-                        depthTest
-                    );
+                    dtPoly* poly = tile->polys + i;
+                    for (unsigned j = 0; j < poly->vertCount; ++j)
+                    {
+                        debug->AddLine(
+                            worldTransform * *reinterpret_cast<const Vector3*>(&tile->verts[poly->verts[j] * 3]),
+                            worldTransform * *reinterpret_cast<const Vector3*>(&tile->verts[poly->verts[(j + 1) % poly->vertCount] * 3]),
+                            Color::YELLOW,
+                            depthTest
+                            );
+                    }
                 }
+            }
+        }
+    }
+
+    Scene* scene = GetScene();
+    if (scene)
+    {
+        // Draw OffMeshConnection components
+        if (drawOffMeshConnections_)
+        {
+            PODVector<Node*> connections;
+            scene->GetChildrenWithComponent<OffMeshConnection>(connections, true);
+            for (unsigned i = 0; i < connections.Size(); ++i)
+            {
+                OffMeshConnection* connection = connections[i]->GetComponent<OffMeshConnection>();
+                if (connection && connection->IsEnabledEffective())
+                    connection->DrawDebugGeometry(debug, depthTest);
+            }
+        }
+
+        // Draw NavArea components
+        if (drawNavAreas_)
+        {
+            PODVector<Node*> areas;
+            scene->GetChildrenWithComponent<NavArea>(areas, true);
+            for (unsigned i = 0; i < areas.Size(); ++i)
+            {
+                NavArea* area = areas[i]->GetComponent<NavArea>();
+                if (area && area->IsEnabledEffective())
+                    area->DrawDebugGeometry(debug, depthTest);
             }
         }
     }
@@ -495,7 +532,7 @@ void NavigationMesh::FindPath(PODVector<Vector3>& dest, const Vector3& start, co
 
     Vector3 localStart = inverse * start;
     Vector3 localEnd = inverse * end;
-    
+
     dtPolyRef startRef;
     dtPolyRef endRef;
     navMeshQuery_->findNearestPoly(&localStart.x_, &extents.x_, queryFilter_, &startRef, 0);
@@ -621,15 +658,22 @@ void NavigationMesh::DrawDebugGeometry(bool depthTest)
     }
 }
 
-void NavigationMesh::SetAreaTypeCost(unsigned areaType, float cost)
+void NavigationMesh::SetAreaCost(unsigned areaID, float cost)
 {
     if (queryFilter_)
-        queryFilter_->setAreaCost((int)areaType, cost);
+        queryFilter_->setAreaCost((int)areaID, cost);
 }
 
 BoundingBox NavigationMesh::GetWorldBoundingBox() const
 {
     return node_ ? boundingBox_.Transformed(node_->GetWorldTransform()) : boundingBox_;
+}
+
+float NavigationMesh::GetAreaCost(unsigned areaID) const
+{
+    if (queryFilter_)
+        return queryFilter_->getAreaCost((int)areaID);
+    return 1.0f;
 }
 
 void NavigationMesh::SetNavigationDataAttr(const PODVector<unsigned char>& value)
@@ -777,7 +821,7 @@ void NavigationMesh::CollectGeometries(Vector<NavigationGeometryInfo>& geometryL
     {
         NavArea* area = navAreas[i];
         // Ignore disabled AND any areas that have no meaningful settings
-        if (area->IsEnabledEffective() && area->GetAreaType() != 0)
+        if (area->IsEnabledEffective() && area->GetAreaID() != 0)
         {
             NavigationGeometryInfo info;
             info.component_ = area;
@@ -791,6 +835,9 @@ void NavigationMesh::CollectGeometries(Vector<NavigationGeometryInfo>& geometryL
 {
     // Make sure nodes are not included twice
     if (processedNodes.Contains(node))
+        return;
+    // Exclude obstacles from consideration
+    if (node->HasComponent<Obstacle>())
         return;
     processedNodes.Insert(node);
 
@@ -889,8 +936,7 @@ void NavigationMesh::GetTileGeometry(NavBuildData* build, Vector<NavigationGeome
             {
                 NavArea* area = static_cast<NavArea*>(geometryList[i].component_);
                 NavAreaStub stub;
-                //\todo is there an alternative to casting down? Attributes restricts area ID/type to being an unsigned int
-                stub.areaID_ = (unsigned char)area->GetAreaType();
+                stub.areaID_ = (unsigned char)area->GetAreaID();
                 stub.bounds_ = area->GetWorldBoundingBox();
                 build->navAreas_.Push(stub);
                 continue;
@@ -1108,7 +1154,7 @@ bool NavigationMesh::BuildTile(Vector<NavigationGeometryInfo>& geometryList, int
     rcRasterizeTriangles(build.ctx_, &build.vertices_[0].x_, build.vertices_.Size(), &build.indices_[0],
         triAreas.Get(), numTriangles, *build.heightField_, cfg.walkableClimb);
     rcFilterLowHangingWalkableObstacles(build.ctx_, cfg.walkableClimb, *build.heightField_);
-    
+
     rcFilterWalkableLowHeightSpans(build.ctx_, cfg.walkableHeight, *build.heightField_);
     rcFilterLedgeSpans(build.ctx_, cfg.walkableHeight, cfg.walkableClimb, *build.heightField_);
 
@@ -1259,6 +1305,8 @@ bool NavigationMesh::BuildTile(Vector<NavigationGeometryInfo>& geometryList, int
     {
         using namespace NavigationAreaRebuilt;
         VariantMap& eventData = GetContext()->GetEventDataMap();
+        eventData[P_NODE] = GetNode();
+        eventData[P_MESH] = this;
         eventData[P_BOUNDSMIN] = Variant(tileBoundingBox.min_);
         eventData[P_BOUNDSMAX] = Variant(tileBoundingBox.max_);
         SendEvent(E_NAVIGATION_AREA_REBUILT, eventData);

@@ -23,9 +23,6 @@
 require 'pathname'
 require 'json'
 require 'yaml'
-if ENV['IOS'] || ENV['EMSCRIPTEN']
-  require 'time'
-end
 
 # Usage: rake sync (only intended to be used in a fork with remote 'upstream' set to urho3d/Urho3D)
 desc 'Fetch and merge upstream urho3d/Urho3D to a Urho3D fork'
@@ -185,6 +182,11 @@ end
 # Usage: NOT intended to be used manually (if you insist then try: rake ci)
 desc 'Configure, build, and test Urho3D project'
 task :ci do
+  # Skip if only performing CI for selected branches and the current branch is not in the list
+  unless ENV['RELEASE_TAG']
+    matched = /\[ci only:(.*?)\]/.match(ENV['COMMIT_MESSAGE'])
+    next if matched && !matched[1].split(/[ ,]/).reject!(&:empty?).map { |i| /#{i}/ =~ ENV['TRAVIS_BRANCH'] }.any?
+  end
   # Obtain our custom data, if any
   data = YAML::load(File.open(".travis.yml"))['data']
   data['excluded_sample'].each { |name| ENV["EXCLUDE_SAMPLE_#{name}"] = '1' } if data && data['excluded_sample']
@@ -192,14 +194,12 @@ task :ci do
   if ENV['CI'] && ENV['PACKAGE_UPLOAD'] && !ENV['RELEASE_TAG']
     system 'git fetch --unshallow' or abort 'Failed to unshallow cloned repository'
   end
-  # Clear ccache on demand
-  system 'ccache -C' if /\[ccache clear\]/ =~ ENV['COMMIT_MESSAGE']
   # Packaging always use Release configuration
   if ENV['PACKAGE_UPLOAD']
     $configuration = 'Release'
     $testing = 0
   else
-    $configuration = ENV['CI'] && ENV['USE_CCACHE'].to_i == 1 ? 'Release' : 'Debug'  # Aways use a same build configuration to keep ccache's cache size small when on Travis CI
+    $configuration = ENV['CI'] && ENV['USE_CCACHE'].to_i > 0 ? 'Release' : 'Debug'  # Aways use a same build configuration to keep ccache's cache size small when on Travis CI
     # Only 64-bit Linux environment with virtual framebuffer X server support and not MinGW build; or OSX build environment and not iOS build; or Emscripten build environment are capable to run tests
     $testing = (ENV['LINUX'] && !ENV['URHO3D_64BIT']) || (ENV['OSX'] && ENV['IOS'].to_i != 1) || ENV['EMSCRIPTEN'] ? 1 : 0
     if $testing
@@ -221,12 +221,45 @@ task :ci do
 end
 
 # Usage: NOT intended to be used manually
+desc 'Setup build cache'
+task :ci_setup_cache do
+  # Use internal cache store instead of using Travis CI one (this is a workaround for using ccache on Travis CI legacy build infra)
+  if ENV['USE_CCACHE'].to_i == 2
+    puts 'Setting up build cache'
+    job_number = ".#{ENV['TRAVIS_JOB_NUMBER'].split('.').last}"
+    repo_slug = "#{ENV['TRAVIS_REPO_SLUG'].split('/').first}/cache-store.git"
+    matched = /.*-([^-]+-[^-]+)$/.match(ENV['TRAVIS_BRANCH'])
+    base_mirror = matched ? matched[1] : nil
+    # Do not abort even when it fails here
+    system "if ! `git clone -q --depth 1 --branch #{ENV['TRAVIS_BRANCH']}#{job_number} https://github.com/#{repo_slug} ~/.ccache 2>/dev/null`; then if ! [ #{base_mirror} ] || ! `git clone -q --depth 1 --branch #{base_mirror}#{job_number} https://github.com/#{repo_slug} ~/.ccache 2>/dev/null`; then git clone -q --depth 1 https://github.com/#{repo_slug} ~/.ccache 2>/dev/null; fi && cd ~/.ccache && git checkout -qf -b #{ENV['TRAVIS_BRANCH']}#{job_number}; fi"
+  end
+  # Clear ccache on demand
+  system "ccache -z -M #{ENV['CCACHE_MAXSIZE']} #{/\[ccache clear\]/ =~ ENV['COMMIT_MESSAGE'] ? '-C' : ''}"
+end
+
+# Usage: NOT intended to be used manually
+desc 'Teardown build cache'
+task :ci_teardown_cache do
+  # Upload cache to internal cache store if it is our own
+  if ENV['USE_CCACHE'].to_i == 2
+    puts 'Storing build cache'
+    job_number = ".#{ENV['TRAVIS_JOB_NUMBER'].split('.').last}"
+    repo_slug = "#{ENV['TRAVIS_REPO_SLUG'].split('/').first}/cache-store.git"
+    # Do not abort even when it fails here
+    system "cd ~/.ccache && git config user.name $GIT_NAME && git config user.email $GIT_EMAIL && git remote set-url --push origin https://$GH_TOKEN@github.com/#{repo_slug} && git add -A . && git commit --amend -qm 'Travis CI: cache update at #{Time.now.utc}.' && git push -qf -u origin #{ENV['TRAVIS_BRANCH']}#{job_number} >/dev/null 2>&1"
+  end
+  system 'ccache -s'
+end
+
+# Usage: NOT intended to be used manually
 desc 'Update site documentation to GitHub Pages'
 task :ci_site_update do
+  # Skip when :ci rake task was skipped
+  next unless File.exist?('../Build/CMakeCache.txt')
   # Pull or clone
   system 'cd ../doc-Build 2>/dev/null && git pull -q -r || git clone --depth 1 -q https://github.com/urho3d/urho3d.github.io.git ../doc-Build' or abort 'Failed to pull/clone'
-  # Update credits from README.md to about.md
-  system "ruby -lne 'BEGIN { credits = false }; puts $_ if credits; credits = true if /bugfixes by:/; credits = false if /^$/' README.md |ruby -i -le 'credits = STDIN.read; puts ARGF.read.gsub(/(?<=bugfixes by\n).*?(?=##)/m, credits)' ../doc-Build/about.md" or abort 'Failed to update credits'
+  # Update credits from README.md to about.yml
+  system "ruby -lne 'BEGIN { credits = false }; puts $_ if credits; credits = true if /bugfixes by:/; credits = false if /^$/' README.md |ruby -i -le 'credits = STDIN.read; puts ARGF.read.gsub(/(?<=contributors:\n).*?\n\n/m, credits)' ../doc-Build/_data/about.yml" or abort 'Failed to update credits'
   # Setup doxygen to use minimal theme
   system "ruby -i -pe 'BEGIN { a = {%q{HTML_HEADER} => %q{minimal-header.html}, %q{HTML_FOOTER} => %q{minimal-footer.html}, %q{HTML_STYLESHEET} => %q{minimal-doxygen.css}, %q{HTML_COLORSTYLE_HUE} => 200, %q{HTML_COLORSTYLE_SAT} => 0, %q{HTML_COLORSTYLE_GAMMA} => 20, %q{DOT_IMAGE_FORMAT} => %q{svg}, %q{INTERACTIVE_SVG} => %q{YES}} }; a.each {|k, v| gsub(/\#{k}\s*?=.*?\n/, %Q{\#{k} = \#{v}\n}) }' ../Build/Docs/Doxyfile" or abort 'Failed to setup doxygen configuration file'
   system 'cp ../doc-Build/_includes/Doxygen/minimal-* ../Build/Docs' or abort 'Failed to copy minimal-themed template'
@@ -240,19 +273,14 @@ task :ci_site_update do
   system "cd ../Build && make -j$NUMJOBS doc >/dev/null 2>&1 && ruby -i -pe 'gsub(/(<\\/?h)3([^>]*?>)/, %q{\\14\\2}); gsub(/(<\\/?h)2([^>]*?>)/, %q{\\13\\2}); gsub(/(<\\/?h)1([^>]*?>)/, %q{\\12\\2})' Docs/html/_*.html && rsync -a --delete Docs/html/ ../doc-Build/documentation/#{release}" or abort 'Failed to generate/rsync doxygen pages'
   # Supply GIT credentials and push site documentation to urho3d/urho3d.github.io.git
   system "cd ../doc-Build && pwd && git config user.name $GIT_NAME && git config user.email $GIT_EMAIL && git remote set-url --push origin https://$GH_TOKEN@github.com/urho3d/urho3d.github.io.git && git add -A . && ( git commit -qm \"Travis CI: site documentation update at #{Time.now.utc}.\n\nCommit: https://github.com/$TRAVIS_REPO_SLUG/commit/$TRAVIS_COMMIT\n\nMessage: $COMMIT_MESSAGE\" || true) && git push -q >/dev/null 2>&1" or abort 'Failed to update site'
-  # Automatically give instruction to do packaging when API has changed, unless the instruction is already given in this commit
-  if ENV['PACKAGE_UPLOAD']
-    instruction = 'skip'
-  else
-    instruction = 'package'
-  end
-  if !ENV['RELEASE_TAG']
-    # Supply GIT credentials and push API documentation to urho3d/Urho3D.git (the push may not be successful if remote master has already diverged)
+  unless ENV['RELEASE_TAG'] || `git fetch -qf origin #{ENV['TRAVIS_BRANCH']}; git log -1 --pretty=format:'%H' FETCH_HEAD` != ENV['TRAVIS_COMMIT']
+    # Supply GIT credentials and push API documentation to urho3d/Urho3D.git (only when changes are detected)
     system 'pwd && git config user.name $GIT_NAME && git config user.email $GIT_EMAIL && git remote set-url --push origin https://$GH_TOKEN@github.com/$TRAVIS_REPO_SLUG.git && git add Docs/*API*'
-    if system("git commit -qm 'Travis CI: API documentation update at #{Time.now.utc}.\n[ci #{instruction}]'") && !ENV['PACKAGE_UPLOAD']
+    if system("git commit -qm 'Test commit to detect API changes'")
+      # Automatically give instruction to do packaging when API has changed, unless the instruction is already given in this commit
       bump_soversion 'Source/Urho3D/.soversion' or abort 'Failed to bump soversion'
-      system "git add Source/Urho3D/.soversion && git commit --amend -qm 'Travis CI: API documentation update at #{Time.now.utc}.\n[ci #{instruction}]'" or abort 'Failed to stage .soversion file'
-      system 'git push origin HEAD:master -q >/dev/null 2>&1' or abort 'Failed to update API documentation, most likely due to remote master has diverged, the API documentation update will be performed again in the subsequent CI build'
+      system "git add Source/Urho3D/.soversion && git commit --amend -qm \"Travis CI: API documentation update at #{Time.now.utc}.\n#{ENV['PACKAGE_UPLOAD'] ? '' : '[ci package]'}\n\nCommit: https://github.com/$TRAVIS_REPO_SLUG/commit/$TRAVIS_COMMIT\n\nMessage: $COMMIT_MESSAGE\"" or abort 'Failed to stage .soversion file'
+      system "git push origin HEAD:#{ENV['TRAVIS_BRANCH']} -q >/dev/null 2>&1" or abort 'Failed to update API documentation'
     end
   end
 end
@@ -260,34 +288,47 @@ end
 # Usage: NOT intended to be used manually
 desc 'Update Emscripten HTML5 samples to GitHub Pages'
 task :ci_emscripten_samples_update do
+  puts "\nUpdating Emscripten samples in main website..."
   # Pull or clone
   system 'cd ../doc-Build 2>/dev/null && git pull -q -r || git clone --depth 1 -q https://github.com/urho3d/urho3d.github.io.git ../doc-Build' or abort 'Failed to pull/clone'
   # Sync Emscripten samples
   system "rsync -a --delete --exclude tool ../Build/bin/ ../doc-Build/samples" or abort 'Failed to rsync Emscripten samples'
   # Update Emscripten json data file
   update_emscripten_data or abort 'Failed to update Emscripten json data file'
-  # Supply GIT credentials and push the changes to urho3d/urho3d.github.io.git
-  system "cd ../doc-Build && git config user.name $GIT_NAME && git config user.email $GIT_EMAIL && git remote set-url --push origin https://$GH_TOKEN@github.com/urho3d/urho3d.github.io.git && git add -A . && ( git commit -qm \"Travis CI: Emscripten samples update at #{Time.now.utc}.\n\nCommit: https://github.com/$TRAVIS_REPO_SLUG/commit/$TRAVIS_COMMIT\n\nMessage: $COMMIT_MESSAGE\" || true) && git push -q >/dev/null 2>&1" or abort 'Failed to update Emscripten samples'
+  root_commit, _ = get_root_commit_and_recipients
+  system "cd ../doc-Build && git config user.name $GIT_NAME && git config user.email $GIT_EMAIL && git remote set-url --push origin https://$GH_TOKEN@github.com/urho3d/urho3d.github.io.git && git add -A . && ( git commit -qm \"Travis CI: Emscripten samples update at #{Time.now.utc}.\n\nCommit: https://github.com/$TRAVIS_REPO_SLUG/commit/#{root_commit}\n\nMessage: #{`git log --format=%B -n 1 #{root_commit}`}\" || true) && git push -q >/dev/null 2>&1" or abort 'Failed to update Emscripten samples'
 end
 
 # Usage: NOT intended to be used manually
 desc 'Create all CI mirror branches'
 task :ci_create_mirrors do
   # Skip if there are more commits since this one
-  abort 'Skip creating mirror branches due to moving HEAD' unless `git fetch -qf origin master; git log -1 --pretty=format:'%H' FETCH_HEAD` == ENV['TRAVIS_COMMIT']
+  abort 'Skipped creating mirror branches due to moving HEAD' unless `git fetch -qf origin #{ENV['TRAVIS_PULL_REQUEST'] == 'false' ? ENV['TRAVIS_BRANCH'] : %Q{+refs/pull/#{ENV['TRAVIS_PULL_REQUEST']}/head'}}; git log -1 --pretty=format:'%H' FETCH_HEAD` == ENV['TRAVIS_COMMIT']
   system 'git config user.name $GIT_NAME && git config user.email $GIT_EMAIL && git remote set-url --push origin https://$GH_TOKEN@github.com/$TRAVIS_REPO_SLUG.git'
-  scan = ENV['PACKAGE_UPLOAD'] || /\[ci scan\]/ =~ ENV['COMMIT_MESSAGE']  # Limit the frequency of scanning
+  # Limit the frequency of scanning
+  scan = `ccache -s |grep 'cache miss'`.split.last.to_i >= ENV['COVERITY_SCAN_THRESHOLD'].to_i || /\[ci scan\]/ =~ ENV['COMMIT_MESSAGE']
+  # Determine which CI mirror branches to be auto created
+  unless ENV['RELEASE_TAG']
+    matched = /\[ci only:(.*?)\]/.match(ENV['COMMIT_MESSAGE'])
+    ci_only = matched ? matched[1].split(/[ ,]/).reject!(&:empty?) : nil
+    ci_only.push('Coverity-Scan') if ci_only && scan
+  else
+    ci_only = nil
+  end
+  # Obtain the whole stream and process the rest of documents except the first one since travis-build does not do that at the moment
   stream = YAML::load_stream(File.open('.travis.yml'))
   notifications = stream[0]['notifications']
-  notifications['email']['recipients'] = `git show -s --format='%ae %ce' #{ENV['TRAVIS_COMMIT']}`.chomp.split.uniq unless notifications['email']['recipients']
-  stream.drop(1).each { |doc| branch = doc.delete('branch'); ci = branch['name']; ci_branch = ENV['RELEASE_TAG'] || (ENV['TRAVIS_BRANCH'] == 'master' && ENV['TRAVIS_PULL_REQUEST'] == 'false') ? ci : (ENV['TRAVIS_PULL_REQUEST'] == 'false' ? "#{ENV['TRAVIS_BRANCH']}-#{ci}" : "PR ##{ENV['TRAVIS_PULL_REQUEST']}-#{ci}"); unless branch['active'] || (scan && /Scan/ =~ ci); system "if git fetch origin #{ci_branch}:#{ci_branch} 2>/dev/null; then git push -qf origin --delete #{ci_branch}; fi"; next; end; lastjob = doc['matrix'] && doc['matrix']['include'] ? doc['matrix']['include'].length : (doc['env']['matrix'] ? doc['env']['matrix'].length : 1); doc['after_script'] = (lastjob == 1 ? '%s' : "if [ ${TRAVIS_JOB_NUMBER##*.} == #{lastjob} ]; then %s; fi") % 'rake ci_delete_mirror'; doc['notifications'] = notifications unless doc['notifications']; File.open('.travis.yml.doc', 'w') { |file| file.write doc.to_yaml }; system "git checkout -B #{ci_branch} && rm .travis.yml && mv .travis.yml.doc .travis.yml && git add -A . && git commit -qm '#{branch['description']}' && git push -qf -u origin #{ci_branch} >/dev/null 2>&1 && git checkout -q -" or abort "Failed to create #{ci_branch} mirror branch" }
+  notifications['email']['recipients'] = get_root_commit_and_recipients().last unless notifications['email']['recipients']
+  stream.drop(1).each { |doc| branch = doc.delete('branch'); ci = branch['name']; ci_branch = ENV['RELEASE_TAG'] || (ENV['TRAVIS_BRANCH'] == 'master' && ENV['TRAVIS_PULL_REQUEST'] == 'false') ? ci : (ENV['TRAVIS_PULL_REQUEST'] == 'false' ? "#{ENV['TRAVIS_BRANCH']}-#{ci}" : "PR ##{ENV['TRAVIS_PULL_REQUEST']}-#{ci}"); unless (ci_only && ci_only.map { |i| /#{i}/ =~ ci }.any?) || (!ci_only && (branch['active'] || (scan && /Scan/ =~ ci))); system "if git fetch origin #{ci_branch}:#{ci_branch} 2>/dev/null; then git push -qf origin --delete #{ci_branch}; fi"; next; end; lastjob = doc['matrix'] && doc['matrix']['include'] ? doc['matrix']['include'].length : (doc['env']['matrix'] ? doc['env']['matrix'].length : 1); doc['after_script'] = [*doc['after_script']] << (lastjob == 1 ? '%s' : "if [ ${TRAVIS_JOB_NUMBER##*.} == #{lastjob} ]; then %s; fi") % 'rake ci_delete_mirror'; doc['notifications'] = notifications unless doc['notifications']; File.open('.travis.yml.doc', 'w') { |file| file.write doc.to_yaml }; system "git checkout -B #{ci_branch} && rm .travis.yml && mv .travis.yml.doc .travis.yml && git add -A . && git commit -qm '#{branch['description']}' && git push -qf -u origin #{ci_branch} >/dev/null 2>&1 && git checkout -q -" or abort "Failed to create #{ci_branch} mirror branch" }
 end
 
 # Usage: NOT intended to be used manually
 desc 'Delete CI mirror branch'
 task :ci_delete_mirror do
   # Skip if there are more commits since this one or if this is a release build
-  abort "Skip deleting #{ENV['TRAVIS_BRANCH']} mirror branch" unless `git fetch -qf origin master; git log -1 --pretty=format:'%H' FETCH_HEAD` == `git show -s --format='%H' #{ENV['TRAVIS_COMMIT']}`.chomp && !ENV['RELEASE_TAG']
+  matched = /(.*)-[^-]+-[^-]+$/.match(ENV['TRAVIS_BRANCH'])
+  base_branch = matched ? matched[1] : 'master'  # Assume 'master' is the default branch name
+  abort "Skipped deleting #{ENV['TRAVIS_BRANCH']} mirror branch" unless `git fetch -qf origin #{/^PR #/ =~ base_branch ? %Q{+refs/pull/#{ENV['TRAVIS_PULL_REQUEST']}/merge'} : base_branch}; git log -1 --pretty=format:'%H' FETCH_HEAD` == `git show -s --format='%H' #{ENV['TRAVIS_COMMIT']}`.rstrip && !ENV['RELEASE_TAG']
   system 'git config user.name $GIT_NAME && git config user.email $GIT_EMAIL && git remote set-url --push origin https://$GH_TOKEN@github.com/$TRAVIS_REPO_SLUG.git'
   system "git push -qf origin --delete #{ENV['TRAVIS_BRANCH']}" or abort "Failed to delete #{ENV['TRAVIS_BRANCH']} mirror branch"
 end
@@ -295,6 +336,8 @@ end
 # Usage: NOT intended to be used manually
 desc 'Make binary package and upload it to a designated central hosting server'
 task :ci_package_upload do
+  # Skip when :ci rake task was skipped
+  next unless File.exist?('../Build/CMakeCache.txt')
   if ENV['XCODE']
     $configuration = 'Release'
     $testing = 0
@@ -306,7 +349,7 @@ task :ci_package_upload do
       ENV['SITE_UPDATE'] = nil
     end
   else
-    system 'echo Generate documentation'
+    system 'echo Generating documentation...'
     if ENV['XCODE']
       xcode_build(ENV['IOS'], '../Build/Urho3D.xcodeproj', 'doc', '>/dev/null') or abort 'Failed to generate documentation'
     else
@@ -320,9 +363,9 @@ task :ci_package_upload do
       elapsed_time = (Time.now - Time.at(ENV['CI_START_TIME'].to_i)) / 60
       puts "\niOS checkpoint reached, elapsed time: #{elapsed_time}\n\n"
     end
-    if !ENV['CI_START_TIME'] || elapsed_time < 15 # minutes
+    if !ENV['CI_START_TIME'] || elapsed_time < 25 # minutes
       # Build Mach-O universal binary consisting of iphoneos (universal ARM archs including 'arm64' if 64-bit is enabled) and iphonesimulator (i386 arch and also x86_64 arch if 64-bit is enabled)
-      system 'echo Rebuild Urho3D library as Mach-O universal binary'
+      system 'echo Rebuilding Urho3D library as Mach-O universal binary...'
       xcode_build(0, '../Build/Urho3D.xcodeproj', 'Urho3D_universal') or abort 'Failed to build Mach-O universal binary'
     end
     # There is a bug in CMake/CPack that causes the 'package' target failed to build for IOS platform, workaround by calling cpack directly
@@ -341,7 +384,7 @@ task :ci_package_upload do
   end
   # Determine the upload location
   setup_digital_keys
-  if !ENV['RELEASE_TAG']
+  unless ENV['RELEASE_TAG']
     upload_dir = "/home/frs/project/#{ENV['TRAVIS_REPO_SLUG']}/Snapshots"
     if ENV['SITE_UPDATE']
       # Download source packages from GitHub
@@ -352,7 +395,7 @@ cd #{upload_dir}
 ls -1r
 bye
 EOF
-); do echo rm #{upload_dir}/${v}*; done |sftp -b - urho-travis-ci@frs.sourceforge.net" or abort 'Failed to housekeep snapshots'
+); do echo rm #{upload_dir}/${v}*; done |sftp -b - urho-travis-ci@frs.sourceforge.net >/dev/null 2>&1" or abort 'Failed to housekeep snapshots'
     end
   else
     upload_dir = "/home/frs/project/#{ENV['TRAVIS_REPO_SLUG']}/#{ENV['RELEASE_TAG']}"
@@ -369,17 +412,25 @@ EOF" or abort 'Failed to create release directory remotely'
   if ENV['SITE_UPDATE']
     # Upload the source package
     system "scp Urho3D-* urho-travis-ci@frs.sourceforge.net:#{upload_dir}" or abort 'Failed to upload source package'
+    if ENV['RELEASE_TAG']
+      # Mark the source tarball as default download for host systems other than Windows/Mac/Linux
+      system "curl -H 'Accept: application/json' -X PUT -d 'default=bsd&default=solaris&default=others' -d \"api_key=$SF_API\" https://sourceforge.net/projects/%s/files/%s/#{ENV['RELEASE_TAG']}/Urho3D-#{ENV['RELEASE_TAG']}-Source.tar.gz" % ENV['TRAVIS_REPO_SLUG'].split('/') or abort 'Failed to set source tarball as default download'
+    end
     # Sync readme and license files, just in case they are updated in the repo
     system 'for f in README.md License.txt; do mtime=$(git log --format=%ai -n1 $f); touch -d "$mtime" $f; done' or abort 'Failed to acquire file modified time'
     system 'rsync -e ssh -az README.md License.txt urho-travis-ci@frs.sourceforge.net:/home/frs/project/$TRAVIS_REPO_SLUG' or abort 'Failed to sync readme and license files'
     # Mark that the site has been updated
     File.open('.site_updated', 'w') {}
   end
-  # Upload the package
+  # Upload the binary package
   system "scp ../Build/Urho3D-* urho-travis-ci@frs.sourceforge.net:#{upload_dir} && rm ../Build/Urho3D-*" or abort 'Failed to upload binary package'
+  if ENV['RELEASE_TAG'] && ENV['SF_DEFAULT']
+    # Mark the corresponding binary package as default download for each Windows/Mac/Linux host systems
+    system "curl -H 'Accept: application/json' -X PUT -d 'default=%s' -d \"api_key=$SF_API\" https://sourceforge.net/projects/%s/files/%s/#{ENV['RELEASE_TAG']}/Urho3D-#{ENV['RELEASE_TAG']}-%s" % ENV['SF_DEFAULT'].split(':').insert(1, ENV['TRAVIS_REPO_SLUG'].split('/')).flatten or abort 'Failed to set binary tarball/zip as default download'
+  end
 end
 
-def scaffolding(dir, project = 'Scaffolding', target = 'Main')
+def scaffolding dir, project = 'Scaffolding', target = 'Main'
   build_script = <<EOF
 # Set project name
 project (#{project})
@@ -453,13 +504,9 @@ def makefile_ci
     android_prepare_device ENV['API'], ENV['ABI'], ENV['AVD'] or abort 'Failed to prepare Android (virtual) device for test run'
   end
   # For Emscripten CI build, skip make test and/or scaffolding test if Travis-CI VM took too long to get here, as otherwise overall build time may exceed 50 minutes time limit
-  test = $testing == 1 ? (ENV['CI'] && ENV['EMSCRIPTEN'] ? '&& (if (( $((($(date +%%s)-$CI_START_TIME)/60)) < 25 )); then %s; fi || true)' : '&& %s') % 'make test' : ''
+  test = $testing == 1 ? '&& make test' : ''
   system "cd ../Build && make -j$NUMJOBS #{test}" or abort 'Failed to build or test Urho3D library'
-  if ENV['CI_START_TIME'] then
-    elapsed_time = (Time.now - Time.at(ENV['CI_START_TIME'].to_i)) / 60
-    puts "\nEmscripten checkpoint reached, elapsed time: #{elapsed_time}\n\n"
-  end
-  unless ENV['CI'] && ENV['EMSCRIPTEN'] && ENV['PACKAGE_UPLOAD'] && elapsed_time > 40  # Skip scaffolding test when packaging for Emscripten
+  unless ENV['CI'] && ENV['EMSCRIPTEN'] && ENV['PACKAGE_UPLOAD']  # For Emscripten, skip scaffolding test when packaging
     # Create a new project on the fly that uses newly built Urho3D library in the build tree
     scaffolding "../Build/generated/UsingBuildTree"
     system "cd ../Build/generated/UsingBuildTree && echo '\nExternal project referencing Urho3D library in its build tree' && ./cmake_generic.sh . #{$build_options} -DURHO3D_HOME=../.. -DURHO3D_LUA#{jit}=1 -DURHO3D_TESTING=#{$testing} -DCMAKE_BUILD_TYPE=#{$configuration} && make -j$NUMJOBS #{test}" or abort 'Failed to configure/build/test temporary project using Urho3D as external library'
@@ -480,6 +527,20 @@ def makefile_ci
       puts 'Skipped test running Urho3D Samples APK as emulator failed to start in time'
     end
   end
+end
+
+def get_root_commit_and_recipients
+  # Root commit is a commit submitted by human
+  root_commit = `git show -s --format='%H' #{ENV['TRAVIS_COMMIT']}`.rstrip
+  recipients = `git show -s --format='%ae %ce' #{root_commit}`.chomp.split.uniq
+  if recipients.include? 'urho3d.travis.ci@gmail.com'
+    matched = /Commit:.*commit\/(.*?)\n/.match(ENV['COMMIT_MESSAGE'])
+    if (matched)
+      root_commit = matched[1]
+      recipients = `git show -s --format='%ae %ce' #{root_commit}`.chomp.split.uniq
+    end
+  end
+  return root_commit, recipients
 end
 
 def android_find_device api = nil, abi = nil

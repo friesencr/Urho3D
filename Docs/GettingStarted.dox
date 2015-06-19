@@ -16,11 +16,11 @@ Although all required third-party libraries are included as source code, there a
 
 - For Raspberry Pi, the following development packages need to be installed. On Raspbian: libasound2-dev, libudev-dev. On Pidora: alsa-lib-devel, systemd-devel.
 
-- For Mac OS X, the Xcode developer tools package should include everything necessary.
+- For Mac OS X, the Xcode developer tools package should include everything necessary. Make sure that the Xcode command line tools are also installed.
 
 - For Android, the Android SDK and Android NDK (minimum API level 12) need to be installed.
 
-- For Emscripten, the Emscripten SDK need to be installed.
+- For Emscripten, the Emscripten SDK need to be installed (on Windows also MinGW toolchain is required.)
 
 To run Urho3D, the minimum system requirements are:
 
@@ -38,7 +38,7 @@ To run Urho3D, the minimum system requirements are:
 
 SSE requirement can be eliminated by disabling the use of SSE instruction set, see URHO3D_SSE build option below.
 
-CMake is required to configure and generate the Urho3D project build tree. The minimum required version is 2.8.6. However, it is recommended to use the latest CMake version avaiable out there, especially when targeting Mac OS X and iOS platforms using the latest Xcode version available. This is because Apple is known to change the internal working of Xcode with little regards to other third party build tools, such as CMake.
+CMake (http://www.cmake.org) is required to configure and generate the Urho3D project build tree. The minimum required version is 2.8.6. However, it is recommended to use the latest CMake version avaiable out there, especially when targeting Mac OS X and iOS platforms using the latest Xcode version available. This is because Apple is known to change the internal working of Xcode with little regards to other third party build tools, such as CMake.
 
 \section Build_Scripts Build scripts
 
@@ -77,6 +77,7 @@ A number of build options can be defined when invoking the build scripts or when
 |URHO3D_LUAJIT        |0|Enable Lua scripting support using LuaJIT (check LuaJIT's CMakeLists.txt for more options)|
 |URHO3D_LUAJIT_AMALG  |0|Enable LuaJIT amalgamated build (LuaJIT only)|
 |URHO3D_SAFE_LUA      |0|Enable Lua C++ wrapper safety checks (Lua/LuaJIT only)|
+|URHO3D_LUA_RAW_SCRIPT_LOADER  |0|Prefer loading raw script files from the file system before falling back on Urho3D resource cache. Useful for debugging (e.g. breakpoints), but less performant (Lua/LuaJIT only)|
 |URHO3D_NETWORK       |1|Enable Networking support|
 |URHO3D_PHYSICS       |1|Enable Physics support|
 |URHO3D_NAVIGATION    |1|Enable Navigation support|
@@ -127,7 +128,7 @@ Note that the specified build option values are cached by CMake after the initia
 
 \section Building_Native Native build process
 
-Urho3D uses CMake (http://www.cmake.org) to build. The process has two steps:
+A native build of Urho3D has two steps:
 
 -# Run CMake in the root directory (which is also CMake's source tree) with your preferred generator and toolchain specified to generate the build tree. You can use cmake-gui or the provided batch files or shell scripts on the respective host system. All the batch files and shell scripts expect the build tree location to be passed as the first argument, or to execute them in the build tree itself when reconfiguring the existing build tree.\n
     - Windows: cmake_vs20xx.bat, cmake_mingw.bat, cmake_codeblock.bat, cmake_ninja.bat, or cmake_generic.bat\n
@@ -139,8 +140,9 @@ Urho3D uses CMake (http://www.cmake.org) to build. The process has two steps:
     - Xcode: open Urho3D.xcodeproj\n
     - CodeBlocks: open Urho3D.cbp\n
     - Eclipse: import project using File|Import "Existing Projects into Workspace"\n
+    - Alternatively, on make-based toolchains like GCC / MinGW, execute make in the build tree
 
-Note that Eclipse requires CDT plugin to build C/C++ project. When using generator backed by Unix Makefiles, you can also execute make command directly in the build tree to build the project.
+Note that Eclipse requires CDT plugin to build a C/C++ project.
 
 On Windows platform Urho3D can use either Direct3D 9 (default), Direct3D 11 or OpenGL rendering. Other platforms always use OpenGL. Use the CMake options "-DURHO3D_D3D11=1" or "-DURHO3D_OPENGL=1" to choose the non-default APIs.
 
@@ -241,6 +243,10 @@ ulimit -Sn 512
 
 After the commands finish successfully, the HTMLs and its correspondng data files should have been generated in the build tree's "bin" subdirectory, from where it can be launched in a browser.
 
+On Windows building with Emscripten requires a MinGW toolchain. The one that can be installed through emsdk may not work correctly, but for example http://sourceforge.net/projects/mingw-w64/ with the default install settings has been known to work.
+
+If CMake complains that emcc is not able to compile a test program, try reactivating your current Emscripten cross-compiler tools with 'emsdk activate <your-tools-version>', clear all generated *.cmake files as well as the CMake cache, and retry running CMake.
+
 \section Building_64bit Native 64bit build
 
 When using MSVC compiler, Urho3D common CMake module configures the build tree to target a 32-bit platform by default. When using other non-MSVC compilers (like GCC or Clang), the module sets the default to 32-bit or 64-bit based on the chosen toolchain in the build tree. You can, however, use the "URHO3D_64BIT" build option to override the default, i.e. by setting the option to '0' (for 32-bit) and '1' (for 64-bit) explicitly.
@@ -297,6 +303,22 @@ Ensure the ccache symlinks directory is being added as the first entry in the 'P
 
 Note that these environment variables are used by ccache itself and not by our CMake build rules, so they must remain set in the host system not only while generating the initial project file using CMake but also while building the project later.
 
+Xcode IDE and its CLI version, xcodebuild, do not work with ccache out of the box. They probably don't need it because internally they already cache the derived build data. However, if you are performing a lot of switching between different checked out versions of the project source tree or performing a lot of clean build similar to continuous integration build then probably it is more beneficial to hack Xcode/xcodebuild to use ccache. As it is a hack, do the following at your own risk.
+
+On Xcode 5:
+\verbatim
+cd $(dirname $(xcodebuild -find-executable clang))
+for compiler in clang clang++; do mv $compiler{,.orig} && ln -sf $(which ccache) $compiler; done
+\endverbatim
+
+On Xcode 6:
+\verbatim
+cd $(dirname $(xcodebuild -find-executable clang))
+cp -p $(which ccache) .
+for compiler in clang clang++; do mv $compiler{,.orig} && sudo mv /usr/bin/$compiler{,.orig} && sudo ln -sf $(pwd)/$compiler.orig /usr/bin/$compiler && ln -sf ccache $compiler; done
+\endverbatim
+
+Xcode 6 has done something funky internally. It won't build unless the symlink resolves to an executable within its own rooted-'/usr/bin' in Xcode.app package. The 'ccache' executable is physically copied to this location for this reason. But as the result, you have to manually keep this copy up to date when upgrading 'ccache'.
 
 \page Running Running Urho3D player application
 
