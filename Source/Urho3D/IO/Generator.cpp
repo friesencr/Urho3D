@@ -68,8 +68,7 @@ unsigned Generator::Read(void* dest, unsigned size)
     if (!generatorFunction_)
         return 0;
 
-    MemoryBuffer buffer(dest, size);
-    unsigned bytesRead = generatorFunction_(context_, buffer, size, position_, parameters_);
+    unsigned bytesRead = generatorFunction_(context_, dest, size, position_, parameters_);
     position_ += bytesRead;
     return bytesRead;
 }

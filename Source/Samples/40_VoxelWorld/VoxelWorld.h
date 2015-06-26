@@ -70,4 +70,5 @@ private:
     SharedPtr<Node> voxelNode_;
     int counter_;
 	bool drawDebug_;
+    SharedPtr<Text> cameraPositionText_;
 };

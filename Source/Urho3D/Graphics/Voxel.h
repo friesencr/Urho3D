@@ -5,6 +5,7 @@
 #include <STB/stb_voxel_render.h>
 #include "../Math/Color.h"
 #include "Texture2DArray.h"
+#include "../Container/ArrayPtr.h"
 
 namespace Urho3D {
 
@@ -55,6 +56,14 @@ enum VoxelHeight
 	VOXEL_HEIGHT_ONE_AND_HALF,
 };
 
+static const unsigned VOXEL_BLOCK_BLOCKTYPE = 0x00000001;
+static const unsigned VOXEL_BLOCK_COLOR     = 0x00000002;
+static const unsigned VOXEL_BLOCK_GEOMETRY  = 0x00000004;
+static const unsigned VOXEL_BLOCK_VHEIGHT   = 0x00000008;
+static const unsigned VOXEL_BLOCK_LIGHTING  = 0x00000010;
+static const unsigned VOXEL_BLOCK_ROTATE    = 0x00000020;
+static const unsigned VOXEL_BLOCK_TEX2      = 0x00000040;
+
 unsigned char VoxelEncodeColor(Color c, bool tex1Enabled, bool tex2Enabled);
 
 unsigned char VoxelEncodeVHeight(VoxelHeight southWest, VoxelHeight southEast, VoxelHeight northWest, VoxelHeight northEast);
@@ -84,39 +93,75 @@ public:
 	~VoxelBlocktypeMap() { }
 };
 
-class URHO3D_API VoxelSetWriter : public Object
+class URHO3D_API VoxelWriter : public Object
 {
-	OBJECT(VoxelSetWriter);
-	SharedPtr<VoxelSet> voxelSet_;
-	int minX_, minY_, minZ_, maxX_, maxY_, maxZ_;
+    OBJECT(VoxelWriter);
 
-	VoxelSetWriter(Context* context) : Object(context)
+    unsigned size;
+	unsigned xStride;
+	unsigned zStride;
+    unsigned char* buffer;
+
+public:
+    VoxelWriter(Context* context) : Object(context),
+        size(0),
+        xStride(0),
+        zStride(0)
+    {
+
+    }
+    
+	inline unsigned GetIndex(int x, int y, int z) { return (y + 1) + ((z + 1) * zStride) + ((x + 1) * xStride); }
+
+	void SetSize(unsigned width, unsigned height, unsigned depth)
 	{
-
+		zStride = height + 2;
+		xStride = (height + 2) * (depth + 2);
+        size = (width + 2)*(height + 2)*(depth + 2);
 	}
 
-	Voxel* GetVoxel(unsigned x, unsigned y, unsigned z)
-	{
+    void InitializeBuffer(unsigned char* data)
+    {
+        buffer = data;
+    }
 
+    void Clear(unsigned char value)
+    {
+		memset(buffer, value, sizeof(char) * size);
+    }
+
+	inline void SetColor(int x, int y, int z, unsigned char val)
+	{
+		buffer[GetIndex(x, y, z)] = val;
 	}
 
-	void SetVoxelSet(VoxelSet* voxelSet)
+	inline void SetBlocktype(int x, int y, int z, unsigned char val)
 	{
-		voxelSet_ = voxelSet;
+		buffer[GetIndex(x, y, z)] = val;
 	}
 
-	void SetRange(int minX, int minY, int minZ, int maxX, int maxY, int maxZ)
+	inline void SetVheight(int x, int y, int z, VoxelHeight sw, VoxelHeight se, VoxelHeight nw, VoxelHeight ne)
 	{
-		minX_ = minX;
-		minY_ = minY;
-		minZ_ = minZ;
-		maxX_ = maxX;
-		maxY_ = maxY;
-		maxZ_ = maxZ;
+		buffer[GetIndex(x, y, z)] = VoxelEncodeVHeight(sw, se, nw, ne);
 	}
+
+	inline void SetLighting(int x, int y, int z, unsigned char val)
+	{
+		buffer[GetIndex(x, y, z)] = val;
+	}
+
+	inline void SetTex2(int x, int y, int z, unsigned char val)
+	{
+		buffer[GetIndex(x, y, z)] = val;
+	}
+
+    inline void SetGeometry(int x, int y, int z, VoxelGeometryType geometrytype)
+    {
+        buffer[GetIndex(x, y, z)] = VoxelEncodeGeometry(geometrytype);
+    }
 };
 
-class URHO3D_API VoxelMap : public Object {
+class URHO3D_API VoxelMap : public Resource {
 	OBJECT(VoxelMap);
 
 public:
@@ -128,64 +173,53 @@ public:
 	PODVector<unsigned char> lighting;
 	PODVector<unsigned char> rotate;
 	PODVector<unsigned char> tex2;
+    unsigned dataMask_;
 	unsigned height_;
 	unsigned width_;
 	unsigned depth_;
 	unsigned size_;
 	unsigned xStride;
 	unsigned zStride;
+    SharedPtr<Object> source_;
 
-	VoxelMap(Context* context) : Object(context) 
-	{
+    /// Construct empty.
+    VoxelMap(Context* context);
 
-	}
+    /// Destruct.
+    virtual ~VoxelMap();
 
-	~VoxelMap() { }
-	
-	inline unsigned GetIndex(int x, int y, int z)
-	{
-		return (y + 1) + ((z + 1) * zStride) + ((x + 1) * xStride);
-	}
+    /// Register object factory.
+    static void RegisterObject(Context* context);
 
-	void SetSize(unsigned width, unsigned height, unsigned depth)
-	{
-		height_ = height;
-		width_ = width;
-		depth_ = depth;
-		zStride = (1 >> height) + 2;
-		xStride = ((1 >> height) + 2) * ((1 >> depth) + 2);
-		size_ = ((1 >> width_) + 2)*((1 >> height_) + 2)*((1 >> depth_) + 2);
-	}
+    /// Load resource from stream. May be called from a worker thread. Return true if successful.
+    virtual bool BeginLoad(Deserializer& source);
 
-	void InitializeBlocktype()
-	{
-		blocktype.Resize(size_);
-		memset(&blocktype.Front(), 0, sizeof(char) * size_);
-	}
+    /// Saves voxel map information.
+    virtual bool Save(Serializer& dest);
 
-	void InitializeVHeight()
-	{
-		vHeight.Resize(size_);
-		memset(&vHeight.Front(), 0, sizeof(char) * size_);
-	}
+    /// Unloads block information from memory.
+    virtual void Unload();
 
-	void InitializeLighting()
-	{
-		lighting.Resize(size_);
-		memset(&lighting.Front(), 0, sizeof(char) * size_);
-	}
+    /// Reloads the voxel map if source is available.
+    virtual bool Reload();
 
-	void InitializeColor()
-	{
-		color.Resize(size_);
-		memset(&color.Front(), 0, sizeof(char) * size_);
-	}
+    /// See if voxel map is loaded into memory.
+    virtual bool IsLoaded();
 
-	void InitializeTex2()
-	{
-		tex2.Resize(size_);
-		memset(&tex2.Front(), 0, sizeof(char) * size_);
-	}
+    /// Sets the deserializer to load the data when chunk is built.
+    virtual void SetSource(Object* deserializer);
+
+    /// Sets the block type data mask.
+    virtual void SetDataMask(unsigned dataMask) { dataMask_ = dataMask; }
+
+	inline unsigned GetIndex(int x, int y, int z) { return (y + 1) + ((z + 1) * zStride) + ((x + 1) * xStride); }
+    void SetSize(unsigned width, unsigned height, unsigned depth);
+    void InitializeBlocktype(unsigned char initialValue = 0);
+	void InitializeVHeight(unsigned char initialValue = 0);
+	void InitializeLighting(unsigned char initialValue = 0);
+	void InitializeColor(unsigned char initialValue = 0);
+	void InitializeTex2(unsigned char initialValue = 0);
+	void InitializeGeometry(unsigned char initialValue = 0);
 
 	inline void SetColor(int x, int y, int z, unsigned char val)
 	{
@@ -211,6 +245,11 @@ public:
 	{
 		tex2[GetIndex(x, y, z)] = val;
 	}
+
+    inline void SetGeometry(int x, int y, int z, VoxelGeometryType geometrytype)
+    {
+        geometry[GetIndex(x, y, z)] = VoxelEncodeGeometry(geometrytype);
+    }
 
 };
 

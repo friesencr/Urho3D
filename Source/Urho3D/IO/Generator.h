@@ -31,7 +31,7 @@
 namespace Urho3D
 {
 
-typedef unsigned (*GeneratorFunction)(Context* context, MemoryBuffer& buffer, unsigned size, unsigned position, VariantMap& parameters);
+typedef unsigned (*GeneratorFunction)(Context* context, void* dest, unsigned size, unsigned position, VariantMap& parameters);
 
 /// %File opened either through the filesystem or from within a package file.
 class URHO3D_API Generator : public Deserializer, public Resource
@@ -54,6 +54,10 @@ public:
     virtual unsigned Seek(unsigned position);
     /// Save resource. Return true if successful.
     virtual bool Save(Serializer& dest) const;
+    /// Gets the function name.
+    virtual String GetName() { return Resource::GetName(); }
+    /// Gets the parameters.
+    virtual VariantMap GetParameters() { return parameters_; }
     /// Change the function name.
     virtual void SetName(const String& name);
     /// Sets the generator function parameters.

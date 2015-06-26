@@ -15,6 +15,16 @@
  
 namespace Urho3D {
 
+enum VoxelBuildStatus
+{
+    VOXEL_BUILD_FRESH,
+    VOXEL_BUILD_NEEDS_BUILD,
+    VOXEL_BUILD_QUEUED,
+    VOXEL_BUILD_BUILDING,
+    VOXEL_BUILD_COMPLETE,
+    VOXEL_BUILD_UNLOADED
+};
+
 static const unsigned char VOXEL_WORKER_SIZE_X = 32;
 static const unsigned char VOXEL_WORKER_SIZE_Y = 128;
 static const unsigned char VOXEL_WORKER_SIZE_Z = 32;

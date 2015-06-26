@@ -32,6 +32,22 @@ public:
     virtual void ApplyAttributes();
     /// Handle enabled/disabled state change.
     virtual void OnSetEnabled();
+    /// Sets the max number of chunks held in memory
+    virtual void SetMaxInMemoryChunks(unsigned maxInMemoryChunks);
+    /// Sets chunk size
+    virtual void SetChunkSpacing(Vector3 spacing);
+    /// Sets number of chunks in the set
+    virtual void SetNumberOfChunks(unsigned x, unsigned y, unsigned z);
+    /// Sets voxel map for chunk
+    virtual bool SetVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap);
+    /// Gets Voxel Chunk at world position.
+    virtual VoxelChunk* GetVoxelChunkAtPosition(Vector3 position) const;
+    /// Gets Voxel Chunk by index.
+    virtual VoxelChunk* GetVoxelChunk(unsigned x, unsigned y, unsigned z);
+    virtual VoxelMap* GetVoxelMap(unsigned x, unsigned y, unsigned z);
+    inline unsigned GetIndex(unsigned x, unsigned y, unsigned z);
+    bool GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, int &z);
+
 
     ///// Set material.
     //void SetMaterial(Material* material);
@@ -57,29 +73,36 @@ public:
     //void SetOccluder(bool enable);
     ///// Set occludee flag for patches.
     //void SetOccludee(bool enable);
-
     void HandleSceneUpdate(StringHash eventType, VariantMap& eventData);
-
-    // Builds a unit of work
-    void SetDimensions(unsigned width, unsigned height, unsigned depth);
+    void Build();
+    void BuildAsync();
 
 private:
+    void BuildInternal(bool async);
+    void ApplyInMemoryLimits();
+    void ApplyInMemoryLimitsForCamera(Camera* camera);
+    void CreateChunks(int x, int y,  int z, unsigned size, Vector3 cameraPosition, Frustum frustrum, float viewDistance);
+    void AllocateAndSortVisibleChunks();
+    VoxelChunk* FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z, VoxelMap* map);
     // Material.
     SharedPtr<Material> material_;
     // Voxel chunks.
-    Vector<VoxelChunk*> chunks_;
-    // Height.
-    unsigned int height_;
-    // Width.
-    unsigned int width_;
-    // Depth.
-    unsigned int depth_;
-
+    PODVector<VoxelChunk*> loadedChunks_;
+    //Vector<WeakPtr<VoxelChunk> > builtChunks_;
+    //Vector<WeakPtr<VoxelChunk> > unbuiltChunks_;
+    Vector<WeakPtr<VoxelChunk> > chunks_;
+    Vector<SharedPtr<VoxelMap> > voxelMaps_;
+    Vector3 lastBuildPosition;
+    Quaternion lastBuildRotation;
+    BoundingBox setBox;
     unsigned numChunksX;
     unsigned numChunksY;
     unsigned numChunksZ;
+    unsigned chunkXStride;
+    unsigned chunkZStride;
     unsigned numChunks;
+    unsigned maxInMemoryChunks_;
+    Vector3 chunkSpacing_;
 };
-
 
 }

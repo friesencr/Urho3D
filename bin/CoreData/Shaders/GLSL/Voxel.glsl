@@ -14,8 +14,6 @@ uniform vec3 cNormalTable[32];
 uniform vec4 cColorTable[64];
 uniform vec4 cTexScale[64];
 uniform vec3 cTexGen[64];
-uniform vec3 cVoxLightPos;
-uniform vec3 cVoxLightCol;
 
 flat varying uvec4  vFacedata;
 varying  vec3  vVoxelSpacePos;
@@ -38,23 +36,6 @@ varying vec4 vWorldPos;
     varying vec3 vVertexLight;
     varying vec4 vScreenPos;
 #endif
-
-vec3 ComputeLighting(vec3 pos, vec3 norm, vec3 albedo, vec3 ambient)
-{
-    vec3 lightDir = vec3(1.0, 500.0, 1.0) - pos;
-    float lambert = dot(lightDir, norm) / dot(lightDir, lightDir);
-    vec3 diffuse = clamp(cVoxLightCol * 150.0 * clamp(lambert, 0.0, 1.0), 0.0, 1.0);
-    //return vec3(1.0, 1.0, 1.0) * lambert;
-    //return lambert * vec3(1.0, 0.5, 0.3);
-    // return (dot(lightDir, norm) / 500.0) * cVoxLightCol;
-    // return cVoxLightCol * (dot(lightDir, norm) / dot(lightDir, lightDir));
-    //return diffuse;
-    // return cVoxLightCol * (1.0 / 5.0);
-    return (diffuse + ambient) * albedo;
-    // return ((dot(lightDir, norm) / dot(lightDir, lightDir)) * vec3(1.0, 1.0, 1.0);
-    // return (dot(lightDir, norm) / dot(lightDir, lightDir)) * cVoxLightCol;
-    //return normalize(lightDir);
-}
 
 void VS()
 {
@@ -224,15 +205,16 @@ void PS()
         #endif
     #else
         // Voxel ambient light
-        // vec3 voxAmbientColor = dot(normal, cAmbientTable[0].xyz) * cAmbientTable[1].xyz + cAmbientTable[2].xyz;
-        // voxAmbientColor = clamp(voxAmbientColor, 0.0, 1.0);
-        // voxAmbientColor *= (1 - vAmbOcc*2);
+        vec3 voxAmbientColor = dot(normal, cAmbientTable[0].xyz) * cAmbientTable[1].xyz + cAmbientTable[2].xyz;
+        voxAmbientColor = clamp(voxAmbientColor, 0.0, 1.0);
+        //voxAmbientColor *= (1 - vAmbOcc*2);
         //vec3 voxLitColor = diffColor.xyz * (1.0 - vAmbOcc*2);
 
         //vec3 voxLitColor = ComputeLighting(vWorldPos.xyz, vNormal, diffColor.xyz, voxAmbientColor);
 
         // Ambient & per-vertex lighting
-        vec3 finalColor = vVertexLight * vAmbOcc * diffColor.rgb;
+        // vec3 finalColor = vVertexLight * vAmbOcc * diffColor.rgb;
+        vec3 finalColor = vVertexLight * vAmbOcc * (diffColor.rgb + voxAmbientColor);
 
         //vec3 finalColor = vec3(1.0, 1.0, 1.0) * (1 - vAmbOcc);
 

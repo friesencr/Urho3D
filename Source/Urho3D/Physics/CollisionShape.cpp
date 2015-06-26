@@ -179,56 +179,58 @@ public:
 
             totalTriangles += meshIndex.m_numTriangles;
         }
+    }
 
 	TriangleMeshInterface(VoxelChunk* voxelChunk) : btTriangleIndexVertexArray()
 	{
-            if (voxelChunk->GetTotalQuads() == 0)
-                    return;
+        if (voxelChunk->GetTotalQuads() == 0)
+            return;
 
-            for (unsigned i = 0; i < voxelChunk->GetNumMeshes(); ++i)
+        unsigned totalTriangles = 0;
+
+        for (unsigned i = 0; i < voxelChunk->GetNumMeshes(); ++i)
+        {
+            Geometry* geometry = voxelChunk->GetGeometry(i);
+            if (!geometry)
             {
-                Geometry* geometry = voxelChunk->GetGeometry(i);
-                if (!geometry)
-                {
-                    LOGWARNING("Skipping null geometry for triangle mesh collision");
-                    continue;
-                }
-    
-                SharedArrayPtr<unsigned char> vertexData;
-                SharedArrayPtr<unsigned char> indexData;
-                unsigned vertexSize;
-                unsigned indexSize;
-                unsigned elementMask;
-    
-                geometry->GetRawDataShared(vertexData, vertexSize, indexData, indexSize, elementMask);
-                if (!vertexData || !indexData)
-                {
-                    LOGWARNING("Skipping geometry with no CPU-side geometry data for triangle mesh collision");
-                    continue;
-                }
-    
-                // Keep shared pointers to the vertex/index data so that if it's unloaded or changes size, we don't crash
-                dataArrays_.Push(vertexData);
-                dataArrays_.Push(indexData);
-    
-                unsigned indexStart = geometry->GetIndexStart();
-                unsigned indexCount = geometry->GetIndexCount();
-    
-                btIndexedMesh meshIndex;
-                meshIndex.m_numTriangles = voxelChunk->GetReducedNumQuads(i) * 2;
-                meshIndex.m_triangleIndexBase = &indexData[indexStart * indexSize];
-                meshIndex.m_triangleIndexStride = 3 * indexSize;
-                meshIndex.m_numVertices = 0;
-                meshIndex.m_vertexBase = vertexData;
-                meshIndex.m_vertexStride = vertexSize;
-                meshIndex.m_indexType = (indexSize == sizeof(unsigned short)) ? PHY_SHORT : PHY_INTEGER;
-                meshIndex.m_vertexType = PHY_FLOAT;
-                m_indexedMeshes.push_back(meshIndex);
-                totalTriangles += meshIndex.m_numTriangles;
+                LOGWARNING("Skipping null geometry for triangle mesh collision");
+                continue;
             }
-	}
+
+            SharedArrayPtr<unsigned char> vertexData;
+            SharedArrayPtr<unsigned char> indexData;
+            unsigned vertexSize;
+            unsigned indexSize;
+            unsigned elementMask;
+
+            geometry->GetRawDataShared(vertexData, vertexSize, indexData, indexSize, elementMask);
+            if (!vertexData || !indexData)
+            {
+                LOGWARNING("Skipping geometry with no CPU-side geometry data for triangle mesh collision");
+                continue;
+            }
+
+            // Keep shared pointers to the vertex/index data so that if it's unloaded or changes size, we don't crash
+            dataArrays_.Push(vertexData);
+            dataArrays_.Push(indexData);
+
+            unsigned indexStart = geometry->GetIndexStart();
+            unsigned indexCount = geometry->GetIndexCount();
+
+            btIndexedMesh meshIndex;
+            meshIndex.m_numTriangles = voxelChunk->GetReducedNumQuads(i) * 2;
+            meshIndex.m_triangleIndexBase = &indexData[indexStart * indexSize];
+            meshIndex.m_triangleIndexStride = 3 * indexSize;
+            meshIndex.m_numVertices = 0;
+            meshIndex.m_vertexBase = vertexData;
+            meshIndex.m_vertexStride = vertexSize;
+            meshIndex.m_indexType = (indexSize == sizeof(unsigned short)) ? PHY_SHORT : PHY_INTEGER;
+            meshIndex.m_vertexType = PHY_FLOAT;
+            m_indexedMeshes.push_back(meshIndex);
+            totalTriangles += meshIndex.m_numTriangles;
+        }
         useQuantize_ = totalTriangles <= QUANTIZE_MAX_TRIANGLES;
-    }
+	}
 
     /// OK to use quantization flag.
     bool useQuantize_;

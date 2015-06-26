@@ -46,6 +46,8 @@
 #include <Urho3D/Physics/PhysicsWorld.h>
 #include <Urho3D/Physics/CollisionShape.h>
 #include <Urho3D/Physics/RigidBody.h>
+#include "stb_perlin.h"
+#include <Urho3D/IO/Generator.h>
 
 #include "VoxelWorld.h"
 
@@ -57,6 +59,140 @@ static const int h = 64;
 static const int w = 64;
 static const int d = 64;
 
+// spoofing a VoxelMap load
+// uint height, uint width, uint depth, unit datamask
+
+static const unsigned chunkHeader[4] = { w, h, d, VOXEL_BLOCK_BLOCKTYPE };
+static const unsigned headerSize = sizeof(chunkHeader);
+static const unsigned dataSize = (h + 2) * (w + 2) * (d + 2);
+static const unsigned podsize = dataSize + 3;
+
+static void FillTerrain(Context* context, unsigned char* dataPtr, VariantMap& parameters, unsigned podIndex)
+{
+    //for (unsigned i = 0; i < size; ++i)
+    //    *dataPtr++ = Max(0, (Rand() % 1000) - 996);
+    VoxelWriter writer(context);
+    writer.SetSize(w,h,d);
+    writer.InitializeBuffer(dataPtr);
+    writer.Clear(0);
+
+    ResourceCache* cache = context->GetSubsystem<ResourceCache>();
+    Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
+    if (!heightMap)
+        return;
+
+    const int heightFactor = 8;
+    unsigned tileX = parameters["TileX"].GetUInt();
+    unsigned tileZ = parameters["TileZ"].GetUInt();
+    unsigned chunkX = parameters["TileX"].GetUInt() * w;
+    unsigned chunkZ = parameters["TileZ"].GetUInt() * d;
+    for (unsigned x = 0; x < w; ++x)
+    {
+        for (unsigned z = 0; z < d; ++z)
+        {
+            Color c = heightMap->GetPixel((chunkX + x) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight());
+            int y = (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+            int nw = (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+            int n = (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth(), (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+            int ne = (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+            int w = (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+            int e = (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+            int sw = (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+            int s = (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth(), (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+            int se = (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+            int height = y / heightFactor;
+
+            if (podIndex == 0) // blocktype
+            {
+                for (unsigned i = 0; i < height; ++i)
+                {
+                    writer.SetBlocktype(x, i, z, (int)(c.Average() * 8) % 4 + 1);
+                    //voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+                    //writer->SetLighting(x, i, z, 0);
+                    //voxelMap->SetGeometry(x, i, z, VOXEL_TYPE_SOLID);
+                }
+                writer.SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
+            }
+        }
+    
+
+                        // gather nearby values to get height
+                        //VoxelHeight heights[4];
+                        //float heightValues[4] = {
+                        //	(float)(y - sw) / 2.0,
+                        //	(float)(y - se) / 2.0,
+                        //	(float)(y - nw) / 2.0,
+                        //	(float)(y - ne) / 2.0,
+                        //};
+
+                        //for (unsigned j = 0; j < 4; ++j)
+                        //{
+                        //	float hv = heightValues[j];
+                        //	if (hv < -0.5)
+                        //		heights[j] = VOXEL_HEIGHT_0;
+                        //	else if (hv < 0.0)
+                        //		heights[j] = VOXEL_HEIGHT_HALF;
+                        //	else if (hv < 0.5)
+                        //		heights[j] = VOXEL_HEIGHT_1;
+                        //	else
+                        //		heights[j] = VOXEL_HEIGHT_1;
+                        //}
+
+                        //voxelMap->SetColor(x, height, z, (int)(c.Average() * 64));
+                        //voxelMap->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
+                        //voxelMap->SetTex2(x, height, z, Rand() % 4);
+                        //voxelMap->SetColor(x, height, z, Rand() % 64);
+                        //voxelMap->SetGeometry(x, height, z, counter++ % 2 == 0 ? VOXEL_TYPE_FLOOR_VHEIGHT_03 : VOXEL_TYPE_FLOOR_VHEIGHT_12);
+
+        //                {
+        //                    int lightHeight = y / heightFactor;
+        //                    int heights[9] = { y, nw, n, ne, w, e, sw, s, se };
+        //                    int light = 0;
+        //                    for (int litY = -1; litY <= 1; ++litY)
+        //                        for (int n = 0; n < 9; ++n)
+        //                        {
+        //                            int neighborHeight = (heights[n] / heightFactor) + litY;
+        //                            light += lightHeight + litY > neighborHeight;
+        //                        }
+
+        //                    voxelMap->SetLighting(x, height, z, light * 255 / 27);
+        //                }
+        //            }
+        //        }
+        //    }
+        //}
+    }
+}
+
+static unsigned RandomTerrain(Context* context, void* dest, unsigned size, unsigned position, VariantMap& parameters)
+{
+    if (position < 4 * sizeof(unsigned))
+    {
+        unsigned* dataPtr = (unsigned*)dest;
+        *dataPtr++ = chunkHeader[position/4];
+        return 4;
+    }
+    else if (position - headerSize % podsize < 3)
+    {
+        unsigned char* dataPtr = (unsigned char*)dest;
+        unsigned char vle[3];
+        vle[0] = dataSize | 0x80;
+        vle[1] = (dataSize >> 7) | 0x80;
+        vle[2] = dataSize >> 14;
+        *((unsigned char*)dataPtr) = vle[position - headerSize % podsize];
+        (unsigned char*)dataPtr += 1;
+        return 1;
+    }
+    else
+    {
+        unsigned podIndex = position - headerSize / podsize == 0;
+        unsigned char* dataPtr = (unsigned char*)dest;
+        FillTerrain(context, dataPtr, parameters, podIndex);
+        return dataSize;
+    }
+    return 0;
+}
+
 
 VoxelWorld::VoxelWorld(Context* context) :
     Sample(context)
@@ -66,9 +202,14 @@ VoxelWorld::VoxelWorld(Context* context) :
 
 void VoxelWorld::Start()
 {
+    Generator::RegisterGeneratorFunction("RandomTerrain", RandomTerrain);
+
     // Execute base class startup
     Sample::Start();
 
+    Graphics* graphics = GetSubsystem<Graphics>();
+    IntVector2 resolution = graphics->GetResolutions()[0];
+    //graphics->SetMode(resolution.x_, resolution.y_, true, false, false, false, false, 4);
     // Create the scene content
     CreateScene();
 
@@ -87,7 +228,7 @@ void VoxelWorld::CreateScene()
     ResourceCache* cache = GetSubsystem<ResourceCache>();
 	cache->SetAutoReloadResources(true);
 	Renderer* renderer = GetSubsystem<Renderer>();
-	renderer->SetMaxOccluderTriangles(10000);
+	//renderer->SetMaxOccluderTriangles(10000);
 
     scene_ = new Scene(context_);
 
@@ -101,8 +242,8 @@ void VoxelWorld::CreateScene()
 
     Node* zoneNode = scene_->CreateChild("Zone");
     Zone* zone = zoneNode->CreateComponent<Zone>();
-    zone->SetBoundingBox(BoundingBox(-1000, 1000));
-    zone->SetAmbientColor(Color(0.5, 0.5, 0.5));
+    zone->SetBoundingBox(BoundingBox(-10000, 10000));
+    zone->SetAmbientColor(Color(1.0, 1.0, 1.0));
 	//zone->SetAmbientGradient(true);
 	zone->SetFogColor(Color(0.9f, 1.0f, 1.0f));
 	zone->SetFogStart(500.0f);
@@ -122,11 +263,11 @@ void VoxelWorld::CreateScene()
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
     cameraNode_ = scene_->CreateChild("Camera");
     Camera* camera = cameraNode_->CreateComponent<Camera>();
-    camera->SetFarClip(1000.0);
+    camera->SetFarClip(750.0);
 
     // Set an initial position for the camera scene node above the plane
-    cameraNode_->SetPosition(Vector3(0.0f, 5.0f, 0.0f));
-
+    //cameraNode_->SetPosition(Vector3(1024.0, 128.0, 1024.0));
+    cameraNode_->SetPosition(Vector3(0.0, 50.0, 0.0));
 
      //Create a directional light to the world so that we can see something. The light scene node's orientation controls the
      //light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
@@ -151,15 +292,15 @@ void VoxelWorld::CreateScene()
     //VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     voxelBlocktypeMap_ = new VoxelBlocktypeMap(context_);
 	unsigned char geoSolid = VoxelEncodeGeometry(VOXEL_TYPE_SOLID);
-	unsigned char geoSlant = VoxelEncodeGeometry(VOXEL_TYPE_SLAB_LOWER);
+	//unsigned char geoSlant = VoxelEncodeGeometry(VOXEL_TYPE_SLAB_LOWER);
 
     //unsigned char heightNormal = VoxelDefinition::EncodeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
 	voxelBlocktypeMap_->blockTex1Face.Resize(5);
-    //unsigned char heightSlope = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-    //unsigned char heightRoof = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0);
-    //voxelBlocktypeMap_->blockVHeight.Push(0);
-    //voxelBlocktypeMap_->blockVHeight.Push(heightNormal);
-    //voxelBlocktypeMap_->blockVHeight.Push(heightNormal);
+ //   //unsigned char heightSlope = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+ //   //unsigned char heightRoof = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0);
+ //   //voxelBlocktypeMap_->blockVHeight.Push(0);
+ //   //voxelBlocktypeMap_->blockVHeight.Push(heightNormal);
+ //   //voxelBlocktypeMap_->blockVHeight.Push(heightNormal);
 
 	// empty
 	voxelBlocktypeMap_->blockTex1Face[0][1] = 0;
@@ -237,7 +378,8 @@ void VoxelWorld::CreateInstructions()
 
     // Construct new Text object, set string to display and font to use
     Text* instructionText = ui->GetRoot()->CreateChild<Text>();
-    instructionText->SetText("Use WASD keys and mouse/touch to move");
+    cameraPositionText_ = instructionText;
+    instructionText->SetText(cameraNode_->GetPosition().ToString());
     instructionText->SetFont(cache->GetResource<Font>("Fonts/Anonymous Pro.ttf"), 15);
 
     // Position the text relative to the screen center
@@ -267,7 +409,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 25.0f;
+    const float MOVE_SPEED = 64.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
@@ -300,6 +442,8 @@ void VoxelWorld::MoveCamera(float timeStep)
         cameraNode_->Translate(Vector3::LEFT * MOVE_SPEED * timeStep);
     if (input->GetKeyDown('D'))
         cameraNode_->Translate(Vector3::RIGHT * MOVE_SPEED * timeStep);
+
+    cameraPositionText_->SetText(cameraNode_->GetPosition().ToString());
 
 	// Toggle physics debug geometry with space
 	if (input->GetKeyPress(KEY_SPACE))
@@ -421,136 +565,128 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 		return;
 
     Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
-	int numX = heightMap->GetWidth() / 64;
-	int numZ = heightMap->GetHeight() / 64;
 	const int heightFactor = 2;
-	numX = 16;
-	numZ = 16;
-    for (unsigned a = 0; a < numX; ++a)
+	unsigned numX = 256;
+	unsigned numZ = 256;
+    VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
+    voxelSet->SetNumberOfChunks(numX, 1, numZ);
+    for (unsigned x = 0; x < numX; ++x)
     {
-		unsigned chunkX = a * 64;
-        for (unsigned b = 0; b < numZ; ++b)
+        for (unsigned z = 0; z < numZ; ++z)
         {
-			unsigned chunkZ = b * 64;
-			//Node* node = voxelNode_->GetChild();
-			String chunkName = "VoxelChunk_" + String(a) + "_" + String(b);
-			Node* node = voxelNode_->CreateChild(chunkName);
-			node->SetPosition(Vector3(a * 64, 0, b * 64));
-			VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
-			//chunk->SetOccludee(true);
-			//chunk->SetOccluder(true);
-			//node->CreateComponent<RigidBody>();
-			//CollisionShape* shape = node->CreateComponent<CollisionShape>();
-			//shape->SetVoxelTriangleMesh(chunk);
-
-			SharedPtr<VoxelMap> voxelMap(new VoxelMap(context_));
-			chunk->SetVoxelMap(voxelMap);
-			voxelMap->SetSize(64, 128, 64);
-			voxelMap->InitializeBlocktype();
-			//voxelMap->InitializeVHeight();
-			voxelMap->InitializeLighting();
-			voxelMap->InitializeColor();
-			//voxelMap->InitializeTex2();
-			voxelMap->blocktypeMap = voxelBlocktypeMap_;
-			for (unsigned x = 0; x < w; ++x)
-			{
-				for (unsigned z = 0; z < d; ++z)
-				{
-					Color c = heightMap->GetPixel(a * 64 + x, b * 64 + z);
-					int y =  (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-					int nw = (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z - 1) & 0x0000FF00) >> 8));
-					int n =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z - 1) & 0x0000FF00) >> 8));
-					int ne = (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z - 1) & 0x0000FF00) >> 8));
-					int w =  (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z    ) & 0x0000FF00) >> 8));
-					int e =  (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z    ) & 0x0000FF00) >> 8));
-					int sw = (255 - ((heightMap->GetPixelInt(chunkX + x - 1, chunkZ + z + 1) & 0x0000FF00) >> 8));
-					int s =  (255 - ((heightMap->GetPixelInt(chunkX + x    , chunkZ + z + 1) & 0x0000FF00) >> 8));
-					int se = (255 - ((heightMap->GetPixelInt(chunkX + x + 1, chunkZ + z + 1) & 0x0000FF00) >> 8));
-					int height = y / heightFactor;
-
-					for (unsigned i = 0; i < height; ++i)
-					{
-						voxelMap->SetBlocktype(x, i, z, (int)(c.Average() * 8) % 4 + 1);
-						//voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-						voxelMap->SetLighting(x, i, z, 0);
-					}
-
-					// gather nearby values to get height
-					VoxelHeight heights[4];
-					float heightValues[4] = {
-						(float)(y - sw) / 2.0,
-						(float)(y - se) / 2.0,
-						(float)(y - nw) / 2.0,
-						(float)(y - ne) / 2.0,
-					};
-					for (unsigned j = 0; j < 4; ++j)
-					{
-						float hv = heightValues[j];
-						if (hv < -0.5)
-							heights[j] = VOXEL_HEIGHT_0;
-						else if (hv < 0.0)
-							heights[j] = VOXEL_HEIGHT_HALF;
-						else if (hv < 0.5)
-							heights[j] = VOXEL_HEIGHT_1;
-						else
-							heights[j] = VOXEL_HEIGHT_1;
-					}
-
-					voxelMap->SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
-					//voxelMap->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
-					//voxelMap->SetTex2(x, height, z, Rand() % 4);
-					voxelMap->SetColor(x, height, z, Rand() % 64);
-					{
-						int lightHeight = y / heightFactor;
-						int heights[9] = { y, nw, n, ne, w, e, sw, s, se };
-						int light = 0;
-						for (int litY = -1; litY <= 1; ++litY)
-							for (int n = 0; n < 9; ++n)
-							{
-								int neighborHeight = (heights[n] / heightFactor) + litY;
-								light += lightHeight + litY > neighborHeight;
-							}
-
-						voxelMap->SetLighting(x, height, z, light * 255 / 27);
-						//voxelMap->SetLighting(x, height, z, 255);
-					}
-						
-
-					//voxelMap->SetVheight(x, height, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-				}
-			}
+            VoxelMap* map = new VoxelMap(context_);
+            map->blocktypeMap = voxelBlocktypeMap_;
+            map->SetSize(w, h, d);
+            SharedPtr<Generator> terrainGenerator(new Generator(context_));
+            terrainGenerator->SetName("RandomTerrain");
+            VariantMap params;
+            params["TileX"] = x;
+            params["TileZ"] = z;
+            terrainGenerator->SetParameters(params);
+            map->SetSource(terrainGenerator);
+            voxelSet->SetVoxelMap(x, 0, z, map);
         }
     }
+    voxelSet->BuildAsync();
 
-	// loop through again and set neighbors
-	for (int a = 0; a < numX; ++a)
-	{
-		for (int b = 0; b < numZ; ++b)
-		{
-			Node* node = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b));
-			Node* north = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b+1));
-			Node* south = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b-1));
-			Node* east  = voxelNode_->GetChild("VoxelChunk_" + String(a+1) + "_" + String(b));
-			Node* west  = voxelNode_->GetChild("VoxelChunk_" + String(a-1) + "_" + String(b));
-			VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
-			VoxelChunk* northChunk = north ? north->GetComponent<VoxelChunk>() : 0;
-			VoxelChunk* southChunk = south ? south->GetComponent<VoxelChunk>() : 0;
-			VoxelChunk* eastChunk = east ? east->GetComponent<VoxelChunk>() : 0;
-			VoxelChunk* westChunk = west ? west->GetComponent<VoxelChunk>() : 0;
-			chunk->SetNeighbors(northChunk, southChunk, eastChunk, westChunk);
-			chunk->Build();
-		}
-	}
+  //  for (unsigned a = 0; a < numX; ++a)
+  //  {
+		//unsigned chunkX = a * 64;
+  //      for (unsigned b = 0; b < numZ; ++b)
+  //      {
+  //          
+		//	unsigned chunkZ = b * 64;
+  //          VoxelChunk* chunk = voxelSet->GetVoxelChunk(a, 0, b);
+		//	//chunk->SetOccludee(true);
+		//	//chunk->SetOccluder(true);
+		//	//node->CreateComponent<RigidBody>();
+		//	//CollisionShape* shape = node->CreateComponent<CollisionShape>();
+		//	//shape->SetVoxelTriangleMesh(chunk);
 
-	for (int a = 0; a < numX; ++a)
-	{
-		for (int b = 0; b < numZ; ++b)
-		{
-			Node* node = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b));
-			VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
-			//chunk->SetVoxelMap(0);
-		}
-	}
+		//	SharedPtr<VoxelMap> voxelMap(new VoxelMap(context_));
+		//	chunk->SetVoxelMap(voxelMap);
+		//	voxelMap->SetSize(64, 128, 64);
+		//	voxelMap->InitializeBlocktype();
+		//	//voxelMap->InitializeVHeight(VoxelEncodeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1));
+		//	voxelMap->InitializeLighting(255);
+		//	//voxelMap->InitializeColor();
+		//	//voxelMap->InitializeTex2();
+  //          //voxelMap->InitializeGeometry(2);
+		//	voxelMap->blocktypeMap = voxelBlocktypeMap_;
+  //          unsigned counter = 0;
+		//	for (unsigned x = 0; x < w; ++x)
+		//	{
+		//		for (unsigned z = 0; z < d; ++z)
+		//		{
+		//			//Color c = heightMap->GetPixel(a * 64 + x, b * 64 + z);
+
+  //                  Color c = heightMap->GetPixel((chunkX + x) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight());
+		//			int y =  (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+		//			int nw = (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+		//			int n =  (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth()    , (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+		//			int ne = (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+		//			int w =  (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z    ) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+		//			int e =  (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z    ) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+		//			int sw = (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+		//			int s =  (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth()    , (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+		//			int se = (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
+		//			int height = y / heightFactor;
+
+		//			for (unsigned i = 0; i < height; ++i)
+		//			{
+		//				voxelMap->SetBlocktype(x, i, z, (int)(c.Average() * 8) % 4 + 1);
+		//				//voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
+		//				voxelMap->SetLighting(x, i, z, 0);
+  //                      //voxelMap->SetGeometry(x, i, z, VOXEL_TYPE_SOLID);
+		//			}
+
+		//			// gather nearby values to get height
+		//			//VoxelHeight heights[4];
+		//			//float heightValues[4] = {
+		//			//	(float)(y - sw) / 2.0,
+		//			//	(float)(y - se) / 2.0,
+		//			//	(float)(y - nw) / 2.0,
+		//			//	(float)(y - ne) / 2.0,
+		//			//};
+
+		//			//for (unsigned j = 0; j < 4; ++j)
+		//			//{
+		//			//	float hv = heightValues[j];
+		//			//	if (hv < -0.5)
+		//			//		heights[j] = VOXEL_HEIGHT_0;
+		//			//	else if (hv < 0.0)
+		//			//		heights[j] = VOXEL_HEIGHT_HALF;
+		//			//	else if (hv < 0.5)
+		//			//		heights[j] = VOXEL_HEIGHT_1;
+		//			//	else
+		//			//		heights[j] = VOXEL_HEIGHT_1;
+		//			//}
+
+		//			voxelMap->SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
+  //                  //voxelMap->SetColor(x, height, z, (int)(c.Average() * 64));
+		//			//voxelMap->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
+		//			//voxelMap->SetTex2(x, height, z, Rand() % 4);
+		//			//voxelMap->SetColor(x, height, z, Rand() % 64);
+  //                  //voxelMap->SetGeometry(x, height, z, counter++ % 2 == 0 ? VOXEL_TYPE_FLOOR_VHEIGHT_03 : VOXEL_TYPE_FLOOR_VHEIGHT_12);
+
+		//			{
+		//				int lightHeight = y / heightFactor;
+		//				int heights[9] = { y, nw, n, ne, w, e, sw, s, se };
+		//				int light = 0;
+		//				for (int litY = -1; litY <= 1; ++litY)
+		//					for (int n = 0; n < 9; ++n)
+		//					{
+		//						int neighborHeight = (heights[n] / heightFactor) + litY;
+		//						light += lightHeight + litY > neighborHeight;
+		//					}
+
+		//				voxelMap->SetLighting(x, height, z, light * 255 / 27);
+		//			}
+		//		}
+		//	}
+    //    }
+    //}
+
 #endif
 
 #if 0

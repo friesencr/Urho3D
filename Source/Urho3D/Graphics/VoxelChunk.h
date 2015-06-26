@@ -68,8 +68,10 @@ class URHO3D_API VoxelChunk : public Drawable
 
     void SetNumberOfMeshes(unsigned count);
 
-    void Build();
-    void BuildAsync();
+    bool Build();
+    bool BuildAsync();
+    void Unload();
+    bool Reload(bool async = false);
 
 	unsigned GetNumMeshes() const { return numMeshes_; }
 	unsigned GetTotalQuads() const;
@@ -83,30 +85,34 @@ class URHO3D_API VoxelChunk : public Drawable
     unsigned char GetSizeZ();
     void SetIndex(unsigned char x, unsigned char y, unsigned char z);
     void SetSize(unsigned char x, unsigned char y, unsigned char z);
-    void SetNeighbors(VoxelChunk* north, VoxelChunk* south, VoxelChunk* east, VoxelChunk* west);
-    VoxelChunk* GetNeighborNorth() const;
-    VoxelChunk* GetNeighborSouth() const;
-    VoxelChunk* GetNeighborEast() const;
-    VoxelChunk* GetNeighborWest() const;
-    unsigned GetLodLevel() const;
+    void SetNeighbors(VoxelMap* north, VoxelMap* south, VoxelMap* east, VoxelMap* west);
+    VoxelMap* GetNeighborNorth() const;
+    VoxelMap* GetNeighborSouth() const;
+    VoxelMap* GetNeighborEast() const;
+    VoxelMap* GetNeighborWest() const;
+    float GetBuildPriority() const { return buildPrioirty_; }
+    float GetBuildVisible() const { return buildVisible_; }
+    int GetBuildStatus() const { return buildStatus_; }
 
-    protected:
+protected:
     /// Recalculate the world-space bounding box.
     virtual void OnWorldBoundingBoxUpdate();
 
-    private:
+private:
+    bool BuildInternal(bool async);
     void OnVoxelChunkCreated();
     // Voxel chunk geometry
     unsigned char index_[3];
     unsigned char size_[3];
-    float priority_;
-    unsigned lodLevel_;
+    float buildPrioirty_;
+    bool buildVisible_;
+    int buildStatus_;
     unsigned numMeshes_;
     WeakPtr<VoxelSet> owner_;
-    WeakPtr<VoxelChunk> neighborNorth_;
-    WeakPtr<VoxelChunk> neighborWest_;
-    WeakPtr<VoxelChunk> neighborEast_;
-    WeakPtr<VoxelChunk> neighborSouth_;
+    WeakPtr<VoxelMap> neighborNorth_;
+    WeakPtr<VoxelMap> neighborWest_;
+    WeakPtr<VoxelMap> neighborEast_;
+    WeakPtr<VoxelMap> neighborSouth_;
 
     SharedPtr<VoxelMap> voxelMap_;
     Vector<SharedPtr<Geometry> > geometries_;
