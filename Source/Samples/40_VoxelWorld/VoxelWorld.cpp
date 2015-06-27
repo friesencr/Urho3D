@@ -409,7 +409,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 64.0f;
+    const float MOVE_SPEED = 200.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
@@ -443,7 +443,9 @@ void VoxelWorld::MoveCamera(float timeStep)
     if (input->GetKeyDown('D'))
         cameraNode_->Translate(Vector3::RIGHT * MOVE_SPEED * timeStep);
 
-    cameraPositionText_->SetText(cameraNode_->GetPosition().ToString());
+    VoxelSet* voxelSet = voxelNode_->GetComponent<VoxelSet>();
+    if (voxelSet)
+        cameraPositionText_->SetText(String(voxelSet->GetNumberOfLoadedChunks()));
 
 	// Toggle physics debug geometry with space
 	if (input->GetKeyPress(KEY_SPACE))

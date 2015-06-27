@@ -13,6 +13,7 @@
 namespace Urho3D {
 
 class URHO3D_API VoxelSet;
+class URHO3D_API VoxelJob;
 class URHO3D_API VoxelChunk : public Drawable
 {
     OBJECT(VoxelChunk);
@@ -108,6 +109,7 @@ private:
     bool buildVisible_;
     int buildStatus_;
     unsigned numMeshes_;
+    VoxelJob* buildJob_;
     WeakPtr<VoxelSet> owner_;
     WeakPtr<VoxelMap> neighborNorth_;
     WeakPtr<VoxelMap> neighborWest_;

@@ -88,7 +88,7 @@ namespace Urho3D {
         if (dataMask_ & VOXEL_BLOCK_GEOMETRY && geometry.Size() != size_)
             return false;
 
-        if (dataMask_ & VOXEL_BLOCK_VHEIGHT && vHeight.Size() != size_);
+        if (dataMask_ & VOXEL_BLOCK_VHEIGHT && vHeight.Size() != size_)
             return false;
 
         if (dataMask_ & VOXEL_BLOCK_ROTATE && rotate.Size() != size_)

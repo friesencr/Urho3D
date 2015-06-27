@@ -20,6 +20,7 @@ class URHO3D_API VoxelSet : public Component
 {
 public:
 
+
     // Construct.
     VoxelSet(Context* context);
     // Destruct.
@@ -32,7 +33,9 @@ public:
     virtual void ApplyAttributes();
     /// Handle enabled/disabled state change.
     virtual void OnSetEnabled();
-    /// Sets the max number of chunks held in memory
+    /// Sets the max number of chunks held in memory after peak is reached
+    virtual void SetMaxInMemoryChunksPeak(unsigned maxInMemoryChunksPeak);
+    /// Sets the number of chunks that trigger removal.
     virtual void SetMaxInMemoryChunks(unsigned maxInMemoryChunks);
     /// Sets chunk size
     virtual void SetChunkSpacing(Vector3 spacing);
@@ -47,6 +50,7 @@ public:
     virtual VoxelMap* GetVoxelMap(unsigned x, unsigned y, unsigned z);
     inline unsigned GetIndex(unsigned x, unsigned y, unsigned z);
     bool GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, int &z);
+    unsigned GetNumberOfLoadedChunks() { return loadedChunks_.Size(); }
 
 
     ///// Set material.
@@ -83,11 +87,13 @@ private:
     void ApplyInMemoryLimitsForCamera(Camera* camera);
     void CreateChunks(int x, int y,  int z, unsigned size, Vector3 cameraPosition, Frustum frustrum, float viewDistance);
     void AllocateAndSortVisibleChunks();
+    void SortLoadedChunks();
     VoxelChunk* FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z, VoxelMap* map);
     // Material.
     SharedPtr<Material> material_;
     // Voxel chunks.
     PODVector<VoxelChunk*> loadedChunks_;
+    PODVector<VoxelChunk*> buildQueue_;
     //Vector<WeakPtr<VoxelChunk> > builtChunks_;
     //Vector<WeakPtr<VoxelChunk> > unbuiltChunks_;
     Vector<WeakPtr<VoxelChunk> > chunks_;
@@ -101,6 +107,7 @@ private:
     unsigned chunkXStride;
     unsigned chunkZStride;
     unsigned numChunks;
+    unsigned maxInMemoryChunksPeak_;
     unsigned maxInMemoryChunks_;
     Vector3 chunkSpacing_;
 };

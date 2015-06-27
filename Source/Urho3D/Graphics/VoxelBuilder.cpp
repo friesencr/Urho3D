@@ -140,7 +140,7 @@ namespace Urho3D
 inline bool CompareJobs(VoxelJob* lhs, VoxelJob* rhs)
 {
     if (lhs->chunk->GetBuildVisible() == rhs->chunk->GetBuildVisible())
-        return lhs->chunk->GetBuildPriority() > rhs->chunk->GetBuildPriority();
+        return lhs->chunk->GetBuildPriority() < rhs->chunk->GetBuildPriority();
     else
         return lhs->chunk->GetBuildVisible();
 }
@@ -150,7 +150,7 @@ VoxelBuilder::VoxelBuilder(Context* context)
     : Object(context),
     compatibilityMode(false),
     sharedIndexBuffer_(0),
-    maxFrameTime_(8),
+    maxFrameTime_(2),
     completeAllWork_(false)
 {
     transform_.Resize(3);
@@ -286,9 +286,8 @@ void VoxelBuilder::CompleteWork(unsigned priority)
     completeAllWork_ = true;
     while (RunJobs())
     {
-    }
-        Time::Sleep(0);
 
+    }
     completeAllWork_ = false;
 }
 
@@ -392,54 +391,45 @@ VoxelJob* VoxelBuilder::BuildVoxelChunk(SharedPtr<VoxelChunk> chunk, bool async)
         return 0;
 
     VoxelJob* job = CreateJob(chunk);
-
-    RunJobs();
     if (!async)
-        CompleteWork();
-    return 0;
+        RunJobs();
+
+    return job;
 }
 
 bool VoxelBuilder::RunJobs()
 {
-    if (!completeAllWork_ && frameTimer_.GetMSec(false) > maxFrameTime_)
-        return false;
-
-    bool pendingWork = false;
-
     if (!jobs_.Empty())
     {
         int slotId = GetFreeWorkSlot();
         if (slotId != -1)
         {
             unsigned count = jobs_.Size();
-            LOGINFO("VOXEL RENDER: " + String(count) + " jobs left");
             VoxelJob* job = jobs_[0];
             VoxelWorkSlot* slot = &slots_[slotId];
             job->slot = slotId;
             slot->job = job;
             jobs_.Erase(0);
             ProcessJob(job);
-            pendingWork = true;
         }
     }
 
+    GetSubsystem<WorkQueue>()->Complete(0);
+
     for (unsigned i = 0; i < slots_.Size(); ++i)
     {
-        if (!completeAllWork_ && frameTimer_.GetMSec(false) > maxFrameTime_)
-            return false;
-
         VoxelWorkSlot* slot = &slots_[i];
         bool process = false;
         {
             MutexLock lock(slot->workMutex);
             process = !slot->free && slot->upload;
-            pendingWork = !slot->free || pendingWork;
             slot->upload = false;
         }
         if (process)
             ProcessSlot(slot);
     }
-    return pendingWork;
+
+    return false;
 }
 
 
@@ -590,29 +580,40 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
 
                 if (!srcMap->IsLoaded()) //&& !srcMap->Reload())
                 {
-                    LOGERROR("Couldn't load neighbor voxel map information.");
+                    //LOGERROR("Couldn't load neighbor voxel map information.");
                     continue;
                 }
 
-                PODVector<unsigned char>* src;
-                PODVector<unsigned char>* dst;
+                bool exists = false;
                 switch (i)
                 {
-                    case TYPE_BLOCKTYPE: src = &srcMap->blocktype; dst = &voxelMap->blocktype; break;
-                    case TYPE_VHEIGHT: src = &srcMap->vHeight; dst = &voxelMap->vHeight; break;
-                    case TYPE_COLOR: src = &srcMap->color; dst = &voxelMap->color; break;
-                    case TYPE_GEOMETRY: src = &srcMap->geometry; dst = &voxelMap->geometry; break;
-                    case TYPE_LIGHTING: src = &srcMap->lighting; dst = &voxelMap->lighting; break;
-                    case TYPE_ROTATE: src = &srcMap->rotate; dst = &voxelMap->rotate; break;
-                    case TYPE_TEX2: src = &srcMap->tex2; dst = &voxelMap->tex2; break;
-                    default: src = 0; dst = 0; break;
+                    case TYPE_BLOCKTYPE: exists = srcMap->blocktype.Size() > 0 && voxelMap->blocktype.Size() > 0; break;
+                    case TYPE_VHEIGHT: exists = srcMap->vHeight.Size() > 0 && voxelMap->vHeight.Size() > 0; break;
+                    case TYPE_COLOR: exists = srcMap->color.Size() > 0 && voxelMap->color.Size() > 0; break;
+                    case TYPE_GEOMETRY: exists = srcMap->geometry.Size() > 0 && voxelMap->geometry.Size() > 0; break;
+                    case TYPE_LIGHTING: exists = srcMap->lighting.Size() > 0 && voxelMap->lighting.Size() > 0; break;
+                    case TYPE_ROTATE: exists = srcMap->rotate.Size() > 0  && voxelMap->rotate.Size() > 0; break;
+                    case TYPE_TEX2: exists = srcMap->tex2.Size() > 0 && voxelMap->tex2.Size() > 0; break;
                 }
-
-                if (!(src && src->Size() > 0 && dst && dst->Size() > 0))
+                if (!exists)
                     continue;
 
-                unsigned char* srcPtr = &src->Front();
-                unsigned char* dstPtr = &dst->Front();
+                unsigned char* src = 0;
+                unsigned char* dst = 0;
+
+                switch (i)
+                {
+                    case TYPE_BLOCKTYPE: src = &srcMap->blocktype.Front(); dst = &voxelMap->blocktype.Front(); break;
+                    case TYPE_VHEIGHT: src = &srcMap->vHeight.Front(); dst = &voxelMap->vHeight.Front(); break;
+                    case TYPE_COLOR: src = &srcMap->color.Front(); dst = &voxelMap->color.Front(); break;
+                    case TYPE_GEOMETRY: src = &srcMap->geometry.Front(); dst = &voxelMap->geometry.Front(); break;
+                    case TYPE_LIGHTING: src = &srcMap->lighting.Front(); dst = &voxelMap->lighting.Front(); break;
+                    case TYPE_ROTATE: src = &srcMap->rotate.Front(); dst = &voxelMap->rotate.Front(); break;
+                    case TYPE_TEX2: src = &srcMap->tex2.Front(); dst = &voxelMap->tex2.Front(); break;
+                }
+
+                unsigned char* srcPtr = src;
+                unsigned char* dstPtr = dst;
 
                 if (m == MAP_NORTH)
                 {
@@ -817,10 +818,7 @@ void VoxelBuilder::HandleBeginFrame(StringHash eventType, VariantMap& eventData)
     PROFILE(VoxelWork);
     frameTimer_.Reset();
     Sort(jobs_.Begin(), jobs_.End(), CompareJobs);
-    while (frameTimer_.GetMSec(false) < maxFrameTime_ &&  RunJobs())
-    {
-        Time::Sleep(0);
-    }
+    RunJobs();
 }
 
 unsigned VoxelBuilder::DecrementWorkSlot(VoxelWorkSlot* slot)

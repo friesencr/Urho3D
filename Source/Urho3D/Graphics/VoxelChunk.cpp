@@ -327,10 +327,15 @@ namespace Urho3D {
 
     void VoxelChunk::Unload()
     {
+        if (buildJob_)
+            GetSubsystem<VoxelBuilder>()->CancelJob(buildJob_);
+
         //GetNode()->SetEnabled(false);
         //SetEnabled(false);
         if (voxelMap_)
             voxelMap_->Unload();
+        else
+            bool arg = true;
 
         SetNumberOfMeshes(0);
         buildStatus_ = VOXEL_BUILD_UNLOADED;
@@ -358,6 +363,9 @@ namespace Urho3D {
     {
         VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
         SharedPtr<VoxelMap> voxelMap(GetVoxelMap());
+        if (buildJob_)
+            builder->CancelJob(buildJob_);
+
         if (voxelMap.Null())
             return false;
 
@@ -365,7 +373,7 @@ namespace Urho3D {
             return false;
 
         buildStatus_ = VOXEL_BUILD_QUEUED;
-        builder->BuildVoxelChunk(SharedPtr<VoxelChunk>(this), async);
+        buildJob_ = builder->BuildVoxelChunk(SharedPtr<VoxelChunk>(this), async);
         return true;
     }
 
@@ -387,6 +395,7 @@ namespace Urho3D {
     void VoxelChunk::OnVoxelChunkCreated()
     {
         buildStatus_ == VOXEL_BUILD_COMPLETE;
+        buildJob_ = 0;
         if (!node_)
             return;
 

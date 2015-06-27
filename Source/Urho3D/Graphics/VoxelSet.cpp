@@ -17,17 +17,20 @@ namespace Urho3D {
 
 extern const char* GEOMETRY_CATEGORY;
 
+static const float BUILD_UNSET = 100000000.0;
+
 inline bool CompareChunks(VoxelChunk* lhs, VoxelChunk* rhs)
 {
     if (lhs->GetBuildVisible() == rhs->GetBuildVisible())
-        return lhs->GetBuildPriority() > rhs->GetBuildPriority();
+        return lhs->GetBuildPriority() < rhs->GetBuildPriority();
     else
         return lhs->GetBuildVisible();
 }
 
 VoxelSet::VoxelSet(Context* context) :
     Component(context),
-    maxInMemoryChunks_(M_MAX_UNSIGNED),
+    maxInMemoryChunks_(950),
+    maxInMemoryChunksPeak_(1000),
     chunkSpacing_(Vector3(64.0, 128.0, 64.0))
 {
 }
@@ -54,6 +57,11 @@ void VoxelSet::OnSetAttribute(const AttributeInfo& attr, const Variant& src)
 void VoxelSet::SetMaxInMemoryChunks(unsigned maxInMemoryChunks)
 {
     maxInMemoryChunks_ = maxInMemoryChunks;
+}
+
+void VoxelSet::SetMaxInMemoryChunksPeak(unsigned maxInMemoryChunksPeak)
+{
+    maxInMemoryChunksPeak_ = maxInMemoryChunksPeak;
 }
 
 void VoxelSet::ApplyAttributes()
@@ -99,9 +107,6 @@ void VoxelSet::CreateChunks(int indexX, int indexY, int indexZ, unsigned size, V
             BoundingBox chunkBox = BoundingBox(chunkSpacing_ * Vector3(x, 0, z), chunkSpacing_ * Vector3(x, 0, z) + chunkSpacing_);
             Vector3 position = chunkBox.Center();
             if ((cameraPosition - position).Length() > viewDistance)
-                continue;
-
-            if (!frustrum.IsInsideFast(chunkBox))
                 continue;
 
             VoxelMap* voxelMap = GetVoxelMap(x, 0, z);
@@ -204,14 +209,45 @@ void VoxelSet::BuildInternal(bool async)
 
     AllocateAndSortVisibleChunks();
 
-    return;
-
-    //Sort(loadedChunks_.Begin(), loadedChunks_.End(), CompareChunks);
-    while (loadedChunks_.Size() > maxInMemoryChunks_)
+    if (loadedChunks_.Size() > maxInMemoryChunksPeak_)
     {
-        chunks_[GetIndex(loadedChunks_[0]->GetIndexX(), loadedChunks_[0]->GetIndexY(), loadedChunks_[0]->GetIndexZ())] = 0;
-        loadedChunks_[0]->Unload();
-        loadedChunks_.Erase(0);
+        SortLoadedChunks();
+        Sort(loadedChunks_.Begin(), loadedChunks_.End(), CompareChunks);
+        for (unsigned i = 0; i < loadedChunks_.Size(); ++i)
+            LOGINFO(String(loadedChunks_[i]->buildVisible_) + "_" + String(loadedChunks_[i]->buildPrioirty_));
+
+        while (loadedChunks_.Size() > maxInMemoryChunks_)
+        {
+            VoxelChunk* chunk = loadedChunks_[maxInMemoryChunks_];
+            //String msg = String("Unloading Chunk: ") + String((int)chunk->GetIndexX()) + "_" +
+            //    String((int)chunk->GetIndexY()) + "_" + String((int)chunk->GetIndexZ()) + "_" + String(chunk->buildPrioirty_);
+            //LOGINFO(msg);
+            float buildPriority = chunk->buildPrioirty_;
+            chunks_[GetIndex(chunk->GetIndexX(), chunk->GetIndexY(), chunk->GetIndexZ())] = 0;
+            chunk->Unload();
+            loadedChunks_.Erase(maxInMemoryChunks_);
+            buildQueue_.Remove(chunk);
+        }
+    }
+
+    Sort(buildQueue_.Begin(), buildQueue_.End(), CompareChunks);
+    while (buildQueue_.Size())
+    {
+        VoxelChunk* chunk = buildQueue_[0];
+        VoxelMap* north = chunk->GetNeighborNorth();
+        VoxelMap* south = chunk->GetNeighborSouth();
+        VoxelMap* east = chunk->GetNeighborEast();
+        VoxelMap* west = chunk->GetNeighborWest();
+        if (north && !north->IsLoaded())
+            north->Reload();
+        if (south && !south->IsLoaded())
+            south->Reload();
+        if (east && !east->IsLoaded())
+            east->Reload();
+        if (west && !west->IsLoaded())
+            west->Reload();
+        chunk->BuildAsync();
+        buildQueue_.Erase(0);
     }
 
     if (!async)
@@ -245,7 +281,6 @@ bool VoxelSet::GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, 
 
 VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z, VoxelMap* map)
 {
-    PROFILE(FindOrCreateVoxelChunk);
     if (x >= numChunksX || y >= numChunksY || z >= numChunksZ)
         return 0;
 
@@ -259,37 +294,25 @@ VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z,
     chunk = chunkNode->CreateComponent<VoxelChunk>();
     chunk->SetIndex(x, y, z);
     chunk->SetVoxelMap(map);
+    chunk->buildPrioirty_ = BUILD_UNSET;
     VoxelMap* north = GetVoxelMap(x, 0, z+1);
     VoxelMap* south = GetVoxelMap(x, 0, z-1);
     VoxelMap* east  = GetVoxelMap(x+1, 0, z);
     VoxelMap* west  = GetVoxelMap(x-1, 0, z);
-    if (north && !north->IsLoaded())
-        north->Reload();
-    if (south && !south->IsLoaded())
-        south->Reload();
-    if (east && !east->IsLoaded())
-        east->Reload();
-    if (west && !west->IsLoaded())
-        west->Reload();
-
     chunk->SetNeighbors(north, south, east, west);
     chunks_[GetIndex(x, y, z)] = chunk;
     loadedChunks_.Push(chunk);
-    chunk->BuildAsync();
+    buildQueue_.Push(chunk);
     return chunk;
 }
 
-void VoxelSet::AllocateAndSortVisibleChunks()
+void VoxelSet::SortLoadedChunks()
 {
-    PROFILE(BuildSet);
+    PROFILE(SortLoadedChunks);
 
     Scene* scene = GetScene();
     if (!scene)
         return;
-
-    Octree* octree = scene->GetComponent<Octree>();
-    if (!octree)
-        LOGERROR("No Octree component in scene, voxel set frame logic bypassed.");
 
     Node* setNode = GetNode();
     if (!setNode)
@@ -297,6 +320,12 @@ void VoxelSet::AllocateAndSortVisibleChunks()
 
     Renderer* renderer = GetSubsystem<Renderer>();
     unsigned viewports = renderer->GetNumViewports();
+
+    for (unsigned i = 0; i < loadedChunks_.Size(); ++i)
+    {
+        loadedChunks_[i]->buildPrioirty_ = BUILD_UNSET;
+        loadedChunks_[i]->buildVisible_ = false;
+    }
 
     for (unsigned i = 0; i < viewports; ++i)
     {
@@ -309,9 +338,56 @@ void VoxelSet::AllocateAndSortVisibleChunks()
         if (!cameraNode)
             continue;
 
+        Frustum visibleTest = camera->GetFrustum();
+        float viewDistance = camera->GetFarClip();
 
-        //if ((cameraNode->GetPosition() - setNode->GetPosition()).Length() > viewDistance)
-        //    return;
+        int currentX = 0;
+        int currentY = 0;
+        int currentZ = 0;
+
+        for (unsigned i = 0; i < loadedChunks_.Size(); ++i)
+        {
+            VoxelChunk* chunk = loadedChunks_[i];
+            Node* chunkNode = chunk->GetNode();
+            float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
+            chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance);
+            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInsideFast(chunk->GetBoundingBox()) == INSIDE;
+        }
+    }
+
+}
+
+void VoxelSet::AllocateAndSortVisibleChunks()
+{
+    PROFILE(BuildSet);
+
+    Scene* scene = GetScene();
+    if (!scene)
+        return;
+
+    Node* setNode = GetNode();
+    if (!setNode)
+        return;
+
+    Renderer* renderer = GetSubsystem<Renderer>();
+    unsigned viewports = renderer->GetNumViewports();
+
+    for (unsigned i = 0; i < buildQueue_.Size(); ++i)
+    {
+        buildQueue_[i]->buildPrioirty_ = BUILD_UNSET;
+        buildQueue_[i]->buildVisible_ = false;
+    }
+
+    for (unsigned i = 0; i < viewports; ++i)
+    {
+        Viewport* viewport = renderer->GetViewport(i);
+        Camera* camera = viewport->GetCamera();
+        if (!camera)
+            continue;
+
+        Node* cameraNode = camera->GetNode();
+        if (!cameraNode)
+            continue;
 
         // make frustrum 1.5x as long as camera
         Frustum visibleTest;
@@ -325,36 +401,18 @@ void VoxelSet::AllocateAndSortVisibleChunks()
 
         if (GetIndexFromWorldPosition(cameraNode->GetWorldPosition(), currentX, currentY, currentZ))
         {
-            unsigned radius = 20;
+            unsigned radius = 15;
             CreateChunks(currentX, currentY, currentZ, radius, cameraNode->GetPosition(), visibleTest, viewDistance);
         }
 
-        //for (unsigned i = 0; i < loadedChunks_.Size(); ++i)
-        //{
-        //    VoxelChunk* chunk = loadedChunks_[i];
-        //    Node* chunkNode = chunk->GetNode();
-        //    float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
-        //    //chunk->buildprioirty_ = min(chunk->buildprioirty_, chunkdistance);
-        //    //chunk->buildvisible_ = chunk->buildvisible_ || visibletest.isinsidefast(chunk->getboundingbox()) == inside;
-        //}
-        
-        //for (unsigned c = 0; c < chunks_.Size(); ++c)
-        //{
-        //    VoxelChunk* chunk = chunks_[c];
-        //    if (!chunk)
-        //        continue;
-
-        //    Node* chunkNode = chunk->GetNode();
-        //    if (!chunkNode)
-        //        continue;
-
-        //    float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
-        //    chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance);
-        //    BoundingBox box = chunk->GetBoundingBox();
-
-        //    if (visibleTest.IsInsideFast(box) == INSIDE)
-        //        chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance / 100000.0);
-        //}
+        for (unsigned i = 0; i < buildQueue_.Size(); ++i)
+        {
+            VoxelChunk* chunk = loadedChunks_[i];
+            Node* chunkNode = chunk->GetNode();
+            float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
+            chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance);
+            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInsideFast(chunk->GetBoundingBox()) == INSIDE;
+        }
     }
 }
 
