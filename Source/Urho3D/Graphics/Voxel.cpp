@@ -57,19 +57,22 @@ namespace Urho3D {
             blocktype = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
 
         if (dataMask_ & VOXEL_BLOCK_COLOR)
-            color = source.ReadBuffer();
+            color = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
 
         if (dataMask_ & VOXEL_BLOCK_GEOMETRY)
-            geometry = source.ReadBuffer();
+            geometry = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
 
         if (dataMask_ & VOXEL_BLOCK_VHEIGHT)
-            vHeight = source.ReadBuffer();
+            vHeight = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
+
+        if (dataMask_ & VOXEL_BLOCK_LIGHTING)
+            lighting = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
 
         if (dataMask_ & VOXEL_BLOCK_ROTATE)
-            rotate = source.ReadBuffer();
+            rotate = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
 
         if (dataMask_ & VOXEL_BLOCK_TEX2)
-            tex2 = source.ReadBuffer();
+            tex2 = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
 
         return true;
     }
@@ -108,11 +111,19 @@ namespace Urho3D {
     void VoxelMap::Unload()
     {
         blocktype.Clear();
+        blocktype.Compact();
         color.Clear();
+        color.Compact();
         geometry.Clear();
+        geometry.Compact();
         vHeight.Clear();
+        vHeight.Compact();
+        lighting.Clear();
+        lighting.Compact();
         rotate.Clear();
+        rotate.Compact();
         tex2.Clear();
+        tex2.Compact();
     }
 
     bool VoxelMap::Reload()

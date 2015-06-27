@@ -448,7 +448,6 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
     VoxelWorkSlot* slot = &slots_[job->slot];
     VoxelMap* voxelMap = job->chunk->GetVoxelMap();
     VoxelChunk* chunk = job->chunk;
-    chunk->buildStatus_ = VOXEL_BUILD_BUILDING;
 
     unsigned char workloadsX = (unsigned char)ceil((float)voxelMap->width_ / (float)VOXEL_WORKER_SIZE_X);
     unsigned char workloadsY = (unsigned char)ceil((float)voxelMap->height_ / (float)VOXEL_WORKER_SIZE_Y);

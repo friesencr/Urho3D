@@ -93,7 +93,6 @@ class URHO3D_API VoxelChunk : public Drawable
     VoxelMap* GetNeighborWest() const;
     float GetBuildPriority() const { return buildPrioirty_; }
     float GetBuildVisible() const { return buildVisible_; }
-    int GetBuildStatus() const { return buildStatus_; }
 
 protected:
     /// Recalculate the world-space bounding box.
@@ -107,7 +106,6 @@ private:
     unsigned char size_[3];
     float buildPrioirty_;
     bool buildVisible_;
-    int buildStatus_;
     unsigned numMeshes_;
     VoxelJob* buildJob_;
     WeakPtr<VoxelSet> owner_;

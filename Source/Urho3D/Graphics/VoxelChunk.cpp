@@ -18,7 +18,6 @@ namespace Urho3D {
         Drawable(context, DRAWABLE_GEOMETRY),
         numMeshes_(0),
         buildPrioirty_(0.0),
-        buildStatus_(0),
         buildVisible_(false)
     {
         size_[0] = 0; size_[1] = 0; size_[2] = 0;
@@ -195,9 +194,9 @@ namespace Urho3D {
         {
             hasMaterialParameters_[i] = false;
             vertexData_[i] = new VertexBuffer(context_);
-            vertexData_[i]->SetShadowed(false);
+            vertexData_[i]->SetShadowed(true);
             faceData_[i] = new IndexBuffer(context_);
-            faceData_[i]->SetShadowed(false);
+            faceData_[i]->SetShadowed(true);
             faceBuffer_[i] = new TextureBuffer(context_);
             materials_[i] = new Material(context_);
             geometries_[i] = new Geometry(context_);
@@ -338,7 +337,6 @@ namespace Urho3D {
             bool arg = true;
 
         SetNumberOfMeshes(0);
-        buildStatus_ = VOXEL_BUILD_UNLOADED;
         GetNode()->Remove();
     }
 
@@ -372,7 +370,6 @@ namespace Urho3D {
         if (!voxelMap->IsLoaded() && !voxelMap->Reload())
             return false;
 
-        buildStatus_ = VOXEL_BUILD_QUEUED;
         buildJob_ = builder->BuildVoxelChunk(SharedPtr<VoxelChunk>(this), async);
         return true;
     }
@@ -394,7 +391,6 @@ namespace Urho3D {
 
     void VoxelChunk::OnVoxelChunkCreated()
     {
-        buildStatus_ == VOXEL_BUILD_COMPLETE;
         buildJob_ = 0;
         if (!node_)
             return;

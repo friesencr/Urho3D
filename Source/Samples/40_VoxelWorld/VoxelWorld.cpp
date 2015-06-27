@@ -62,7 +62,7 @@ static const int d = 64;
 // spoofing a VoxelMap load
 // uint height, uint width, uint depth, unit datamask
 
-static const unsigned chunkHeader[4] = { w, h, d, VOXEL_BLOCK_BLOCKTYPE };
+static const unsigned chunkHeader[4] = { w, h, d, VOXEL_BLOCK_BLOCKTYPE | VOXEL_BLOCK_LIGHTING };
 static const unsigned headerSize = sizeof(chunkHeader);
 static const unsigned dataSize = (h + 2) * (w + 2) * (d + 2);
 static const unsigned podsize = dataSize + 3;
@@ -105,62 +105,32 @@ static void FillTerrain(Context* context, unsigned char* dataPtr, VariantMap& pa
             if (podIndex == 0) // blocktype
             {
                 for (unsigned i = 0; i < height; ++i)
-                {
                     writer.SetBlocktype(x, i, z, (int)(c.Average() * 8) % 4 + 1);
-                    //voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-                    //writer->SetLighting(x, i, z, 0);
-                    //voxelMap->SetGeometry(x, i, z, VOXEL_TYPE_SOLID);
-                }
+
                 writer.SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
             }
+            else if (podIndex == 1)
+            {
+                for (unsigned i = 0; i < height; ++i)
+                    writer.SetLighting(x, i, z, 0);
+
+                for (unsigned i = height + 1; i < y; ++i)
+                    writer.SetLighting(x, i, z, 255);
+
+                int lightHeight = y / heightFactor;
+                int heights[9] = { y, nw, n, ne, w, e, sw, s, se };
+                int light = 0;
+                for (int litY = -1; litY <= 1; ++litY)
+                {
+                    for (int n = 0; n < 9; ++n)
+                    {
+                        int neighborHeight = (heights[n] / heightFactor) + litY;
+                        light += lightHeight + litY > neighborHeight;
+                    }
+                }
+                writer.SetLighting(x, height, z, light * 255 / 27);
+            }
         }
-    
-
-                        // gather nearby values to get height
-                        //VoxelHeight heights[4];
-                        //float heightValues[4] = {
-                        //	(float)(y - sw) / 2.0,
-                        //	(float)(y - se) / 2.0,
-                        //	(float)(y - nw) / 2.0,
-                        //	(float)(y - ne) / 2.0,
-                        //};
-
-                        //for (unsigned j = 0; j < 4; ++j)
-                        //{
-                        //	float hv = heightValues[j];
-                        //	if (hv < -0.5)
-                        //		heights[j] = VOXEL_HEIGHT_0;
-                        //	else if (hv < 0.0)
-                        //		heights[j] = VOXEL_HEIGHT_HALF;
-                        //	else if (hv < 0.5)
-                        //		heights[j] = VOXEL_HEIGHT_1;
-                        //	else
-                        //		heights[j] = VOXEL_HEIGHT_1;
-                        //}
-
-                        //voxelMap->SetColor(x, height, z, (int)(c.Average() * 64));
-                        //voxelMap->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
-                        //voxelMap->SetTex2(x, height, z, Rand() % 4);
-                        //voxelMap->SetColor(x, height, z, Rand() % 64);
-                        //voxelMap->SetGeometry(x, height, z, counter++ % 2 == 0 ? VOXEL_TYPE_FLOOR_VHEIGHT_03 : VOXEL_TYPE_FLOOR_VHEIGHT_12);
-
-        //                {
-        //                    int lightHeight = y / heightFactor;
-        //                    int heights[9] = { y, nw, n, ne, w, e, sw, s, se };
-        //                    int light = 0;
-        //                    for (int litY = -1; litY <= 1; ++litY)
-        //                        for (int n = 0; n < 9; ++n)
-        //                        {
-        //                            int neighborHeight = (heights[n] / heightFactor) + litY;
-        //                            light += lightHeight + litY > neighborHeight;
-        //                        }
-
-        //                    voxelMap->SetLighting(x, height, z, light * 255 / 27);
-        //                }
-        //            }
-        //        }
-        //    }
-        //}
     }
 }
 
@@ -172,20 +142,20 @@ static unsigned RandomTerrain(Context* context, void* dest, unsigned size, unsig
         *dataPtr++ = chunkHeader[position/4];
         return 4;
     }
-    else if (position - headerSize % podsize < 3)
+    else if ((position - headerSize) % podsize < 3)
     {
         unsigned char* dataPtr = (unsigned char*)dest;
         unsigned char vle[3];
         vle[0] = dataSize | 0x80;
         vle[1] = (dataSize >> 7) | 0x80;
         vle[2] = dataSize >> 14;
-        *((unsigned char*)dataPtr) = vle[position - headerSize % podsize];
+        *((unsigned char*)dataPtr) = vle[(position - headerSize) % podsize];
         (unsigned char*)dataPtr += 1;
         return 1;
     }
     else
     {
-        unsigned podIndex = position - headerSize / podsize == 0;
+        unsigned podIndex = (position - headerSize) / podsize;
         unsigned char* dataPtr = (unsigned char*)dest;
         FillTerrain(context, dataPtr, parameters, podIndex);
         return dataSize;

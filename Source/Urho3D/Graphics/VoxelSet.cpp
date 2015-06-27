@@ -213,16 +213,9 @@ void VoxelSet::BuildInternal(bool async)
     {
         SortLoadedChunks();
         Sort(loadedChunks_.Begin(), loadedChunks_.End(), CompareChunks);
-        for (unsigned i = 0; i < loadedChunks_.Size(); ++i)
-            LOGINFO(String(loadedChunks_[i]->buildVisible_) + "_" + String(loadedChunks_[i]->buildPrioirty_));
-
         while (loadedChunks_.Size() > maxInMemoryChunks_)
         {
             VoxelChunk* chunk = loadedChunks_[maxInMemoryChunks_];
-            //String msg = String("Unloading Chunk: ") + String((int)chunk->GetIndexX()) + "_" +
-            //    String((int)chunk->GetIndexY()) + "_" + String((int)chunk->GetIndexZ()) + "_" + String(chunk->buildPrioirty_);
-            //LOGINFO(msg);
-            float buildPriority = chunk->buildPrioirty_;
             chunks_[GetIndex(chunk->GetIndexX(), chunk->GetIndexY(), chunk->GetIndexZ())] = 0;
             chunk->Unload();
             loadedChunks_.Erase(maxInMemoryChunks_);
