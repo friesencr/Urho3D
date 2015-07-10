@@ -14,6 +14,11 @@ namespace Urho3D {
 		return STBVOX_MAKE_VHEIGHT(southWest, southEast, northWest, northEast);
 	}
 
+	unsigned char VoxelEncodeVHeight(VoxelHeight voxelHeight)
+	{
+		return STBVOX_MAKE_VHEIGHT(voxelHeight, voxelHeight, voxelHeight, voxelHeight);
+	}
+
 	unsigned char VoxelEncodeGeometry(VoxelGeometryType type, VoxelRotation rot, VoxelHeight height)
 	{
 		return STBVOX_MAKE_GEOMETRY(type, rot, height);
@@ -49,9 +54,9 @@ namespace Urho3D {
         height_ = source.ReadUInt();
         depth_ = source.ReadUInt();
         dataMask_ = source.ReadUInt();
-		zStride = height_ + 2;
-		xStride = (height_ + 2) * (depth_ + 2);
-		size_ = (width_ + 2)*(height_ + 2)*(depth_ + 2);
+		zStride = height_ + 4;
+		xStride = (height_ + 4) * (depth_ + 4);
+		size_ = (width_ + 4)*(height_ + 4)*(depth_ + 4);
 
         if (dataMask_ & VOXEL_BLOCK_BLOCKTYPE)
             blocktype = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
@@ -145,9 +150,9 @@ namespace Urho3D {
 		height_ = height;
 		width_ = width;
 		depth_ = depth;
-		zStride = height + 2;
-		xStride = (height + 2) * (depth + 2);
-		size_ = (width_ + 2)*(height_ + 2)*(depth_ + 2);
+		zStride = height + 4;
+		xStride = (height + 4) * (depth + 4);
+		size_ = (width_ + 4)*(height_ + 4)*(depth_ + 4);
 	}
 
 	void VoxelMap::InitializeBlocktype(unsigned char initialValue)

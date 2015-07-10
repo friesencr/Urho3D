@@ -46,89 +46,207 @@
 #include <Urho3D/Physics/PhysicsWorld.h>
 #include <Urho3D/Physics/CollisionShape.h>
 #include <Urho3D/Physics/RigidBody.h>
-#include "stb_perlin.h"
 #include <Urho3D/IO/Generator.h>
+#include <Urho3D/IO/Log.h>
 
 #include "VoxelWorld.h"
 
+#define STB_PERLIN_IMPLEMENTATION
+#include "stb_perlin.h"
+
 #include <Urho3D/DebugNew.h>
+
+//#define SMOOTH_TERRAIN
 
 DEFINE_APPLICATION_MAIN(VoxelWorld)
 
-static const int h = 64;
+static const int h = 128;
 static const int w = 64;
 static const int d = 64;
 
 // spoofing a VoxelMap load
 // uint height, uint width, uint depth, unit datamask
-
-static const unsigned chunkHeader[4] = { w, h, d, VOXEL_BLOCK_BLOCKTYPE | VOXEL_BLOCK_LIGHTING };
+static const unsigned chunkHeader[4] = { w, h, d, VOXEL_BLOCK_BLOCKTYPE };
 static const unsigned headerSize = sizeof(chunkHeader);
-static const unsigned dataSize = (h + 2) * (w + 2) * (d + 2);
+static const unsigned dataSize = (h + 4) * (w + 4) * (d + 4);
 static const unsigned podsize = dataSize + 3;
 
-static void FillTerrain(Context* context, unsigned char* dataPtr, VariantMap& parameters, unsigned podIndex)
+float noiseFactors[10] = {
+    1.0, 1.0, 1.0, 0.3,
+    0.3, 0.4, 0.7, 1.0,
+    1.0, 1.0
+};
+
+static void AOVoxelLighting(VoxelChunk* chunk, VoxelMap* src, VoxelProcessorWriters writers)
 {
-    //for (unsigned i = 0; i < size; ++i)
-    //    *dataPtr++ = Max(0, (Rand() % 1000) - 996);
-    VoxelWriter writer(context);
-    writer.SetSize(w,h,d);
+    unsigned char* bt = 0;
+    const int xStride = src->xStride;
+    const int zStride = src->zStride;
+
+    for (int x = -1; x < (int)src->width_+1; x++)
+    {
+        for (int z = -1; z < (int)src->depth_+1; z++)
+        {
+            for (int y = -1; y < (int)src->height_+1; y++)
+            {
+                int index = src->GetIndex(x, y, z);
+                bt = &src->blocktype[index];
+
+#ifdef SMOOTH_TERRAIN
+                if (bt[0] > 0)
+                {
+                    if (bt[1] == 0)
+                    {
+                        VoxelHeight scores[4] = { VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0 };
+                        int corners[4] = { -xStride - zStride, xStride - zStride, -xStride + zStride, xStride + zStride };
+                        unsigned checks[4][6] = {
+                            { zStride, zStride+1, 0, 1, xStride, xStride+1 },
+                            { zStride, zStride+1, 0, 1, -xStride, -xStride+1 },
+                            { -zStride, -zStride+1, 0, 1, xStride, xStride+1 },
+                            { -zStride, -zStride+1, 0, 1, -xStride, -xStride+1 }
+                        };
+                        //int checks[4][3] = {
+                        //    { zStride+1, 1, xStride+1 },
+                        //    { zStride+1, 1, -xStride+1 },
+                        //    { -zStride+1, 1, xStride+1 },
+                        //    { -zStride+1, 1, -xStride+1 }
+                        //};
+
+                        unsigned score = 0;
+                        for (unsigned i = 0; i < 4; ++i)
+                        {
+                            for (unsigned j = 0; j < 6; ++j)
+                            {
+                                score += bt[corners[i] + checks[i][j]] > 0;
+                            }
+                            scores[i] = (VoxelHeight)(unsigned)(score/6);
+                        }
+                        writers.geometry.buffer[index] = VoxelEncodeGeometry(VOXEL_TYPE_FLOOR_VHEIGHT_03);
+                        writers.vHeight.buffer[index] = VoxelEncodeVHeight(scores[0], scores[1], scores[2], scores[3]);
+                    }
+                    //else if (bt[-1] == 0)
+                    //{
+                    //    //writers.geometry.buffer[index] = VoxelEncodeGeometry(x*z % 2 == 0 ? VOXEL_TYPE_CEIL_VHEIGHT_03 : VOXEL_TYPE_CEIL_VHEIGHT_12);
+                    //    writers.geometry.buffer[index] = VoxelEncodeGeometry(VOXEL_TYPE_CEIL_VHEIGHT_03);
+                    //    writers.vHeight.buffer[index] = VoxelEncodeVHeight(
+                    //        (bt[-xStride - zStride - 1] > 0) ? VOXEL_HEIGHT_1 : VOXEL_HEIGHT_0,   // sw
+                    //        (bt[xStride - zStride - 1] > 0) ? VOXEL_HEIGHT_1 : VOXEL_HEIGHT_0,    // se
+                    //        (bt[-xStride + zStride - 1] > 0) ? VOXEL_HEIGHT_1 : VOXEL_HEIGHT_0,   // nw
+                    //        (bt[xStride + zStride - 1] > 0) ? VOXEL_HEIGHT_1 : VOXEL_HEIGHT_0    // ne
+                    //    );
+                    //}
+                    else
+                        writers.geometry.buffer[index] = VoxelEncodeGeometry(VOXEL_TYPE_SOLID);
+                }
+#endif
+                int light = 
+                    (bt[-xStride - zStride] == 0) +  // nw
+                    (bt[-zStride] == 0) +            // n
+                    (bt[xStride - zStride] == 0) +   // ne
+                    (bt[-xStride] == 0) +            // w
+                    (bt[0] == 0) +                   // origin
+                    (bt[xStride] == 0) +             // e
+                    (bt[-xStride + zStride] == 0) +  // sw
+                    (bt[zStride] == 0) +             // s
+                    (bt[xStride + zStride] == 0);    // se
+
+                writers.lighting.buffer[index - 1] += light * 255 / 27;
+                writers.lighting.buffer[index] += light * 255 / 27;
+                writers.lighting.buffer[index + 1] += light * 255 / 27;
+            }
+        }
+    }
+}
+
+static void FillTerrainPerlin(Context* context, unsigned char* dataPtr, VariantMap& parameters, unsigned podIndex)
+{
+    VoxelWriter writer;
+    writer.SetSize(w, h, d);
     writer.InitializeBuffer(dataPtr);
     writer.Clear(0);
-
-    ResourceCache* cache = context->GetSubsystem<ResourceCache>();
-    Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
-    if (!heightMap)
-        return;
-
-    const int heightFactor = 8;
     unsigned tileX = parameters["TileX"].GetUInt();
     unsigned tileZ = parameters["TileZ"].GetUInt();
     unsigned chunkX = parameters["TileX"].GetUInt() * w;
     unsigned chunkZ = parameters["TileZ"].GetUInt() * d;
+
+
+    const int DEEP_WATER_BLOCK = 27;
+    const int WATER_BLOCK = 28;
+    const int DESERT_BLOCK = 44;
+    const int DIRT_BLOCK = 44;
+    const int GRASS_BLOCK = 36;
+    const int SLATE_BLOCK = 29;
+    const int FLOOR_BLOCK = 12;
+    const int SNOW_BLOCK = 5;
+    const int LIGHT_SNOW_BLOCK = 2;
+    const int WHITE_SNOW_BLOCK = 0;
+
+    const int FLOOR_HEIGHT = 10;
+    const int SLATE_HEIGHT = 20;
+    const int DIRT_HEIGHT = 30;
+    const int DESERT_HEIGHT = 45;
+    const int GRASS_HEIGHT = 70;
+    const int SNOW_HEIGHT = 90;
+    const int LIGHT_SNOW_HEIGHT = 105;
+    const int WHITE_SNOW_HEIGHT = 128;
+    const int WATER_HEIGHT = 30;
+
+    int blocks[8] = {FLOOR_BLOCK, SLATE_BLOCK, DIRT_BLOCK, DESERT_BLOCK, GRASS_BLOCK, SNOW_BLOCK, LIGHT_SNOW_BLOCK, WHITE_SNOW_BLOCK };
+    int heights[8] = {FLOOR_HEIGHT, SLATE_HEIGHT, DIRT_HEIGHT, DESERT_HEIGHT, GRASS_HEIGHT, SNOW_HEIGHT, LIGHT_SNOW_HEIGHT, WHITE_SNOW_HEIGHT };
+    int numBlocks = 8;
+
     for (unsigned x = 0; x < w; ++x)
     {
         for (unsigned z = 0; z < d; ++z)
         {
-            Color c = heightMap->GetPixel((chunkX + x) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight());
-            int y = (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-            int nw = (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-            int n = (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth(), (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-            int ne = (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-            int w = (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-            int e = (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-            int sw = (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-            int s = (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth(), (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-            int se = (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-            int height = y / heightFactor;
-
-            if (podIndex == 0) // blocktype
+            // detail noise
+            float dt = 0.0;
+            for (int o = 3; o < 5; ++o)
             {
-                for (unsigned i = 0; i < height; ++i)
-                    writer.SetBlocktype(x, i, z, (int)(c.Average() * 8) % 4 + 1);
-
-                writer.SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
+                float scale = (float)(1 << o);
+                float ns = stb_perlin_noise3((x + chunkX) / scale, (z + chunkZ) / scale, (float)-o, 256, 256, 256);
+                dt += Abs(ns);
             }
-            else if (podIndex == 1)
+
+            // low frequency
+            float ht = 0.0;
+            for (int o = 3; o < 9; ++o)
             {
-                for (unsigned i = 0; i < height; ++i)
-                    writer.SetLighting(x, i, z, 0);
+                float scale = (float)(1 << o);
+                float ns = stb_perlin_noise3((x + chunkX) / scale, (z + chunkZ) / scale, (float)o, 256, 256, 256);
+                ht += ns * noiseFactors[o];
+            }
 
-                for (unsigned i = height + 1; i < y; ++i)
-                    writer.SetLighting(x, i, z, 255);
+            // biome
+            float biome = stb_perlin_noise3((x + chunkX) / 2048, (z + chunkZ) / 2048, 32.0, 256, 256, 256);
 
-                int lightHeight = y / heightFactor;
-                int heights[9] = { y, nw, n, ne, w, e, sw, s, se };
-                int light = 0;
-                for (int litY = -1; litY <= 1; ++litY)
+            int height = (int)((ht + 0.2) * 45.0) + 32;
+            height = Clamp(height, 1, 128);
+
+            for (unsigned i = 0; i < height; ++i)
+            {
+                int h = ((float)i * (dt/2.0 + 1.0));
+                int b = 0;
+                for (int bh = 0; bh < numBlocks - 1; ++bh)
                 {
-                    for (int n = 0; n < 9; ++n)
+                    if (h < heights[bh])
                     {
-                        int neighborHeight = (heights[n] / heightFactor) + litY;
-                        light += lightHeight + litY > neighborHeight;
+                        b = bh;
+                        break;
                     }
                 }
-                writer.SetLighting(x, height, z, light * 255 / 27);
+                writer.SetBlocktype(x, i, z, blocks[b] + (dt > 0.5 ? 1 : 0));
+            }
+
+            if (height < WATER_HEIGHT)
+            {
+                for (unsigned i = 0; i < WATER_HEIGHT; ++i)
+                {
+                    if (height > WATER_HEIGHT - 5 && i > WATER_HEIGHT - 5)
+                        writer.SetBlocktype(x, i, z, WATER_BLOCK);
+                    else
+                        writer.SetBlocktype(x, i, z, DEEP_WATER_BLOCK +(dt > 0.7 ? 1 : 0));
+                }
             }
         }
     }
@@ -157,16 +275,16 @@ static unsigned RandomTerrain(Context* context, void* dest, unsigned size, unsig
     {
         unsigned podIndex = (position - headerSize) / podsize;
         unsigned char* dataPtr = (unsigned char*)dest;
-        FillTerrain(context, dataPtr, parameters, podIndex);
+        FillTerrainPerlin(context, dataPtr, parameters, podIndex);
         return dataSize;
     }
     return 0;
 }
 
-
 VoxelWorld::VoxelWorld(Context* context) :
     Sample(context)
 {
+    ProcSky::RegisterObject(context);
     counter_ = 0;
 }
 
@@ -189,6 +307,8 @@ void VoxelWorld::Start()
     // Setup the viewport for displaying the scene
     SetupViewport();
 
+    procSky_->Initialize();
+
     // Hook up to the frame update events
     SubscribeToEvents();
 }
@@ -209,131 +329,105 @@ void VoxelWorld::CreateScene()
     scene_->CreateComponent<Octree>();
     DebugRenderer* debug = scene_->CreateComponent<DebugRenderer>();
     scene_->CreateComponent<PhysicsWorld>();
-
+    
     Node* zoneNode = scene_->CreateChild("Zone");
     Zone* zone = zoneNode->CreateComponent<Zone>();
-    zone->SetBoundingBox(BoundingBox(-10000, 10000));
-    zone->SetAmbientColor(Color(1.0, 1.0, 1.0));
+    zone->SetBoundingBox(BoundingBox(Vector3(-100000, 0, -100000), Vector3(100000, 128, 100000)));
+    zone->SetAmbientColor(Color(0.5, 0.5, 0.5));
+    zone->SetHeightFog(true);
 	//zone->SetAmbientGradient(true);
-	zone->SetFogColor(Color(0.9f, 1.0f, 1.0f));
-	zone->SetFogStart(500.0f);
-	zone->SetFogEnd(750.0f);
+    zone->SetFogColor(Color(0.8, 0.8, 0.8));
+	zone->SetFogStart(700.0f);
+	zone->SetFogEnd(900.0f);
 
 
 	// Create skybox. The Skybox component is used like StaticModel, but it will be always located at the camera, giving the
 	// illusion of the box planes being far away. Use just the ordinary Box model and a suitable material, whose shader will
 	// generate the necessary 3D texture coordinates for cube mapping
-	Node* skyNode = scene_->CreateChild("Sky");
-	skyNode->SetScale(1000.0f); // The scale actually does not matter
-	Skybox* skybox = skyNode->CreateComponent<Skybox>();
-	skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
-	skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
+	//Node* skyNode = scene_->CreateChild("Sky");
+	//Skybox* skybox = skyNode->CreateComponent<Skybox>();
+	//skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
+	//skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
 
     // Create a scene node for the camera, which we will move around
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
     cameraNode_ = scene_->CreateChild("Camera");
     Camera* camera = cameraNode_->CreateComponent<Camera>();
-    camera->SetFarClip(750.0);
+    camera->SetFarClip(900.0);
 
     // Set an initial position for the camera scene node above the plane
     //cameraNode_->SetPosition(Vector3(1024.0, 128.0, 1024.0));
     cameraNode_->SetPosition(Vector3(0.0, 50.0, 0.0));
 
+    Node* skyNode = scene_->CreateChild("SkyNode");
+    procSky_ = skyNode->CreateComponent<ProcSky>();
+
      //Create a directional light to the world so that we can see something. The light scene node's orientation controls the
      //light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
      //The light will use default settings (white light, no shadows)
- //   Node* lightNode = scene_->CreateChild("DirectionalLight");
- //   lightNode->SetDirection(Vector3(0.6f, -1.0f, 0.8f)); // The direction vector does not need to be normalized
+    Node* lightNode = skyNode->CreateChild("DirectionalLight");
+    lightNode->SetDirection(Vector3(0.8f, -0.2f, 0.8f)); // The direction vector does not need to be normalized
 
- //   Light* light = lightNode->CreateComponent<Light>();
- //   light->SetLightType(LIGHT_DIRECTIONAL);
- //   light->SetCastShadows(true);
- //   light->SetBrightness(0.7);
-	//light->SetColor(Color(0.7, 1.0, 0.7));
-
-    //Node* planeNode = scene_->CreateChild("Plane");
-    //planeNode->SetScale(Vector3(100.0f, 1.0f, 100.0f));
-    //StaticModel* planeObject = planeNode->CreateComponent<StaticModel>();
-    //planeObject->SetModel(cache->GetResource<Model>("Models/Plane.mdl"));
-    //planeObject->SetMaterial(cache->GetResource<Material>("Materials/StoneTiled.xml"));
+    Light* light = lightNode->CreateComponent<Light>();
+    light->SetLightType(LIGHT_DIRECTIONAL);
+    light->SetCastShadows(true);
+    light->SetBrightness(0.4);
+	light->SetColor(Color(1.0, 1.0, 1.0));
+    light->SetShadowBias(BiasParameters(0.00025f, 0.5f));
+    // Set cascade splits at 10, 50 and 200 world units, fade shadows out at 80% of maximum shadow distance
+    light->SetShadowCascade(CascadeParameters(10.0f, 150.0f, 400.0f, 0.0f, 0.8f));
 
 
     voxelNode_ = scene_->CreateChild("VoxelNode");
-    //VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     voxelBlocktypeMap_ = new VoxelBlocktypeMap(context_);
-	unsigned char geoSolid = VoxelEncodeGeometry(VOXEL_TYPE_SOLID);
-	//unsigned char geoSlant = VoxelEncodeGeometry(VOXEL_TYPE_SLAB_LOWER);
+    voxelBlocktypeMap_->blockColor.Push(0);
+    for (unsigned i = 1; i < 64; ++i)
+        voxelBlocktypeMap_->blockColor.Push(i);
 
-    //unsigned char heightNormal = VoxelDefinition::EncodeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-	voxelBlocktypeMap_->blockTex1Face.Resize(5);
- //   //unsigned char heightSlope = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
- //   //unsigned char heightRoof = VoxelDefinition::EncodeBlockTypeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0);
- //   //voxelBlocktypeMap_->blockVHeight.Push(0);
- //   //voxelBlocktypeMap_->blockVHeight.Push(heightNormal);
- //   //voxelBlocktypeMap_->blockVHeight.Push(heightNormal);
+	//SharedPtr<Texture2DArray> texture(new Texture2DArray(context_));
+	//Vector<SharedPtr<Image> > images;
+	//images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Beach_sand_pxr128.png")));
+	//images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Bowling_grass_pxr128.png")));
+	//images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Brown_dirt_pxr128.png")));
+	//images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/stone/Gray_marble_pxr128.png")));
+	//if (!texture->SetData(images))
+	//	return;
 
-	// empty
-	voxelBlocktypeMap_->blockTex1Face[0][1] = 0;
-	voxelBlocktypeMap_->blockTex1Face[0][2] = 0;
-	voxelBlocktypeMap_->blockTex1Face[0][3] = 0;
-	voxelBlocktypeMap_->blockTex1Face[0][4] = 0;
-	voxelBlocktypeMap_->blockTex1Face[0][5] = 0;
+	//voxelBlocktypeMap_->diffuse1Textures = texture;
 
-	// grass
-	voxelBlocktypeMap_->blockTex1Face[1][0] = 0;
-	voxelBlocktypeMap_->blockTex1Face[1][1] = 0;
-	voxelBlocktypeMap_->blockTex1Face[1][2] = 0;
-	voxelBlocktypeMap_->blockTex1Face[1][3] = 0;
-	voxelBlocktypeMap_->blockTex1Face[1][4] = 0;
-	voxelBlocktypeMap_->blockTex1Face[1][5] = 0;
+    VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
 
-	// dirt
-	voxelBlocktypeMap_->blockTex1Face[2][0] = 1;
-	voxelBlocktypeMap_->blockTex1Face[2][1] = 1;
-	voxelBlocktypeMap_->blockTex1Face[2][2] = 1;
-	voxelBlocktypeMap_->blockTex1Face[2][3] = 1;
-	voxelBlocktypeMap_->blockTex1Face[2][4] = 1;
-	voxelBlocktypeMap_->blockTex1Face[2][5] = 1;
-
-	// brick
-	voxelBlocktypeMap_->blockTex1Face[3][0] = 2;
-	voxelBlocktypeMap_->blockTex1Face[3][1] = 2;
-	voxelBlocktypeMap_->blockTex1Face[3][2] = 2;
-	voxelBlocktypeMap_->blockTex1Face[3][3] = 2;
-	voxelBlocktypeMap_->blockTex1Face[3][4] = 2;
-	voxelBlocktypeMap_->blockTex1Face[3][5] = 2;
-
-	// fabric
-	voxelBlocktypeMap_->blockTex1Face[4][0] = 3;
-	voxelBlocktypeMap_->blockTex1Face[4][1] = 3;
-	voxelBlocktypeMap_->blockTex1Face[4][2] = 3;
-	voxelBlocktypeMap_->blockTex1Face[4][3] = 3;
-	voxelBlocktypeMap_->blockTex1Face[4][4] = 3;
-	voxelBlocktypeMap_->blockTex1Face[4][5] = 3;
-
-	// voxelBlocktypeMap_->blockTex1Face.Push(empty);
-	// voxelBlocktypeMap_->blockTex1Face.Push(dirt);
-	// voxelBlocktypeMap_->blockTex1Face.Push(grass);
-    voxelBlocktypeMap_->blockGeometry.Push(0);
-    voxelBlocktypeMap_->blockGeometry.Push(geoSolid);
-    voxelBlocktypeMap_->blockGeometry.Push(geoSolid);
-    voxelBlocktypeMap_->blockGeometry.Push(geoSolid);
-    voxelBlocktypeMap_->blockGeometry.Push(geoSolid);
-    //voxelBlocktypeMap_->blocktype.Clear();
-
-	SharedPtr<Texture2DArray> texture(new Texture2DArray(context_));
-	Vector<SharedPtr<Image> > images;
-	images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Bowling_grass_pxr128.png")));
-	images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Brown_dirt_pxr128.png")));
-	images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/brick/Blue_glazed_pxr128.png")));
-	images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/fabric/Flower_pattern_pxr128.png")));
-	if (!texture->SetData(images))
-		return;
-
-	voxelBlocktypeMap_->diffuse1Textures = texture;
+	unsigned numX = 256;
+	unsigned numZ = 256;
+    VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
+    voxelSet->SetNumberOfChunks(numX, 1, numZ);
+    for (unsigned x = 0; x < numX; ++x)
+    {
+        for (unsigned z = 0; z < numZ; ++z)
+        {
+            VoxelMap* map = new VoxelMap(context_);
+            map->blocktypeMap = voxelBlocktypeMap_;
+            map->SetSize(w, h, d);
+            SharedPtr<Generator> terrainGenerator(new Generator(context_));
+            terrainGenerator->SetName("RandomTerrain");
+            VariantMap params;
+            params["TileX"] = x;
+            params["TileZ"] = z;
+            terrainGenerator->SetParameters(params);
+            map->SetSource(terrainGenerator);
+            map->AddVoxelProcessor(AOVoxelLighting);
+#ifdef SMOOTH_TERRAIN
+            map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING | VOXEL_BLOCK_GEOMETRY | VOXEL_BLOCK_VHEIGHT);
+#else
+            map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+#endif
+            voxelSet->SetVoxelMap(x, 0, z, map);
+        }
+    }
+    voxelSet->BuildAsync();
 
  //   Node* spotNode = cameraNode_->CreateChild("PointLight");
- //   spotNode->SetPosition(Vector3(0.0, -5.0, -5.0));
+ //   spotNode->SetPosition(Vector3(0.0, -15.0, 0.0));
  //   Light* spotLight = spotNode->CreateComponent<Light>();
  //   spotLight->SetLightType(LIGHT_POINT);
  //   spotLight->SetCastShadows(true);
@@ -379,7 +473,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 200.0f;
+    const float MOVE_SPEED = 20.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
@@ -392,7 +486,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Node* lightNode = scene_->GetChild("DirectionalLight");
 	if (lightNode)
 	{
-		lightNode->Rotate(Quaternion(0.0, 30.0 * timeStep, 0.0));
+		//lightNode->Rotate(Quaternion(0.0, 30.0 * timeStep, 0.0));
 	}
 
     // Construct new orientation for the camera scene node from yaw and pitch. Roll is fixed to zero
@@ -468,257 +562,6 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
     float timeStep = eventData[P_TIMESTEP].GetFloat();
     // Move the camera, scale movement with time step
     MoveCamera(timeStep);
-
-    ResourceCache* cache = GetSubsystem<ResourceCache>();
-    VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
-
-#if 0
-
-	if (counter_ == 0)
-	{
-		for (unsigned x = 0; x < 1; ++x)
-		{
-			for (unsigned y = 0; y < 1; ++y)
-			{
-				Node* node = voxelNode_->CreateChild("VoxelChunk_" + String(x) + "_" + String(y));
-				node->SetPosition(Vector3(x * 64, 0, y * 64));
-				VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
-				SharedPtr<VoxelMap> map(new VoxelMap(context_));
-				map->SetSize(w, h, d);
-				chunk->SetVoxelMap(map);
-				node->CreateComponent<RigidBody>();
-				CollisionShape* shape = node->CreateComponent<CollisionShape>();
-				shape->SetVoxelTriangleMesh(chunk);
-			}
-		}
-	}
-	else
-		return;
-
-
-    float offset = (float)h / 2.0 + ((counter_ % 10) - 5);
-    float sphereSize = 25.0; // +((counter_ % 10) - 5);
-    int counter = counter_ % h;
-
-	Node* node = voxelNode_->GetChild("VoxelChunk_" + String(0) + "_" + String(0));
-	VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
-	VoxelMap* map = chunk->GetVoxelMap();
-	map->InitializeBlocktype();
-
-    for (unsigned x = 0; x < w; ++x)
-    {
-    	for (unsigned z = 0; z < d; ++z)
-    	{
-    		for (unsigned y = 0; y < h; ++y)
-    		{
-				//map->SetBlocktype(x, y, z, 1);
-				
-    			Vector3 v(x, y, z);
-    			v = v - Vector3(w/2.0, h/2.0, offset);
-				map->SetBlocktype(x,y,z,v.Length() < sphereSize && v.Length() > sphereSize - 5.0 ? 1 : 0);
-    		}
-    	}
-    }
-	chunk->Build();
-
-   // for (unsigned x = 0; x < 2; ++x)
-   // {
-   // 	for (unsigned y = 0; y < 2; ++y)
-   // 	{
-			//Node* node = voxelNode_->GetChild("VoxelChunk_" + String(x) + "_" + String(y));
-			//VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
-   // 		builder->BuildVoxelChunk(chunk, voxelDefinition_);
-   // 	}
-   // }
-#endif
-
-#if 1
-	if (counter_ != 0)
-		return;
-
-    Image* heightMap = cache->GetResource<Image>("Textures/HeightMap.png");
-	const int heightFactor = 2;
-	unsigned numX = 256;
-	unsigned numZ = 256;
-    VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
-    voxelSet->SetNumberOfChunks(numX, 1, numZ);
-    for (unsigned x = 0; x < numX; ++x)
-    {
-        for (unsigned z = 0; z < numZ; ++z)
-        {
-            VoxelMap* map = new VoxelMap(context_);
-            map->blocktypeMap = voxelBlocktypeMap_;
-            map->SetSize(w, h, d);
-            SharedPtr<Generator> terrainGenerator(new Generator(context_));
-            terrainGenerator->SetName("RandomTerrain");
-            VariantMap params;
-            params["TileX"] = x;
-            params["TileZ"] = z;
-            terrainGenerator->SetParameters(params);
-            map->SetSource(terrainGenerator);
-            voxelSet->SetVoxelMap(x, 0, z, map);
-        }
-    }
-    voxelSet->BuildAsync();
-
-  //  for (unsigned a = 0; a < numX; ++a)
-  //  {
-		//unsigned chunkX = a * 64;
-  //      for (unsigned b = 0; b < numZ; ++b)
-  //      {
-  //          
-		//	unsigned chunkZ = b * 64;
-  //          VoxelChunk* chunk = voxelSet->GetVoxelChunk(a, 0, b);
-		//	//chunk->SetOccludee(true);
-		//	//chunk->SetOccluder(true);
-		//	//node->CreateComponent<RigidBody>();
-		//	//CollisionShape* shape = node->CreateComponent<CollisionShape>();
-		//	//shape->SetVoxelTriangleMesh(chunk);
-
-		//	SharedPtr<VoxelMap> voxelMap(new VoxelMap(context_));
-		//	chunk->SetVoxelMap(voxelMap);
-		//	voxelMap->SetSize(64, 128, 64);
-		//	voxelMap->InitializeBlocktype();
-		//	//voxelMap->InitializeVHeight(VoxelEncodeVHeight(VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1));
-		//	voxelMap->InitializeLighting(255);
-		//	//voxelMap->InitializeColor();
-		//	//voxelMap->InitializeTex2();
-  //          //voxelMap->InitializeGeometry(2);
-		//	voxelMap->blocktypeMap = voxelBlocktypeMap_;
-  //          unsigned counter = 0;
-		//	for (unsigned x = 0; x < w; ++x)
-		//	{
-		//		for (unsigned z = 0; z < d; ++z)
-		//		{
-		//			//Color c = heightMap->GetPixel(a * 64 + x, b * 64 + z);
-
-  //                  Color c = heightMap->GetPixel((chunkX + x) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight());
-		//			int y =  (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth(), (chunkZ + z) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-		//			int nw = (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-		//			int n =  (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth()    , (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-		//			int ne = (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z - 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-		//			int w =  (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z    ) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-		//			int e =  (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z    ) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-		//			int sw = (255 - ((heightMap->GetPixelInt((chunkX + x - 1) % heightMap->GetWidth(), (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-		//			int s =  (255 - ((heightMap->GetPixelInt((chunkX + x) % heightMap->GetWidth()    , (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-		//			int se = (255 - ((heightMap->GetPixelInt((chunkX + x + 1) % heightMap->GetWidth(), (chunkZ + z + 1) % heightMap->GetHeight()) & 0x0000FF00) >> 8));
-		//			int height = y / heightFactor;
-
-		//			for (unsigned i = 0; i < height; ++i)
-		//			{
-		//				voxelMap->SetBlocktype(x, i, z, (int)(c.Average() * 8) % 4 + 1);
-		//				//voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-		//				voxelMap->SetLighting(x, i, z, 0);
-  //                      //voxelMap->SetGeometry(x, i, z, VOXEL_TYPE_SOLID);
-		//			}
-
-		//			// gather nearby values to get height
-		//			//VoxelHeight heights[4];
-		//			//float heightValues[4] = {
-		//			//	(float)(y - sw) / 2.0,
-		//			//	(float)(y - se) / 2.0,
-		//			//	(float)(y - nw) / 2.0,
-		//			//	(float)(y - ne) / 2.0,
-		//			//};
-
-		//			//for (unsigned j = 0; j < 4; ++j)
-		//			//{
-		//			//	float hv = heightValues[j];
-		//			//	if (hv < -0.5)
-		//			//		heights[j] = VOXEL_HEIGHT_0;
-		//			//	else if (hv < 0.0)
-		//			//		heights[j] = VOXEL_HEIGHT_HALF;
-		//			//	else if (hv < 0.5)
-		//			//		heights[j] = VOXEL_HEIGHT_1;
-		//			//	else
-		//			//		heights[j] = VOXEL_HEIGHT_1;
-		//			//}
-
-		//			voxelMap->SetBlocktype(x, height, z, (int)(c.Average() * 8) % 4 + 1);
-  //                  //voxelMap->SetColor(x, height, z, (int)(c.Average() * 64));
-		//			//voxelMap->SetVheight(x, height, z, heights[0], heights[1], heights[2], heights[3]);
-		//			//voxelMap->SetTex2(x, height, z, Rand() % 4);
-		//			//voxelMap->SetColor(x, height, z, Rand() % 64);
-  //                  //voxelMap->SetGeometry(x, height, z, counter++ % 2 == 0 ? VOXEL_TYPE_FLOOR_VHEIGHT_03 : VOXEL_TYPE_FLOOR_VHEIGHT_12);
-
-		//			{
-		//				int lightHeight = y / heightFactor;
-		//				int heights[9] = { y, nw, n, ne, w, e, sw, s, se };
-		//				int light = 0;
-		//				for (int litY = -1; litY <= 1; ++litY)
-		//					for (int n = 0; n < 9; ++n)
-		//					{
-		//						int neighborHeight = (heights[n] / heightFactor) + litY;
-		//						light += lightHeight + litY > neighborHeight;
-		//					}
-
-		//				voxelMap->SetLighting(x, height, z, light * 255 / 27);
-		//			}
-		//		}
-		//	}
-    //    }
-    //}
-
-#endif
-
-#if 0
-	int btype = 1;
-    for (unsigned a = 0; a < 2; ++a)
-    {
-		unsigned chunkX = a * 64;
-        for (unsigned b = 0; b < 2; ++b)
-        {
-			unsigned chunkZ = b * 64;
-			String chunkName = "VoxelChunk_" + String(a) + "_" + String(b);
-			Node* node = voxelNode_->CreateChild(chunkName);
-			node->SetPosition(Vector3(a * 64, 0, b * 64));
-			VoxelChunk* chunk = node->CreateComponent<VoxelChunk>();
-			SharedPtr<VoxelMap> voxelMap(new VoxelMap(context_));
-			chunk->SetVoxelMap(voxelMap);
-			voxelMap->SetSize(64, 64, 64);
-			voxelMap->InitializeBlocktype();
-			//voxelMap->InitializeVHeight();
-			voxelMap->blocktypeMap = voxelBlocktypeMap_;
-			for (unsigned x = 0; x < 64; ++x)
-			{
-				for (unsigned y = 0; y < 10; ++y)
-				{ 
-					for (unsigned z = 0; z < 64; ++z)
-					{
-						voxelMap->SetBlocktype(x, y, z, btype);
-						//voxelMap->SetVheight(x, i, z, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1, VOXEL_HEIGHT_1);
-					}
-				}
-			}
-			btype++;
-        }
-    }
-
-	// loop through again and set neighbors
-	for (int a = 0; a < 2; ++a)
-	{
-		for (int b = 0; b < 2; ++b)
-		{
-			Node* node = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b));
-			Node* north = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b+1));
-			Node* south = voxelNode_->GetChild("VoxelChunk_" + String(a)   + "_" + String(b-1));
-			Node* east  = voxelNode_->GetChild("VoxelChunk_" + String(a+1) + "_" + String(b));
-			Node* west  = voxelNode_->GetChild("VoxelChunk_" + String(a-1) + "_" + String(b));
-			VoxelChunk* chunk = node->GetComponent<VoxelChunk>();
-			VoxelChunk* northChunk = north ? north->GetComponent<VoxelChunk>() : 0;
-			VoxelChunk* southChunk = south ? south->GetComponent<VoxelChunk>() : 0;
-			VoxelChunk* eastChunk = east ? east->GetComponent<VoxelChunk>() : 0;
-			VoxelChunk* westChunk = west ? west->GetComponent<VoxelChunk>() : 0;
-			chunk->SetNeighbors(northChunk, southChunk, eastChunk, westChunk);
-			chunk->Build();
-		}
-	}
-#endif
-
-
-    counter_++;
-	// builder->CompleteWork();
-	//builder->BuildVoxelChunk(chunk, voxelMap);
 }
 
 void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData)
@@ -734,7 +577,6 @@ void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventD
 
 	if (drawDebug_)
 		scene_->GetComponent<PhysicsWorld>()->DrawDebugGeometry(true);
-
 }
 
 

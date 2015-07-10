@@ -9,6 +9,12 @@
 
 namespace Urho3D {
 
+class VoxelChunk;
+class VoxelMap;
+
+struct VoxelProcessorWriters;
+typedef void(*VoxelProcessorFunc)(VoxelChunk* chunk, VoxelMap* source, VoxelProcessorWriters writers);
+
 // Shapes of blocks that aren't always cubes
 enum VoxelGeometryType
 {
@@ -93,17 +99,15 @@ public:
 	~VoxelBlocktypeMap() { }
 };
 
-class URHO3D_API VoxelWriter : public Object
+class URHO3D_API VoxelWriter
 {
-    OBJECT(VoxelWriter);
-
+public:
     unsigned size;
 	unsigned xStride;
 	unsigned zStride;
     unsigned char* buffer;
 
-public:
-    VoxelWriter(Context* context) : Object(context),
+    VoxelWriter() :
         size(0),
         xStride(0),
         zStride(0)
@@ -111,13 +115,13 @@ public:
 
     }
     
-	inline unsigned GetIndex(int x, int y, int z) { return (y + 1) + ((z + 1) * zStride) + ((x + 1) * xStride); }
+	inline unsigned GetIndex(int x, int y, int z) { return (y + 2) + ((z + 2) * zStride) + ((x + 2) * xStride); }
 
 	void SetSize(unsigned width, unsigned height, unsigned depth)
 	{
-		zStride = height + 2;
-		xStride = (height + 2) * (depth + 2);
-        size = (width + 2)*(height + 2)*(depth + 2);
+		zStride = height + 4;
+		xStride = (height + 4) * (depth + 4);
+        size = (width + 4)*(height + 4)*(depth + 4);
 	}
 
     void InitializeBuffer(unsigned char* data)
@@ -128,6 +132,11 @@ public:
     void Clear(unsigned char value)
     {
 		memset(buffer, value, sizeof(char) * size);
+    }
+
+    inline void Set(int x, int y, int z, unsigned char val)
+    {
+		buffer[GetIndex(x, y, z)] = val;
     }
 
 	inline void SetColor(int x, int y, int z, unsigned char val)
@@ -174,12 +183,14 @@ public:
 	PODVector<unsigned char> rotate;
 	PODVector<unsigned char> tex2;
     unsigned dataMask_;
+    unsigned processorDataMask_;
 	unsigned height_;
 	unsigned width_;
 	unsigned depth_;
 	unsigned size_;
 	unsigned xStride;
 	unsigned zStride;
+    Vector<VoxelProcessorFunc> voxelProcessors_;
     SharedPtr<Object> source_;
 
     /// Construct empty.
@@ -212,7 +223,10 @@ public:
     /// Sets the block type data mask.
     virtual void SetDataMask(unsigned dataMask) { dataMask_ = dataMask; }
 
-	inline unsigned GetIndex(int x, int y, int z) { return (y + 1) + ((z + 1) * zStride) + ((x + 1) * xStride); }
+    /// Sets the block type data mask.
+    virtual void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
+
+	inline unsigned GetIndex(int x, int y, int z) { return (y + 2) + ((z + 2) * zStride) + ((x + 2) * xStride); }
     void SetSize(unsigned width, unsigned height, unsigned depth);
     void InitializeBlocktype(unsigned char initialValue = 0);
 	void InitializeVHeight(unsigned char initialValue = 0);
@@ -220,6 +234,12 @@ public:
 	void InitializeColor(unsigned char initialValue = 0);
 	void InitializeTex2(unsigned char initialValue = 0);
 	void InitializeGeometry(unsigned char initialValue = 0);
+
+    Vector<VoxelProcessorFunc> GetVoxelProcessors() { return voxelProcessors_; }
+
+    void AddVoxelProcessor(VoxelProcessorFunc voxelProcessor) { voxelProcessors_.Push(voxelProcessor); }
+
+    void RemoveVoxelProcessor(unsigned index) { voxelProcessors_.Erase(index); }
 
 	inline void SetColor(int x, int y, int z, unsigned char val)
 	{
@@ -251,6 +271,17 @@ public:
         geometry[GetIndex(x, y, z)] = VoxelEncodeGeometry(geometrytype);
     }
 
+};
+
+struct VoxelProcessorWriters
+{
+    VoxelWriter blocktype;
+	VoxelWriter color;
+	VoxelWriter geometry;
+	VoxelWriter vHeight;
+	VoxelWriter lighting;
+	VoxelWriter rotate;
+	VoxelWriter tex2;
 };
 
 class Voxel

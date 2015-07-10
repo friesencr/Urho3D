@@ -36,6 +36,7 @@ varying vec4 vWorldPos;
     varying vec3 vVertexLight;
     varying vec4 vScreenPos;
 #endif
+varying vec3 vReflectionVec;
 
 void VS()
 {
@@ -92,9 +93,7 @@ void VS()
 
         vScreenPos = GetScreenPos(gl_Position);
 
-        #ifdef ENVCUBEMAP
-            vReflectionVec = worldPos - cCameraPos;
-        #endif
+        vReflectionVec = worldPos - cCameraPos;
     #endif
 }
 
@@ -143,11 +142,15 @@ void PS()
     diffTex2.a *= vTexLerp;
 
     if (texBlendMode)
+    {
         diffColor.rgb = cMatDiffColor.rgb * diffTex1.rgb * mix(vec3(1.0, 1.0, 1.0), 2.0 * diffTex2.xyz, diffTex2.a);
-    else {
+    }
+    else
+    {
         diffColor.rgb = cMatDiffColor.rgb * mix(diffTex1.xyz, diffTex2.xyz, 0.5);
         fragmentAlpha = diffTex1.a * (1 - diffTex2.a) + diffTex2.a;
     }
+    diffColor = color * vAmbOcc;
 
     // diffColor.rgb = cMatDiffColor.rgb * diffTex1.rgb;
     
@@ -195,11 +198,19 @@ void PS()
         #endif
 
         #ifdef AMBIENT
-            finalColor += cAmbientColor * diffColor.rgb;
+
+            vec3 voxAmbientColor = dot(normal, cAmbientTable[0].xyz) * cAmbientTable[1].xyz + cAmbientTable[2].xyz;
+            voxAmbientColor = clamp(voxAmbientColor, 0.0, 1.0);
+            // vec3 finalColor = vVertexLight * vAmbOcc * (diffColor.rgb + voxAmbientColor);
+
+            //finalColor += vAmbOcc * (diffColor.rgb + voxAmbientColor);
+            finalColor += (voxAmbientColor + cAmbientColor) * diffColor.rgb;
             finalColor += cMatEmissiveColor;
 
-            // gl_FragColor = vec4(GetFog(finalColor, fogFactor), diffColor.a);
-            gl_FragColor = vec4(GetFog(finalColor, fogFactor), diffColor.a);
+            //finalColor = textureCube(sZoneCubeMap, vReflectionVec).rgb;
+            finalColor = textureCube(sZoneCubeMap, vec3(1.0, 1.0, 0.0)).rgb;
+            gl_FragColor = vec4(finalColor, diffColor.a);
+            //gl_FragColor = vec4(GetFog(finalColor, fogFactor), diffColor.a);
         #else
             gl_FragColor = vec4(GetLitFog(finalColor, fogFactor), diffColor.a);
         #endif
@@ -207,20 +218,10 @@ void PS()
         // Voxel ambient light
         vec3 voxAmbientColor = dot(normal, cAmbientTable[0].xyz) * cAmbientTable[1].xyz + cAmbientTable[2].xyz;
         voxAmbientColor = clamp(voxAmbientColor, 0.0, 1.0);
-        //voxAmbientColor *= (1 - vAmbOcc*2);
-        //vec3 voxLitColor = diffColor.xyz * (1.0 - vAmbOcc*2);
+        vec3 finalColor = vVertexLight * (diffColor.rgb + voxAmbientColor);
 
-        //vec3 voxLitColor = ComputeLighting(vWorldPos.xyz, vNormal, diffColor.xyz, voxAmbientColor);
-
-        // Ambient & per-vertex lighting
-        // vec3 finalColor = vVertexLight * vAmbOcc * diffColor.rgb;
-        vec3 finalColor = vVertexLight * vAmbOcc * (diffColor.rgb + voxAmbientColor);
-
-        //vec3 finalColor = vec3(1.0, 1.0, 1.0) * (1 - vAmbOcc);
-
-        // gl_FragColor = vec4(0.0, 0.0, 0.0, fragmentAlpha * diffColor.a);
+        //finalColor = textureCube(sZoneCubeMap, vec3(0.0, 1.0, 0.0)).rgb;
         gl_FragColor = vec4(GetFog(finalColor, fogFactor), fragmentAlpha * diffColor.a);
-        //gl_FragColor = vec4(voxLitColor, diffColor.a);
     #endif
 
 }

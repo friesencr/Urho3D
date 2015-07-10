@@ -205,9 +205,6 @@ namespace Urho3D {
             batches_[i].geometry_ = geometries_[i];
             batches_[i].geometryType_ = GEOM_STATIC_NOINSTANCING;
             numQuads_[i] = 0;
-
-            vertexData_[i]->SetShadowed(false);
-            faceData_[i]->SetShadowed(false);
         }
     }
 

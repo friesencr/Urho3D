@@ -30,7 +30,7 @@ static const unsigned char VOXEL_WORKER_SIZE_Y = 128;
 static const unsigned char VOXEL_WORKER_SIZE_Z = 32;
 
 // VOXEL CONFIG MODE 0 - is 2 uints per vertex
-static const unsigned VOXEL_WORKER_MAX_QUADS = 400000;
+static const unsigned VOXEL_WORKER_MAX_QUADS = 800000;
 static const unsigned VOXEL_WORKER_VERTEX_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4 * 4;
 static const unsigned VOXEL_WORKER_FACE_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4;
 
@@ -38,6 +38,7 @@ static const unsigned char VOXEL_CHUNK_SIZE_X = 64;
 static const unsigned char VOXEL_CHUNK_SIZE_Y = 128;
 static const unsigned char VOXEL_CHUNK_SIZE_Z = 64;
 static const unsigned VOXEL_CHUNK_SIZE = VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Y * VOXEL_CHUNK_SIZE_Z;
+static const unsigned VOXEL_PROCESSOR_SIZE = (VOXEL_CHUNK_SIZE_X + 4) * (VOXEL_CHUNK_SIZE_Y + 4) * (VOXEL_CHUNK_SIZE_Z + 4);
 
 class VoxelBuilder;
 class VoxelChunk;
@@ -52,10 +53,12 @@ struct VoxelJob {
 struct VoxelWorkSlot
 {
     Vector<VoxelWorkload> workloads;
+    VoxelProcessorWriters processorWriters;
     VoxelJob* job;
     stbvox_mesh_maker meshMakers[4];
     unsigned char workVertexBuffers[4][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
     unsigned char workFaceBuffers[4][VOXEL_WORKER_FACE_BUFFER_SIZE];
+    unsigned char workProcessorBuffers[7][VOXEL_PROCESSOR_SIZE];
     int numQuads;
     bool failed;
     bool free;
@@ -146,10 +149,6 @@ private:
 	Vector<Variant> texgenTable_;
 	Vector<Variant> colorTable_;
 	Mutex slotMutex_;
-	Timer frameTimer_;
-	unsigned maxFrameTime_;
-	bool frameReset_;
-	bool completeAllWork_;
 };
 
 }

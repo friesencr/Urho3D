@@ -25,6 +25,7 @@
 #include <Urho3D/Graphics/Voxel.h>
 
 #include "Sample.h"
+#include "ProcSky.h"
 
 namespace Urho3D
 {
@@ -68,6 +69,7 @@ private:
 
 	SharedPtr<VoxelBlocktypeMap> voxelBlocktypeMap_;
     SharedPtr<Node> voxelNode_;
+    SharedPtr<ProcSky> procSky_;
     int counter_;
 	bool drawDebug_;
     SharedPtr<Text> cameraPositionText_;

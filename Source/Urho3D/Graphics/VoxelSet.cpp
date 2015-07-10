@@ -21,10 +21,7 @@ static const float BUILD_UNSET = 100000000.0;
 
 inline bool CompareChunks(VoxelChunk* lhs, VoxelChunk* rhs)
 {
-    if (lhs->GetBuildVisible() == rhs->GetBuildVisible())
-        return lhs->GetBuildPriority() < rhs->GetBuildPriority();
-    else
-        return lhs->GetBuildVisible();
+    return lhs->GetBuildVisible() > rhs->GetBuildVisible() || lhs->GetBuildPriority() < rhs->GetBuildPriority();
 }
 
 VoxelSet::VoxelSet(Context* context) :
@@ -82,6 +79,9 @@ void VoxelSet::OnSetEnabled()
 
 void VoxelSet::HandleSceneUpdate(StringHash eventType, VariantMap& eventData)
 {
+    if (loadedChunks_.Size() == chunks_.Size())
+        return;
+
     BuildInternal(true);
 }
 
@@ -189,7 +189,8 @@ void VoxelSet::Build()
         {
             for (unsigned y = 0; y < numChunksY; ++y)
             {
-                FindOrCreateVoxelChunk(x, y, z, GetVoxelMap(x, y, z));
+                VoxelChunk* chunk = FindOrCreateVoxelChunk(x, y, z, GetVoxelMap(x, y, z));
+                chunk->BuildAsync();
             }
         }
     }
@@ -221,6 +222,20 @@ void VoxelSet::BuildInternal(bool async)
             loadedChunks_.Erase(maxInMemoryChunks_);
             buildQueue_.Remove(chunk);
         }
+    }
+
+    for (unsigned i = 0; i < buildQueue_.Size(); ++i)
+    {
+        VoxelChunk* chunk = buildQueue_[i];
+        if (chunk->GetSizeX() != 64)
+            int a = 1;
+    }
+
+    for (PODVector<VoxelChunk*>::ConstIterator i = buildQueue_.Begin(); i != buildQueue_.End(); ++i)
+    {
+        VoxelChunk* chunk = *i;
+        if (chunk->GetSizeX() != 64)
+            int a = 1;
     }
 
     Sort(buildQueue_.Begin(), buildQueue_.End(), CompareChunks);
@@ -286,7 +301,9 @@ VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z,
     chunkNode->SetPosition(Vector3((float)x, (float)y, (float)z) * chunkSpacing_);
     chunk = chunkNode->CreateComponent<VoxelChunk>();
     chunk->SetIndex(x, y, z);
+    chunk->SetSize(64, 128, 64);
     chunk->SetVoxelMap(map);
+    chunk->SetCastShadows(true);
     chunk->buildPrioirty_ = BUILD_UNSET;
     VoxelMap* north = GetVoxelMap(x, 0, z+1);
     VoxelMap* south = GetVoxelMap(x, 0, z-1);
@@ -374,6 +391,9 @@ void VoxelSet::AllocateAndSortVisibleChunks()
     for (unsigned i = 0; i < viewports; ++i)
     {
         Viewport* viewport = renderer->GetViewport(i);
+        if (!viewport)
+            continue;
+
         Camera* camera = viewport->GetCamera();
         if (!camera)
             continue;
@@ -394,7 +414,7 @@ void VoxelSet::AllocateAndSortVisibleChunks()
 
         if (GetIndexFromWorldPosition(cameraNode->GetWorldPosition(), currentX, currentY, currentZ))
         {
-            unsigned radius = 15;
+            unsigned radius = 20;
             CreateChunks(currentX, currentY, currentZ, radius, cameraNode->GetPosition(), visibleTest, viewDistance);
         }
 

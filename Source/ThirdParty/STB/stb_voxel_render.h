@@ -1,4 +1,4 @@
-// stb_voxel_render.h - v0.80 - Sean Barrett, 2015 - public domain
+// stb_voxel_render.h - v0.81 - Sean Barrett, 2015 - public domain
 //
 // This library helps render large-scale "voxel" worlds for games,
 // in this case, one with blocks that can have textures and that
@@ -169,6 +169,7 @@
 //
 // VERSION HISTORY
 //
+//   0.81   (2015-05-28)  fix broken STBVOX_CONFIG_OPTIMIZED_VHEIGHT
 //   0.80   (2015-04-11)  fix broken STBVOX_CONFIG_ROTATION_IN_LIGHTING refactoring
 //                        change STBVOX_MAKE_LIGHTING to STBVOX_MAKE_LIGHTING_EXT so
 //                                    that header defs don't need to see config vars
@@ -2734,7 +2735,6 @@ void stbvox_make_mesh_for_face(stbvox_mesh_maker *mm, stbvox_rotate rot, int fac
    }
 }
 
-#ifndef STBVOX_CONFIG_OPTIMIZED_VHEIGHT
 // get opposite-facing normal & texgen for opposite face, used to map up-facing vheight data to down-facing data
 static unsigned char stbvox_reverse_face[STBVF_count] =
 {
@@ -2744,7 +2744,7 @@ static unsigned char stbvox_reverse_face[STBVF_count] =
          0,       0,       0,       0, STBVF_ne_d, STBVF_ne_d, STBVF_nd, STBVF_nu
 };
 
-
+#ifndef STBVOX_CONFIG_OPTIMIZED_VHEIGHT
 // render non-planar quads by splitting into two triangles, rendering each as a degenerate quad
 static void stbvox_make_12_split_mesh_for_face(stbvox_mesh_maker *mm, stbvox_rotate rot, int face, int v_off, stbvox_pos pos, stbvox_mesh_vertex vertbase, stbvox_mesh_vertex *face_coord, unsigned char mesh, unsigned char *ht)
 {
@@ -3291,7 +3291,8 @@ static void stbvox_make_mesh_for_column(stbvox_mesh_maker *mm, int x, int y, int
       int z;
       for (z=z0; z < mm->z1; ++z) {
          if (bt[z] && ( !bt[z+ns_off] || !STBVOX_GET_GEO(geo[z+ns_off]) || !bt[z-ns_off] || !STBVOX_GET_GEO(geo[z-ns_off])
-                      || !bt[z+ew_off] || !STBVOX_GET_GEO(geo[z+ew_off]) || !bt[z-ew_off] || !STBVOX_GET_GEO(geo[z-ew_off])))
+                      || !bt[z+ew_off] || !STBVOX_GET_GEO(geo[z+ew_off]) || !bt[z-ew_off] || !STBVOX_GET_GEO(geo[z-ew_off])
+                      || !bt[z-1] || !STBVOX_GET_GEO(geo[z-1]) || !bt[z+1] || !STBVOX_GET_GEO(geo[z+1])))
          {  // TODO check up and down
             pos.z = z;
             stbvox_make_mesh_for_block_with_geo(mm, pos, v_off+z);
