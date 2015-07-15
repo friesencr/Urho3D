@@ -61,12 +61,11 @@ static float URHO3D_default_normals[32][3] =
 	{ 0, -URHO3D_RSQRT2, -URHO3D_RSQRT2 }, // south & down
 };
 
-static float URHO3D_default_ambient[4][4] =
+static float URHO3D_default_ambient[3][4] =
 {
 	{ 0, 1, 0, 0 }, // reversed lighting direction
-	{ 0.1, 0.1, 0.1, 0 }, // directional color
+	{ 0.2, 0.2, 0.2, 0 }, // directional color
 	{ 0.0, 0.0, 0.0, 0 }, // constant color
-	{ 0.5, 0.5, 0.5, 1.0f / 1000.0f / 1000.0f }, // fog data for simple_fog
 };
 
 static float URHO3D_default_texscale[128][4] =
@@ -150,7 +149,7 @@ VoxelBuilder::VoxelBuilder(Context* context)
 {
     transform_.Resize(3);
     normals_.Resize(32);
-    ambientTable_.Resize(4);
+    ambientTable_.Resize(3);
     texscaleTable_.Resize(64);
     texgenTable_.Resize(64);
     colorTable_.Resize(64);
@@ -166,7 +165,7 @@ VoxelBuilder::VoxelBuilder(Context* context)
         normals_[i] = Vector3(URHO3D_default_normals[i]);
 
     // ambient color table
-    for (unsigned i = 0; i < 4; ++i)
+    for (unsigned i = 0; i < 3; ++i)
         ambientTable_[i] = Vector3(URHO3D_default_ambient[i]);
 
     // texscale table
@@ -738,7 +737,7 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
     return success;
 }
 
-bool VoxelBuilder::SetMaterialParameters(Material* material)
+bool VoxelBuilder::UpdateMaterialParameters(Material* material, bool setColors)
 {
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     Technique* technique = cache->GetResource<Technique>("Techniques/VoxelDiff.xml");
@@ -748,7 +747,8 @@ bool VoxelBuilder::SetMaterialParameters(Material* material)
     material->SetShaderParameter("AmbientTable", ambientTable_);
     material->SetShaderParameter("TexScale", texscaleTable_);
     material->SetShaderParameter("TexGen", texgenTable_);
-    material->SetShaderParameter("ColorTable", colorTable_);
+    if (setColors)
+        material->SetShaderParameter("ColorTable", colorTable_);
     return true;
 }
 
@@ -827,12 +827,6 @@ bool VoxelBuilder::UploadGpuData(VoxelWorkSlot* slot, bool append)
 
     //PODVector<unsigned char> compressed(EstimateCompressBound(chunk->GetVoxelMap()->blocktype.Size()));
     //unsigned size = CompressData(&compressed.Front(), &chunk->GetVoxelMap()->blocktype.Front(), chunk->GetVoxelMap()->blocktype.Size());
-
-    if (!chunk->GetHasShaderParameters(0))
-    {
-        SetMaterialParameters(chunk->GetMaterial(0));
-        chunk->SetHasShaderParameters(0, true);
-    }
 
     chunk->SetBoundingBox(slot->box);
     Material* material = chunk->GetMaterial(0);

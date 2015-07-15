@@ -93,7 +93,7 @@ bool ProcSky::Initialize() {
   }
 
   if (!zone_)
-      zone_ = GetScene()->GetComponent<Zone>();
+      zone_ = GetComponent<Zone>();
 
   // Use first child as light node if it exists; otherwise, create it.
   if (!lightNode_) {

@@ -68,9 +68,9 @@ namespace Urho3D {
             // Check that the material is suitable for occlusion (default material always is)
             Material* mat = batches_[i].material_;
             if (mat && !mat->GetOcclusion())
-            continue;
+                continue;
             else
-            numTriangles += batches_[i].geometry_->GetIndexCount() / 3;
+                numTriangles += batches_[i].geometry_->GetIndexCount() / 3;
         }
         return numTriangles;
     }
@@ -102,6 +102,12 @@ namespace Urho3D {
 
         /* if (owner_) */
         /*     owner_->UpdatePatchLod(this); */
+
+        for (unsigned i = 0; i < GetNumMeshes(); ++i)
+        {
+            if (updateMaterialParameters_[i])
+                UpdateMaterialParameters(i);
+        }
     }
 
     void VoxelChunk::OnWorldBoundingBoxUpdate()
@@ -159,15 +165,15 @@ namespace Urho3D {
     //}
     }
 
-    bool VoxelChunk::GetHasShaderParameters(unsigned index)
-    {
-        return hasMaterialParameters_[index];
-    }
+    //bool VoxelChunk::GetHasShaderParameters(unsigned index)
+    //{
+    //    return hasMaterialParameters_[index];
+    //}
 
-    void VoxelChunk::SetHasShaderParameters(unsigned index, bool isRequired)
-    {
-        hasMaterialParameters_[index] = isRequired;
-    }
+    //void VoxelChunk::SetHasShaderParameters(unsigned index, bool isRequired)
+    //{
+    //    hasMaterialParameters_[index] = isRequired;
+    //}
 
     void VoxelChunk::SetNumberOfMeshes(unsigned count)
     {
@@ -186,13 +192,13 @@ namespace Urho3D {
         geometries_.Resize(count);
         materials_.Resize(count);
         batches_.Resize(count);
-        hasMaterialParameters_.Resize(count);
+        updateMaterialParameters_.Resize(count);
         numQuads_.Resize(count);
         reducedQuadCount_.Resize(count);
 
         for (unsigned i = 0; i < count; ++i)
         {
-            hasMaterialParameters_[i] = false;
+            updateMaterialParameters_[i] = false;
             vertexData_[i] = new VertexBuffer(context_);
             vertexData_[i]->SetShadowed(true);
             faceData_[i] = new IndexBuffer(context_);
@@ -246,9 +252,7 @@ namespace Urho3D {
     {
         unsigned total = 0;
         for (unsigned i = 0; i < GetNumMeshes(); ++i)
-        {
             total += GetNumQuads(i);
-        }
         return total;
     }
 
@@ -292,7 +296,7 @@ namespace Urho3D {
             {
                 if (!material->GetOcclusion())
                     return true;
-                    buffer->SetCullMode(material->GetCullMode());
+                buffer->SetCullMode(material->GetCullMode());
             }
             else
                 buffer->SetCullMode(CULL_CCW);
@@ -316,7 +320,7 @@ namespace Urho3D {
 
             // Draw and check for running out of triangles
             if (!buffer->Draw(node_->GetWorldTransform(), vertexData, vertexSize, indexData, indexSize, indexStart, indexCount))
-            return false;
+                return false;
         }
         return true;
     }
@@ -386,9 +390,46 @@ namespace Urho3D {
         voxelMap_ = voxelMap;
     }
 
+    void VoxelChunk::UpdateMaterialParameters(unsigned slot)
+    {
+        Material* material = GetMaterial(slot);
+        if (!material)
+            return;
+
+        bool setColor = true;
+
+        if (voxelMap_)
+        {
+            VoxelTextureMap* textureMap = voxelMap_->textureMap;
+            if (textureMap)
+            {
+                Texture* diffuse1 = textureMap->GetDiffuse1Texture();
+                if (diffuse1)
+                    material->SetTexture(TU_DIFFUSE, diffuse1);
+
+                Texture* diffuse2 = textureMap->GetDiffuse2Texture();
+                if (diffuse2)
+                    material->SetTexture(TU_NORMAL, diffuse2);
+
+            }
+
+            VoxelColorPalette* colorPalette = voxelMap_->colorPalette;
+            if (colorPalette)
+            {
+                setColor = false;
+                material->SetShaderParameter("ColorTable", colorPalette->GetColors());
+            }
+        }
+        VoxelBuilder* voxelBuilder = GetSubsystem<VoxelBuilder>();
+        voxelBuilder->UpdateMaterialParameters(material, true);
+
+        updateMaterialParameters_[slot] = false;
+    }
+
     void VoxelChunk::OnVoxelChunkCreated()
     {
         buildJob_ = 0;
+        updateMaterialParameters_[0] = true;
         if (!node_)
             return;
 

@@ -1,6 +1,9 @@
 #include "Voxel.h"
+#include "../Core/Object.h"
+#include "../Core/Context.h"
 #include "../IO/Deserializer.h"
 #include "../IO/Generator.h"
+#include "../Resource/ResourceCache.h"
 
 namespace Urho3D {
 
@@ -19,23 +22,153 @@ namespace Urho3D {
 		return STBVOX_MAKE_VHEIGHT(voxelHeight, voxelHeight, voxelHeight, voxelHeight);
 	}
 
-	unsigned char VoxelEncodeGeometry(VoxelGeometryType type, VoxelRotation rot, VoxelHeight height)
+	unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot, VoxelHeight height)
 	{
-		return STBVOX_MAKE_GEOMETRY(type, rot, height);
+		return STBVOX_MAKE_GEOMETRY(geometry, rot, height);
 	}
 
-	unsigned char VoxelEncodeGeometry(VoxelGeometryType type, VoxelRotation rot)
+	unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot)
 	{
-		return STBVOX_MAKE_GEOMETRY(type, rot, 0);
+		return STBVOX_MAKE_GEOMETRY(geometry, rot, 0);
 	}
 
-	unsigned char VoxelEncodeGeometry(VoxelGeometryType type)
+	unsigned char VoxelEncodeGeometry(VoxelGeometry geometry)
 	{
-		return STBVOX_MAKE_GEOMETRY(type, VOXEL_FACE_EAST,0);
+		return STBVOX_MAKE_GEOMETRY(geometry, VOXEL_FACE_EAST,0);
 	}
+
+    /// Register object factory.
+    void VoxelTextureMap::RegisterObject(Context* context)
+    {
+        context->RegisterFactory<VoxelTextureMap>();
+    }
+
+    bool VoxelTextureMap::BeginLoad(Deserializer& source)
+    {
+        ResourceCache* cache = GetSubsystem<ResourceCache>();
+        ResourceRef diffuse1Ref = source.ReadResourceRef();
+        ResourceRef diffuse2Ref = source.ReadResourceRef();
+        this->defaultTexture2Map = source.ReadBuffer();
+        SetDiffuse1Texture(cache->GetResource<Texture>(diffuse1Ref.name_));
+        SetDiffuse2Texture(cache->GetResource<Texture>(diffuse2Ref.name_));
+        return true;
+    }
+
+    void VoxelTextureMap::SetDiffuse1TextureArrayAttr(const ResourceRef& value)
+    {
+        ResourceCache* cache = GetSubsystem<ResourceCache>();
+        Texture* texture = cache->GetResource<Texture>(value.name_);
+        SetDiffuse2Texture(texture);
+    }
+
+    void VoxelTextureMap::SetDiffuse2TextureArrayAttr(const ResourceRef& value)
+    {
+        ResourceCache* cache = GetSubsystem<ResourceCache>();
+        SetDiffuse2Texture(cache->GetResource<Texture>(value.name_));
+    }
+
+    void VoxelTextureMap::SetDiffuse1Texture(Texture* texture)
+    { 
+        diffuse1Texture = texture;
+    }
+
+    void VoxelTextureMap::SetDiffuse2Texture(Texture* texture)
+    { 
+        diffuse2Texture = texture; 
+    }
+
+    /// Register object factory.
+    void VoxelBlocktypeMap::RegisterObject(Context* context)
+    {
+        context->RegisterFactory<VoxelBlocktypeMap>();
+    }
+
+    bool VoxelBlocktypeMap::BeginLoad(Deserializer& source)
+    {
+        if (source.ReadFileID() != "VOXB")
+            return false;
+
+        blockColor = source.ReadBuffer();
+        blockGeometry = source.ReadBuffer();
+        blockVHeight = source.ReadBuffer();
+        blockTex1 = source.ReadBuffer();
+        blockTex2 = source.ReadBuffer();
+        blockSelector = source.ReadBuffer();
+        blockSideTextureRotation = source.ReadBuffer();
+        PODVector<unsigned char[6]>* faceData[3] = { &blockColorFace, &blockTex1Face, &blockTex2Face };
+        for (unsigned set = 0; set < 3; ++set)
+        {
+            unsigned size = source.ReadVLE();
+            faceData[set]->Resize(size);
+            unsigned char* dataPtr = faceData[set]->Front();
+            for (unsigned i = 0; i < size; ++i)
+            {
+                *dataPtr++ = source.ReadUByte();
+                *dataPtr++ = source.ReadUByte();
+                *dataPtr++ = source.ReadUByte();
+                *dataPtr++ = source.ReadUByte();
+                *dataPtr++ = source.ReadUByte();
+                *dataPtr++ = source.ReadUByte();
+            }
+        }
+        return true;
+    }
+
+    /// Saves voxel map information.
+    bool VoxelBlocktypeMap::Save(Serializer& dest) 
+    {
+        if (!dest.WriteFileID("VOXB"))
+            return false;
+
+        dest.WriteBuffer(blockColor);
+        dest.WriteBuffer(blockGeometry);
+        dest.WriteBuffer(blockVHeight);
+        dest.WriteBuffer(blockTex1);
+        dest.WriteBuffer(blockTex2);
+        dest.WriteBuffer(blockSelector);
+        dest.WriteBuffer(blockSideTextureRotation);
+        PODVector<unsigned char[6]>* faceData[3] = { &blockColorFace, &blockTex1Face, &blockTex2Face };
+        for (unsigned set = 0; set < 3; ++set)
+        {
+            dest.WriteUInt(faceData[set]->Size());
+            unsigned char* dataPtr = faceData[set]->Front();
+            for (unsigned i = 0; i < faceData[set]->Size(); ++i)
+            {
+                dest.WriteUByte(*dataPtr++);
+                dest.WriteUByte(*dataPtr++);
+                dest.WriteUByte(*dataPtr++);
+                dest.WriteUByte(*dataPtr++);
+                dest.WriteUByte(*dataPtr++);
+                dest.WriteUByte(*dataPtr++);
+            }
+        }
+        return true;
+    }
+
+    /// Register object factory.
+    void VoxelOverlayMap::RegisterObject(Context* context)
+    {
+        context->RegisterFactory<VoxelOverlayMap>();
+    }
+
+    bool VoxelOverlayMap::BeginLoad(Deserializer& source)
+    {
+        return false;
+    }
+
+    /// Register object factory.
+    void VoxelColorPalette::RegisterObject(Context* context)
+    {
+        context->RegisterFactory<VoxelColorPalette>();
+    }
+
+    bool VoxelColorPalette::BeginLoad(Deserializer& source)
+    {
+        return false;
+    }
 
     VoxelMap::VoxelMap(Context* context) 
-        : Resource(context),
+        : Serializable(context),
         width_(0),
         height_(0),
         depth_(0),
@@ -46,6 +179,24 @@ namespace Urho3D {
 
     VoxelMap::~VoxelMap()
     {
+    }
+
+    /// Register object factory.
+    void VoxelMap::RegisterObject(Context* context)
+    {
+        context->RegisterFactory<VoxelMap>();
+        ATTRIBUTE("Data Mask", unsigned, dataMask_, 0, AM_EDIT);
+    }
+
+    bool VoxelMap::Load(Deserializer& source)
+    {
+        if (!Serializable::Load(source))
+            return false;
+
+        if (!BeginLoad(source))
+            return false;
+
+        return true;
     }
 
     bool VoxelMap::BeginLoad(Deserializer& source)

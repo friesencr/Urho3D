@@ -48,6 +48,7 @@
 #include <Urho3D/Physics/RigidBody.h>
 #include <Urho3D/IO/Generator.h>
 #include <Urho3D/IO/Log.h>
+#include <Urho3D/IO/File.h>
 
 #include "VoxelWorld.h"
 
@@ -70,6 +71,7 @@ static const unsigned chunkHeader[4] = { w, h, d, VOXEL_BLOCK_BLOCKTYPE };
 static const unsigned headerSize = sizeof(chunkHeader);
 static const unsigned dataSize = (h + 4) * (w + 4) * (d + 4);
 static const unsigned podsize = dataSize + 3;
+static const unsigned generatorSize = headerSize + podsize;
 
 float noiseFactors[10] = {
     1.0, 1.0, 1.0, 0.3,
@@ -316,9 +318,9 @@ void VoxelWorld::Start()
 void VoxelWorld::CreateScene()
 {
     ResourceCache* cache = GetSubsystem<ResourceCache>();
-	cache->SetAutoReloadResources(true);
-	Renderer* renderer = GetSubsystem<Renderer>();
-	//renderer->SetMaxOccluderTriangles(10000);
+    cache->SetAutoReloadResources(true);
+    Renderer* renderer = GetSubsystem<Renderer>();
+    //renderer->SetMaxOccluderTriangles(10000);
 
     scene_ = new Scene(context_);
 
@@ -329,25 +331,15 @@ void VoxelWorld::CreateScene()
     scene_->CreateComponent<Octree>();
     DebugRenderer* debug = scene_->CreateComponent<DebugRenderer>();
     scene_->CreateComponent<PhysicsWorld>();
-    
-    Node* zoneNode = scene_->CreateChild("Zone");
-    Zone* zone = zoneNode->CreateComponent<Zone>();
-    zone->SetBoundingBox(BoundingBox(Vector3(-100000, 0, -100000), Vector3(100000, 128, 100000)));
-    zone->SetAmbientColor(Color(0.5, 0.5, 0.5));
-    zone->SetHeightFog(true);
-	//zone->SetAmbientGradient(true);
-    zone->SetFogColor(Color(0.8, 0.8, 0.8));
-	zone->SetFogStart(700.0f);
-	zone->SetFogEnd(900.0f);
 
 
-	// Create skybox. The Skybox component is used like StaticModel, but it will be always located at the camera, giving the
-	// illusion of the box planes being far away. Use just the ordinary Box model and a suitable material, whose shader will
-	// generate the necessary 3D texture coordinates for cube mapping
-	//Node* skyNode = scene_->CreateChild("Sky");
-	//Skybox* skybox = skyNode->CreateComponent<Skybox>();
-	//skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
-	//skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
+    // Create skybox. The Skybox component is used like StaticModel, but it will be always located at the camera, giving the
+    // illusion of the box planes being far away. Use just the ordinary Box model and a suitable material, whose shader will
+    // generate the necessary 3D texture coordinates for cube mapping
+    //Node* skyNode = scene_->CreateChild("Sky");
+    //Skybox* skybox = skyNode->CreateComponent<Skybox>();
+    //skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
+    //skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
 
     // Create a scene node for the camera, which we will move around
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
@@ -362,20 +354,30 @@ void VoxelWorld::CreateScene()
     Node* skyNode = scene_->CreateChild("SkyNode");
     procSky_ = skyNode->CreateComponent<ProcSky>();
 
-     //Create a directional light to the world so that we can see something. The light scene node's orientation controls the
-     //light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
-     //The light will use default settings (white light, no shadows)
+    //Create a directional light to the world so that we can see something. The light scene node's orientation controls the
+    //light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
+    //The light will use default settings (white light, no shadows)
     Node* lightNode = skyNode->CreateChild("DirectionalLight");
     lightNode->SetDirection(Vector3(0.8f, -0.2f, 0.8f)); // The direction vector does not need to be normalized
 
     Light* light = lightNode->CreateComponent<Light>();
     light->SetLightType(LIGHT_DIRECTIONAL);
-    light->SetCastShadows(true);
-    light->SetBrightness(0.4);
-	light->SetColor(Color(1.0, 1.0, 1.0));
-    light->SetShadowBias(BiasParameters(0.00025f, 0.5f));
+    light->SetCastShadows(false);
+    light->SetBrightness(0.0);
+    light->SetEnabled(false);
+    //light->SetColor(Color(1.0, 1.0, 1.0));
+    //   light->SetShadowBias(BiasParameters(0.00025f, 0.5f));
     // Set cascade splits at 10, 50 and 200 world units, fade shadows out at 80% of maximum shadow distance
-    light->SetShadowCascade(CascadeParameters(10.0f, 150.0f, 400.0f, 0.0f, 0.8f));
+    //light->SetShadowCascade(CascadeParameters(10.0f, 150.0f, 400.0f, 0.0f, 0.8f));
+
+    Zone* zone = skyNode->CreateComponent<Zone>();
+    zone->SetBoundingBox(BoundingBox(Vector3(-100000, 0, -100000), Vector3(100000, 128, 100000)));
+    zone->SetAmbientColor(Color(0.2, 0.2, 0.2));
+    zone->SetHeightFog(true);
+    //zone->SetAmbientGradient(true);
+    zone->SetFogColor(Color(0.3, 0.3, 0.3));
+    zone->SetFogStart(700.0f);
+    zone->SetFogEnd(900.0f);
 
 
     voxelNode_ = scene_->CreateChild("VoxelNode");
@@ -384,21 +386,25 @@ void VoxelWorld::CreateScene()
     for (unsigned i = 1; i < 64; ++i)
         voxelBlocktypeMap_->blockColor.Push(i);
 
-	//SharedPtr<Texture2DArray> texture(new Texture2DArray(context_));
-	//Vector<SharedPtr<Image> > images;
-	//images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Beach_sand_pxr128.png")));
-	//images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Bowling_grass_pxr128.png")));
-	//images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Brown_dirt_pxr128.png")));
-	//images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/stone/Gray_marble_pxr128.png")));
-	//if (!texture->SetData(images))
-	//	return;
+    File file = File(context_);
+    if (file.Open("BlocktypeMap.bin", FILE_WRITE))
+        voxelBlocktypeMap_->Save(file);
 
-	//voxelBlocktypeMap_->diffuse1Textures = texture;
+    //SharedPtr<Texture2DArray> texture(new Texture2DArray(context_));
+    //Vector<SharedPtr<Image> > images;
+    //images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Beach_sand_pxr128.png")));
+    //images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Bowling_grass_pxr128.png")));
+    //images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/ground/Brown_dirt_pxr128.png")));
+    //images.Push(SharedPtr<Image>(cache->GetResource<Image>("BlockTextures/stone/Gray_marble_pxr128.png")));
+    //if (!texture->SetData(images))
+    //  return;
+
+    //voxelBlocktypeMap_->diffuse1Textures = texture;
 
     VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
 
-	unsigned numX = 256;
-	unsigned numZ = 256;
+    unsigned numX = 256;
+    unsigned numZ = 256;
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     voxelSet->SetNumberOfChunks(numX, 1, numZ);
     for (unsigned x = 0; x < numX; ++x)
@@ -406,9 +412,11 @@ void VoxelWorld::CreateScene()
         for (unsigned z = 0; z < numZ; ++z)
         {
             VoxelMap* map = new VoxelMap(context_);
-            map->blocktypeMap = voxelBlocktypeMap_;
+            map->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
             map->SetSize(w, h, d);
+            map->blocktypeMap = voxelBlocktypeMap_;
             SharedPtr<Generator> terrainGenerator(new Generator(context_));
+            terrainGenerator->SetSize(generatorSize);
             terrainGenerator->SetName("RandomTerrain");
             VariantMap params;
             params["TileX"] = x;
@@ -426,13 +434,13 @@ void VoxelWorld::CreateScene()
     }
     voxelSet->BuildAsync();
 
- //   Node* spotNode = cameraNode_->CreateChild("PointLight");
- //   spotNode->SetPosition(Vector3(0.0, -15.0, 0.0));
- //   Light* spotLight = spotNode->CreateComponent<Light>();
- //   spotLight->SetLightType(LIGHT_POINT);
- //   spotLight->SetCastShadows(true);
- //   spotLight->SetRange(100.0);
-	//spotLight->SetBrightness(0.7);
+    //   Node* spotNode = cameraNode_->CreateChild("PointLight");
+    //   spotNode->SetPosition(Vector3(0.0, -15.0, 0.0));
+    //   Light* spotLight = spotNode->CreateComponent<Light>();
+    //   spotLight->SetLightType(LIGHT_POINT);
+    //   spotLight->SetCastShadows(true);
+    //   spotLight->SetRange(100.0);
+    //spotLight->SetBrightness(0.7);
 }
 
 void VoxelWorld::CreateInstructions()
@@ -473,7 +481,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 20.0f;
+    const float MOVE_SPEED = 100.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
@@ -484,17 +492,17 @@ void VoxelWorld::MoveCamera(float timeStep)
     pitch_ = Clamp(pitch_, -90.0f, 90.0f);
 
     Node* lightNode = scene_->GetChild("DirectionalLight");
-	if (lightNode)
-	{
-		//lightNode->Rotate(Quaternion(0.0, 30.0 * timeStep, 0.0));
-	}
+    if (lightNode)
+    {
+        //lightNode->Rotate(Quaternion(0.0, 30.0 * timeStep, 0.0));
+    }
 
     // Construct new orientation for the camera scene node from yaw and pitch. Roll is fixed to zero
     cameraNode_->SetRotation(Quaternion(pitch_, yaw_, 0.0f));
 
-	// "Shoot" a physics object with left mousebutton
-	if (input->GetMouseButtonPress(MOUSEB_LEFT))
-		SpawnObject();
+    // "Shoot" a physics object with left mousebutton
+    if (input->GetMouseButtonPress(MOUSEB_LEFT))
+        SpawnObject();
 
     // Read WASD keys and move the camera scene node to the corresponding direction if they are pressed
     // Use the Translate() function (default local space) to move relative to the node's orientation.
@@ -511,37 +519,37 @@ void VoxelWorld::MoveCamera(float timeStep)
     if (voxelSet)
         cameraPositionText_->SetText(String(voxelSet->GetNumberOfLoadedChunks()));
 
-	// Toggle physics debug geometry with space
-	if (input->GetKeyPress(KEY_SPACE))
-		drawDebug_ = !drawDebug_;
+    // Toggle physics debug geometry with space
+    if (input->GetKeyPress(KEY_SPACE))
+        drawDebug_ = !drawDebug_;
 }
 
 void VoxelWorld::SpawnObject()
 {
-	ResourceCache* cache = GetSubsystem<ResourceCache>();
+    ResourceCache* cache = GetSubsystem<ResourceCache>();
 
-	// Create a smaller box at camera position
-	Node* boxNode = scene_->CreateChild("SmallBox");
-	boxNode->SetPosition(cameraNode_->GetPosition());
-	boxNode->SetRotation(cameraNode_->GetRotation());
-	boxNode->SetScale(0.25f);
-	StaticModel* boxObject = boxNode->CreateComponent<StaticModel>();
-	boxObject->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
-	boxObject->SetMaterial(cache->GetResource<Material>("Materials/StoneEnvMapSmall.xml"));
-	boxObject->SetCastShadows(true);
+    // Create a smaller box at camera position
+    Node* boxNode = scene_->CreateChild("SmallBox");
+    boxNode->SetPosition(cameraNode_->GetPosition());
+    boxNode->SetRotation(cameraNode_->GetRotation());
+    boxNode->SetScale(0.25f);
+    StaticModel* boxObject = boxNode->CreateComponent<StaticModel>();
+    boxObject->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
+    boxObject->SetMaterial(cache->GetResource<Material>("Materials/StoneEnvMapSmall.xml"));
+    boxObject->SetCastShadows(true);
 
-	// Create physics components, use a smaller mass also
-	RigidBody* body = boxNode->CreateComponent<RigidBody>();
-	body->SetMass(0.25f);
-	body->SetFriction(0.75f);
-	CollisionShape* shape = boxNode->CreateComponent<CollisionShape>();
-	shape->SetBox(Vector3::ONE);
+    // Create physics components, use a smaller mass also
+    RigidBody* body = boxNode->CreateComponent<RigidBody>();
+    body->SetMass(0.25f);
+    body->SetFriction(0.75f);
+    CollisionShape* shape = boxNode->CreateComponent<CollisionShape>();
+    shape->SetBox(Vector3::ONE);
 
-	const float OBJECT_VELOCITY = 10.0f;
+    const float OBJECT_VELOCITY = 10.0f;
 
-	// Set initial velocity for the RigidBody based on camera forward vector. Add also a slight up component
-	// to overcome gravity better
-	body->SetLinearVelocity(cameraNode_->GetRotation() * Vector3(0.0f, 0.25f, 1.0f) * OBJECT_VELOCITY);
+    // Set initial velocity for the RigidBody based on camera forward vector. Add also a slight up component
+    // to overcome gravity better
+    body->SetLinearVelocity(cameraNode_->GetRotation() * Vector3(0.0f, 0.25f, 1.0f) * OBJECT_VELOCITY);
 }
 
 void VoxelWorld::SubscribeToEvents()
@@ -572,11 +580,11 @@ void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventD
     //PODVector<VoxelChunk*> voxelChunks;
     //scene_->GetComponents<VoxelChunk>(voxelChunks, true);
     //for (unsigned i = 0; i < voxelChunks.Size(); ++i)
-    //	voxelChunks[i]->DrawDebugGeometry(debug, true);
+    //  voxelChunks[i]->DrawDebugGeometry(debug, true);
     //scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
 
-	if (drawDebug_)
-		scene_->GetComponent<PhysicsWorld>()->DrawDebugGeometry(true);
+    if (drawDebug_)
+        scene_->GetComponent<PhysicsWorld>()->DrawDebugGeometry(true);
 }
 
 

@@ -46,8 +46,8 @@ class URHO3D_API VoxelChunk : public Drawable
     /// Draw to occlusion buffer. Return true if did not run out of triangles.
     virtual bool DrawOcclusion(OcclusionBuffer* buffer);
 
-    bool GetHasShaderParameters(unsigned index);
-    void SetHasShaderParameters(unsigned index, bool isRequired);
+    //bool GetHasShaderParameters(unsigned index);
+    //void SetHasShaderParameters(unsigned index, bool isRequired);
 
     /// Set mesh selector material.
     Material* GetMaterial(unsigned selector) const;
@@ -99,6 +99,7 @@ protected:
     virtual void OnWorldBoundingBoxUpdate();
 
 private:
+    void UpdateMaterialParameters(unsigned slot);
     bool BuildInternal(bool async);
     void OnVoxelChunkCreated();
     // Voxel chunk geometry
@@ -122,7 +123,7 @@ private:
     Vector<SharedPtr<TextureBuffer> > faceBuffer_;
     Vector<unsigned > reducedQuadCount_;
     Vector<unsigned> numQuads_;
-    Vector<bool> hasMaterialParameters_;
+    Vector<bool> updateMaterialParameters_;
 };
 
 }

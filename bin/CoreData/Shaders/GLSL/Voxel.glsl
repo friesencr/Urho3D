@@ -198,19 +198,12 @@ void PS()
         #endif
 
         #ifdef AMBIENT
-
             vec3 voxAmbientColor = dot(normal, cAmbientTable[0].xyz) * cAmbientTable[1].xyz + cAmbientTable[2].xyz;
             voxAmbientColor = clamp(voxAmbientColor, 0.0, 1.0);
-            // vec3 finalColor = vVertexLight * vAmbOcc * (diffColor.rgb + voxAmbientColor);
-
-            //finalColor += vAmbOcc * (diffColor.rgb + voxAmbientColor);
             finalColor += (voxAmbientColor + cAmbientColor) * diffColor.rgb;
             finalColor += cMatEmissiveColor;
-
-            //finalColor = textureCube(sZoneCubeMap, vReflectionVec).rgb;
-            finalColor = textureCube(sZoneCubeMap, vec3(1.0, 1.0, 0.0)).rgb;
-            gl_FragColor = vec4(finalColor, diffColor.a);
-            //gl_FragColor = vec4(GetFog(finalColor, fogFactor), diffColor.a);
+            finalColor += cMatEnvMapColor * min(vec3(1.0, 1.0, 1.0), textureCube(sZoneCubeMap, normal).rgb) * 0.35;
+            gl_FragColor = vec4(GetFog(finalColor, fogFactor), diffColor.a);
         #else
             gl_FragColor = vec4(GetLitFog(finalColor, fogFactor), diffColor.a);
         #endif
@@ -219,8 +212,7 @@ void PS()
         vec3 voxAmbientColor = dot(normal, cAmbientTable[0].xyz) * cAmbientTable[1].xyz + cAmbientTable[2].xyz;
         voxAmbientColor = clamp(voxAmbientColor, 0.0, 1.0);
         vec3 finalColor = vVertexLight * (diffColor.rgb + voxAmbientColor);
-
-        //finalColor = textureCube(sZoneCubeMap, vec3(0.0, 1.0, 0.0)).rgb;
+        finalColor += min(vec3(1.0, 1.0, 1.0), textureCube(sZoneCubeMap, normal).rgb) * 0.35;
         gl_FragColor = vec4(GetFog(finalColor, fogFactor), fragmentAlpha * diffColor.a);
     #endif
 

@@ -3373,6 +3373,11 @@ void RegisterGraphicsLibrary(Context* context)
     Zone::RegisterObject(context);
 	VoxelSet::RegisterObject(context);
 	VoxelChunk::RegisterObject(context);
+    VoxelBlocktypeMap::RegisterObject(context);
+    VoxelOverlayMap::RegisterObject(context);
+    VoxelTextureMap::RegisterObject(context);
+    VoxelColorPalette::RegisterObject(context);
+    VoxelMap::RegisterObject(context);
 }
 
 }

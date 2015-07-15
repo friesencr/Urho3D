@@ -88,6 +88,7 @@ struct VoxelWorkload
 
 class URHO3D_API VoxelBuilder : public Object {
     OBJECT(VoxelBuilder);
+    friend VoxelChunk;
 
 public:
     VoxelBuilder(Context* context);
@@ -112,7 +113,7 @@ private:
     void DecodeWorkBuffer(VoxelWorkload* workload);
     bool UploadGpuData(VoxelWorkSlot* slot, bool append = false);
     bool UploadGpuDataCompatibilityMode(VoxelWorkSlot* slot, bool append = false);
-	bool SetMaterialParameters(Material* material);
+	bool UpdateMaterialParameters(Material* material, bool setColor);
     void HandleBeginFrame(StringHash eventType, VariantMap& eventData);
 	unsigned SimplifyMesh(VoxelWorkSlot* slot, unsigned char* verticies, unsigned char* normals, unsigned char** newMesh);
 	bool PendingWork();
