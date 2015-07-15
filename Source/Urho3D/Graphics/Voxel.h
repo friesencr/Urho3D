@@ -155,8 +155,8 @@ private:
     SharedPtr<Texture> diffuse1Texture;
     SharedPtr<Texture> diffuse2Texture;
     PODVector<unsigned char> defaultTexture2Map;
-    void VoxelTextureMap::SetDiffuse1TextureArrayAttr(const ResourceRef& value);
-    void VoxelTextureMap::SetDiffuse2TextureArrayAttr(const ResourceRef& value);
+    void SetDiffuse1TextureArrayAttr(const ResourceRef& value);
+    void SetDiffuse2TextureArrayAttr(const ResourceRef& value);
 
 };
 

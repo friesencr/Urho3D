@@ -42,31 +42,31 @@
 
 ProcSky::ProcSky(Context* context):
   Component(context)
-  ,renderSize_(256)
-  ,renderFOV_(89.5)
-  ,updateMode_(UpdateMode::Auto)
-  ,updateInterval_(0.0f)
-  ,updateWait_(0)
-  ,renderQueued_(true)
-  ,cam_(NULL)
-  ,zone_(NULL)
-  ,Kr_(Vector3(0.18867780436772762, 0.4978442963618773, 0.6616065586417131))
-  ,rayleighBrightness_(3.3f)
-  ,mieBrightness_(0.1f)
-  ,spotBrightness_(50.0f)
-  ,scatterStrength_(0.028f)
-  ,rayleighStrength_(0.139f)
-  ,mieStrength_(0.264f)
-  ,rayleighCollectionPower_(0.81f)
-  ,mieCollectionPower_(0.39f)
-  ,mieDistribution_(0.63f)
+  , renderSize_(256)
+  , renderFOV_(89.5)
+  , updateAuto_(true)
+  , updateInterval_(0.0f)
+  , updateWait_(0)
+  , renderQueued_(true)
+  , cam_(NULL)
+  , zone_(NULL)
+  , Kr_(Vector3(0.18867780436772762, 0.4978442963618773, 0.6616065586417131))
+  , rayleighBrightness_(3.3f)
+  , mieBrightness_(0.1f)
+  , spotBrightness_(50.0f)
+  , scatterStrength_(0.028f)
+  , rayleighStrength_(0.139f)
+  , mieStrength_(0.264f)
+  , rayleighCollectionPower_(0.81f)
+  , mieCollectionPower_(0.39f)
+  , mieDistribution_(0.63f)
 {
-  faceRotations_[FACE_POSITIVE_X] = Quaternion(Vector3::FORWARD, Vector3::RIGHT).RotationMatrix();
-  faceRotations_[FACE_NEGATIVE_X] = Quaternion(Vector3::FORWARD, Vector3::LEFT).RotationMatrix();
-  faceRotations_[FACE_POSITIVE_Y] = Quaternion(Vector3::FORWARD, Vector3::UP).RotationMatrix();
-  faceRotations_[FACE_NEGATIVE_Y] = Quaternion(Vector3::FORWARD, Vector3::DOWN).RotationMatrix();
-  faceRotations_[FACE_POSITIVE_Z] = Quaternion(Vector3::FORWARD, Vector3::FORWARD).RotationMatrix();
-  faceRotations_[FACE_NEGATIVE_Z] = Quaternion(Vector3::FORWARD, Vector3::BACK).RotationMatrix();
+  faceRotations_[FACE_POSITIVE_X] = Matrix3(0,0,1,  0,1,0, -1,0,0);
+  faceRotations_[FACE_NEGATIVE_X] = Matrix3(0,0,-1, 0,1,0,  1,0,0);
+  faceRotations_[FACE_POSITIVE_Y] = Matrix3(1,0,0,  0,0,1,  0,-1,0);
+  faceRotations_[FACE_NEGATIVE_Y] = Matrix3(1,0,0,  0,0,-1, 0,1,0);
+  faceRotations_[FACE_POSITIVE_Z] = Matrix3(1,0,0,  0,1,0,  0,0,1);
+  faceRotations_[FACE_NEGATIVE_Z] = Matrix3(-1,0,0, 0,1,0,  0,0,-1);
 }
 ProcSky::~ProcSky() {}
 void ProcSky::RegisterObject(Context* context) {
@@ -114,10 +114,10 @@ bool ProcSky::Initialize() {
 
   // Create a Skybox to draw to. Set its Material, Technique, and render size.
   skybox_ = node_->CreateComponent<Skybox>();
-  Model* model(cache->GetResource<Model>("models/box.mdl"));
+  Model* model(cache->GetResource<Model>("Models/Box.mdl"));
   skybox_->SetModel(model);
   SharedPtr<Material> skyboxMat(new Material(context_));
-  skyboxMat->SetTechnique(0, cache->GetResource<Technique>("techniques/DiffSkybox.xml"));
+  skyboxMat->SetTechnique(0, cache->GetResource<Technique>("Techniques/DiffSkybox.xml"));
   skyboxMat->SetCullMode(CULL_NONE);
   skybox_->SetMaterial(skyboxMat);
   SetRenderSize(renderSize_);
@@ -195,7 +195,7 @@ void ProcSky::HandleUpdate(StringHash eventType, VariantMap& eventData) {
   }
 #endif // defined(PROCSKY_UI)
 
-  if (updateMode_ == UpdateMode::Auto) {
+  if (updateAuto_) {
     float dt(eventData[Update::P_TIMESTEP].GetFloat());
     // If using an interval, queue update when done waiting.
     if (updateInterval_ > 0) {
@@ -250,6 +250,7 @@ bool ProcSky::SetRenderSize(unsigned size) {
     skybox_->GetMaterial()->SetTexture(TU_DIFFUSE, skyboxTexCube);
     if (zone_)
         zone_->SetZoneTexture(skyboxTexCube);
+    renderSize_ = size;
     return true;
   } else {
     LOGERROR("ProcSky::SetSize ignored; requires size >= 1.");
@@ -257,22 +258,22 @@ bool ProcSky::SetRenderSize(unsigned size) {
   return false;
 }
 
-void ProcSky::SetUpdateMode(UpdateMode updateMode) {
-  if (updateMode_ == updateMode) return;
-  updateMode_ = updateMode;
+void ProcSky::SetUpdateAuto(bool updateAuto) {
+  if (updateAuto_ == updateAuto) return;
+  updateAuto_ = updateAuto;
 }
 
 void ProcSky::SetRenderQueued(bool queued) {
   if (renderQueued_ == queued) return;
   // When using manual update, be notified after rendering.
-  if (updateMode_ == UpdateMode::Manual)
+  if (!updateAuto_)
     SubscribeToEvent(E_POSTRENDERUPDATE, HANDLER(ProcSky, HandlePostRenderUpdate));
   rPath_->SetEnabled("ProcSky", queued);
   renderQueued_ = queued;
 }
 
 void ProcSky::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData) {
-  if (updateMode_ == UpdateMode::Manual)
+  if (!updateAuto_)
     SetRenderQueued(false);
 }
 
@@ -308,19 +309,19 @@ void ProcSky::ToggleUI() {
   win->AddChild(titleBar);
   windowTitle->SetStyleAuto();
 
-  Slider* rayleighBrightness(CreateSlider(win, "rayleighBrightness", &rayleighBrightness_, 100.0f));
-  Slider* mieBrightness(CreateSlider(win, "mieBrightness", &mieBrightness_, 10.0f));
-  Slider* spotBrightness(CreateSlider(win, "spotBrightness", &spotBrightness_, 200.0f));
-  Slider* scatterStrength(CreateSlider(win, "scatterStrength", &scatterStrength_, 1.0f));
-  Slider* rayleighStrength(CreateSlider(win, "rayleighStrength", &rayleighStrength_, 5.0f));
-  Slider* mieStrength(CreateSlider(win, "mieStrength", &mieStrength_, 2.0f));
-  Slider* rayleighCollectionPower(CreateSlider(win, "rayleighCollectionPower", &rayleighCollectionPower_, 10.0f));
-  Slider* mieCollectionPower(CreateSlider(win, "mieCollectionPower", &mieCollectionPower_, 10.0f));
-  Slider* mieDistribution(CreateSlider(win, "mieDistribution", &mieDistribution_, 10.0f));
-  Slider* Kr_r(CreateSlider(win, "Kr_red", &Kr_.x_, 1.0f));
-  Slider* Kr_g(CreateSlider(win, "Kr_green", &Kr_.y_, 1.0f));
-  Slider* Kr_b(CreateSlider(win, "Kr_blue", &Kr_.z_, 1.0f));
-  Slider* updateInterval(CreateSlider(win, "updateInterval", &updateInterval_, 10.0f));
+  CreateSlider(win, "rayleighBrightness", &rayleighBrightness_, 100.0f);
+  CreateSlider(win, "mieBrightness", &mieBrightness_, 10.0f);
+  CreateSlider(win, "spotBrightness", &spotBrightness_, 200.0f);
+  CreateSlider(win, "scatterStrength", &scatterStrength_, 1.0f);
+  CreateSlider(win, "rayleighStrength", &rayleighStrength_, 5.0f);
+  CreateSlider(win, "mieStrength", &mieStrength_, 2.0f);
+  CreateSlider(win, "rayleighCollectionPower", &rayleighCollectionPower_, 10.0f);
+  CreateSlider(win, "mieCollectionPower", &mieCollectionPower_, 10.0f);
+  CreateSlider(win, "mieDistribution", &mieDistribution_, 10.0f);
+  CreateSlider(win, "Kr_red", &Kr_.x_, 1.0f);
+  CreateSlider(win, "Kr_green", &Kr_.y_, 1.0f);
+  CreateSlider(win, "Kr_blue", &Kr_.z_, 1.0f);
+  CreateSlider(win, "updateInterval", &updateInterval_, 10.0f);
 
   Graphics* graphics(GetSubsystem<Graphics>());
   IntVector2 scrSize(graphics->GetWidth(), graphics->GetHeight());
@@ -331,7 +332,7 @@ void ProcSky::ToggleUI() {
   win->SetPosition(0, (scrSize.y_-winSize.y_)/2);
 }
 
-Slider* ProcSky::CreateSlider(UIElement* parent, const String& label, float* target, float range) {
+void ProcSky::CreateSlider(UIElement* parent, const String& label, float* target, float range) {
   UIElement* textContainer(new UIElement(context_));
   parent->AddChild(textContainer);
   textContainer->SetStyleAuto();
@@ -365,7 +366,6 @@ Slider* ProcSky::CreateSlider(UIElement* parent, const String& label, float* tar
   // Store value label for handler to use.
   slider->SetVar(label+"_value", valueText);
   SubscribeToEvent(slider, E_SLIDERCHANGED, HANDLER(ProcSky, HandleSliderChanged));
-  return slider;
 }
 
 void ProcSky::HandleSliderChanged(StringHash eventType, VariantMap& eventData) {
@@ -388,11 +388,7 @@ void ProcSky::HandleKeyDown(StringHash eventType, VariantMap& eventData) {
   int qual(eventData[KeyDown::P_QUALIFIERS].GetInt());
 
   if (key == KEY_U) {
-    if (GetUpdateMode() | UpdateMode::Auto) {
-      SetUpdateMode(UpdateMode::Auto);
-    } else {
-      SetUpdateMode(UpdateMode::Manual);
-    }
+    updateAuto_ = !updateAuto_;
   }
   else if (key == KEY_SPACE) {
     ToggleUI();
@@ -408,28 +404,22 @@ void ProcSky::HandleKeyDown(StringHash eventType, VariantMap& eventData) {
   }
 
   if (key == KEY_KP_6) {
-    Matrix3 m(Quaternion(Vector3::FORWARD, Vector3::RIGHT).RotationMatrix());
-    lightNode_->SetRotation(m);
+    lightNode_->SetRotation(faceRotations_[FACE_POSITIVE_X]);
   }
   else if (key == KEY_KP_4) {
-    Matrix3 m(Quaternion(Vector3::FORWARD, Vector3::LEFT).RotationMatrix());
-    lightNode_->SetRotation(m);
+    lightNode_->SetRotation(faceRotations_[FACE_NEGATIVE_X]);
   }
   else if (key == KEY_KP_7) {
-    Matrix3 m(Quaternion(Vector3::FORWARD, Vector3::UP).RotationMatrix());
-    lightNode_->SetRotation(m);
+    lightNode_->SetRotation(faceRotations_[FACE_POSITIVE_Y]);
   }
   else if (key == KEY_KP_1) {
-    Matrix3 m(Quaternion(Vector3::FORWARD, Vector3::DOWN).RotationMatrix());
-    lightNode_->SetRotation(m);
+    lightNode_->SetRotation(faceRotations_[FACE_NEGATIVE_Y]);
   }
   else if (key == KEY_KP_8) {
-    Matrix3 m(Quaternion(Vector3::FORWARD, Vector3::FORWARD).RotationMatrix());
-    lightNode_->SetRotation(m);
+    lightNode_->SetRotation(faceRotations_[FACE_POSITIVE_Z]);
   }
   else if (key == KEY_KP_2) {
-    Matrix3 m(Quaternion(Vector3::FORWARD, Vector3::BACK).RotationMatrix());
-    lightNode_->SetRotation(m);
+    lightNode_->SetRotation(faceRotations_[FACE_NEGATIVE_Z]);
   }
 
 #if defined(PROCSKY_TEXTURE_DUMPING)

@@ -266,11 +266,11 @@ static unsigned RandomTerrain(Context* context, void* dest, unsigned size, unsig
     {
         unsigned char* dataPtr = (unsigned char*)dest;
         unsigned char vle[3];
-        vle[0] = dataSize | 0x80;
-        vle[1] = (dataSize >> 7) | 0x80;
+        vle[0] = (unsigned char)(dataSize | 0x80);
+        vle[1] = (unsigned char)((dataSize >> 7) | 0x80);
         vle[2] = dataSize >> 14;
         *((unsigned char*)dataPtr) = vle[(position - headerSize) % podsize];
-        (unsigned char*)dataPtr += 1;
+        dataPtr += 1;
         return 1;
     }
     else
@@ -386,7 +386,7 @@ void VoxelWorld::CreateScene()
     for (unsigned i = 1; i < 64; ++i)
         voxelBlocktypeMap_->blockColor.Push(i);
 
-    File file = File(context_);
+    File file(context_);
     if (file.Open("BlocktypeMap.bin", FILE_WRITE))
         voxelBlocktypeMap_->Save(file);
 
@@ -400,8 +400,6 @@ void VoxelWorld::CreateScene()
     //  return;
 
     //voxelBlocktypeMap_->diffuse1Textures = texture;
-
-    VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
 
     unsigned numX = 256;
     unsigned numZ = 256;

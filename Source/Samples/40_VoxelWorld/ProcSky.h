@@ -16,14 +16,12 @@
 #include <Urho3D/Container/Vector.h>
 #include <Urho3D/Math/Vector3.h>
 #include <Urho3D/Graphics/Zone.h>
-
 using namespace Urho3D;
 
 namespace Urho3D {
 class Skybox;
 class StringHash;
 #if defined(PROCSKY_UI)
-class Slider;
 class UIElement;
 #endif
 #if defined(PROCSKY_TEXTURE_DUMPING)
@@ -41,14 +39,13 @@ public:
   static void RegisterObject(Context* context);
   void OnNodeSet(Node* node);
 
-  enum UpdateMode { Auto = 0, Manual = 1, };
-  UpdateMode GetUpdateMode() const { return updateMode_; }
+  bool GetUpdateAuto() const { return updateAuto_; }
   float GetUpdateInterval() const { return updateInterval_; }
   float GetUpdateWait() const { return updateWait_; }
   unsigned GetRenderSize() const { return renderSize_; }
 
-  /// UpdateMode::Auto renders according to update interval. With UpdateMode::Manual, user calls Update() to render.
-  void SetUpdateMode(UpdateMode mode);
+  /// Automatic update renders according to update interval. If Manual, user calls Update() to render.
+  void SetUpdateAuto(bool updateAuto);
   /// Set the rendering interval (default 0).
   void SetUpdateInterval(float interval) { updateInterval_ = interval; }
   /// Set size of Skybox TextureCube.
@@ -67,7 +64,7 @@ protected:
 #if defined(PROCSKY_UI)
   void HandleKeyDown(StringHash eventType, VariantMap& eventData);
   void ToggleUI();
-  Slider* CreateSlider(UIElement* parent, const String& label, float* target, float range);
+  void CreateSlider(UIElement* parent, const String& label, float* target, float range);
   void HandleSliderChanged(StringHash eventType, VariantMap& eventData);
 #endif
 
@@ -93,7 +90,7 @@ protected:
   /// Fixed rotations for each cube face.
   Matrix3 faceRotations_[MAX_CUBEMAP_FACES];
 
-  UpdateMode updateMode_;
+  bool updateAuto_;
   float updateInterval_;
   float updateWait_;
   bool renderQueued_;
