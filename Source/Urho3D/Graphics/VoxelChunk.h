@@ -72,6 +72,8 @@ class URHO3D_API VoxelChunk : public Drawable
     bool Build();
     bool BuildAsync();
     void Unload();
+    void UnloadMesh();
+    void UnloadMap();
     bool Reload(bool async = false);
 
 	unsigned GetNumMeshes() const { return numMeshes_; }

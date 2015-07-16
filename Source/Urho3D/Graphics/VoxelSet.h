@@ -50,7 +50,7 @@ public:
     virtual VoxelMap* GetVoxelMap(unsigned x, unsigned y, unsigned z);
     inline unsigned GetIndex(unsigned x, unsigned y, unsigned z);
     bool GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, int &z);
-    unsigned GetNumberOfLoadedChunks() { return loadedChunks_.Size(); }
+    unsigned GetNumberOfLoadedChunks() { return loadedMaps_.Size(); }
 
 
     ///// Set material.
@@ -92,7 +92,8 @@ private:
     // Material.
     SharedPtr<Material> material_;
     // Voxel chunks.
-    PODVector<VoxelChunk*> loadedChunks_;
+    PODVector<VoxelChunk*> loadedMeshes_;
+    PODVector<VoxelChunk*> loadedMaps_;
     PODVector<VoxelChunk*> buildQueue_;
     //Vector<WeakPtr<VoxelChunk> > builtChunks_;
     //Vector<WeakPtr<VoxelChunk> > unbuiltChunks_;
@@ -107,8 +108,10 @@ private:
     unsigned chunkXStride;
     unsigned chunkZStride;
     unsigned numChunks;
-    unsigned maxInMemoryChunksPeak_;
-    unsigned maxInMemoryChunks_;
+    unsigned maxInMemoryMeshPeak_;
+    unsigned maxInMemoryMesh_;
+    unsigned maxInMemoryMapPeak_;
+    unsigned maxInMemoryMap_;
     Vector3 chunkSpacing_;
 };
 

@@ -325,20 +325,36 @@ namespace Urho3D {
         return true;
     }
 
+    void VoxelChunk::UnloadMesh()
+    {
+        if (buildJob_)
+        {
+            GetSubsystem<VoxelBuilder>()->CancelJob(buildJob_);
+            buildJob_ = 0;
+        }
+        SetNumberOfMeshes(0);
+    }
+
+    void VoxelChunk::UnloadMap()
+    {
+        if (buildJob_)
+        {
+            GetSubsystem<VoxelBuilder>()->CancelJob(buildJob_);
+            buildJob_ = 0;
+        }
+        if (voxelMap_)
+            voxelMap_->Unload();
+    }
+
     void VoxelChunk::Unload()
     {
         if (buildJob_)
+        {
             GetSubsystem<VoxelBuilder>()->CancelJob(buildJob_);
-
-        //GetNode()->SetEnabled(false);
-        //SetEnabled(false);
-        if (voxelMap_)
-            voxelMap_->Unload();
-        else
-            bool arg = true;
-
-        SetNumberOfMeshes(0);
-        GetNode()->Remove();
+            buildJob_ = 0;
+        }
+        UnloadMap();
+        UnloadMesh();
     }
 
     bool VoxelChunk::Reload(bool async)

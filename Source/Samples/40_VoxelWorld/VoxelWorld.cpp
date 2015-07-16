@@ -421,11 +421,11 @@ void VoxelWorld::CreateScene()
             params["TileZ"] = z;
             terrainGenerator->SetParameters(params);
             map->SetSource(terrainGenerator);
-            map->AddVoxelProcessor(AOVoxelLighting);
+            //map->AddVoxelProcessor(AOVoxelLighting);
 #ifdef SMOOTH_TERRAIN
             map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING | VOXEL_BLOCK_GEOMETRY | VOXEL_BLOCK_VHEIGHT);
 #else
-            map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+            //map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
 #endif
             voxelSet->SetVoxelMap(x, 0, z, map);
         }
@@ -479,7 +479,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 100.0f;
+    const float MOVE_SPEED = 200.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 

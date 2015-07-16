@@ -26,8 +26,10 @@ inline bool CompareChunks(VoxelChunk* lhs, VoxelChunk* rhs)
 
 VoxelSet::VoxelSet(Context* context) :
     Component(context),
-    maxInMemoryChunks_(950),
-    maxInMemoryChunksPeak_(1000),
+    maxInMemoryMeshPeak_(4000),
+    maxInMemoryMesh_(3950),
+    maxInMemoryMapPeak_(1000),
+    maxInMemoryMap_(950),
     chunkSpacing_(Vector3(64.0, 128.0, 64.0))
 {
 }
@@ -53,12 +55,12 @@ void VoxelSet::OnSetAttribute(const AttributeInfo& attr, const Variant& src)
 
 void VoxelSet::SetMaxInMemoryChunks(unsigned maxInMemoryChunks)
 {
-    maxInMemoryChunks_ = maxInMemoryChunks;
+    maxInMemoryMap_ = maxInMemoryChunks;
 }
 
 void VoxelSet::SetMaxInMemoryChunksPeak(unsigned maxInMemoryChunksPeak)
 {
-    maxInMemoryChunksPeak_ = maxInMemoryChunksPeak;
+    maxInMemoryMapPeak_ = maxInMemoryChunksPeak;
 }
 
 void VoxelSet::ApplyAttributes()
@@ -79,7 +81,7 @@ void VoxelSet::OnSetEnabled()
 
 void VoxelSet::HandleSceneUpdate(StringHash eventType, VariantMap& eventData)
 {
-    if (loadedChunks_.Size() == chunks_.Size())
+    if (loadedMaps_.Size() == chunks_.Size())
         return;
 
     BuildInternal(true);
@@ -107,6 +109,9 @@ void VoxelSet::CreateChunks(int indexX, int indexY, int indexZ, unsigned size, V
             BoundingBox chunkBox = BoundingBox(chunkSpacing_ * Vector3(x, 0, z), chunkSpacing_ * Vector3(x, 0, z) + chunkSpacing_);
             Vector3 position = chunkBox.Center();
             if ((cameraPosition - position).Length() > viewDistance)
+                continue;
+
+            if (frustrum.IsInsideFast(chunkBox) == OUTSIDE)
                 continue;
 
             VoxelMap* voxelMap = GetVoxelMap(x, 0, z);
@@ -210,17 +215,22 @@ void VoxelSet::BuildInternal(bool async)
 
     AllocateAndSortVisibleChunks();
 
-    if (loadedChunks_.Size() > maxInMemoryChunksPeak_)
+    if (loadedMaps_.Size() > maxInMemoryMapPeak_)
     {
         SortLoadedChunks();
-        Sort(loadedChunks_.Begin(), loadedChunks_.End(), CompareChunks);
-        while (loadedChunks_.Size() > maxInMemoryChunks_)
+        Sort(loadedMaps_.Begin(), loadedMaps_.End(), CompareChunks);
+        while (loadedMaps_.Size() > maxInMemoryMap_)
         {
-            VoxelChunk* chunk = loadedChunks_[maxInMemoryChunks_];
+            VoxelChunk* chunk = loadedMaps_[maxInMemoryMap_];
+            bool buildVisible = chunk->buildVisible_;
+            float buildPriority = chunk->buildPrioirty_;
             chunks_[GetIndex(chunk->GetIndexX(), chunk->GetIndexY(), chunk->GetIndexZ())] = 0;
             chunk->Unload();
-            loadedChunks_.Erase(maxInMemoryChunks_);
-            buildQueue_.Remove(chunk);
+            chunk->GetNode()->Remove();
+            loadedMaps_.Erase(maxInMemoryMap_);
+            bool inBuild = buildQueue_.Remove(chunk);
+            if (inBuild)
+                bool a = true;
         }
     }
 
@@ -311,7 +321,7 @@ VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z,
     VoxelMap* west  = GetVoxelMap(x-1, 0, z);
     chunk->SetNeighbors(north, south, east, west);
     chunks_[GetIndex(x, y, z)] = chunk;
-    loadedChunks_.Push(chunk);
+    loadedMaps_.Push(chunk);
     buildQueue_.Push(chunk);
     return chunk;
 }
@@ -331,10 +341,10 @@ void VoxelSet::SortLoadedChunks()
     Renderer* renderer = GetSubsystem<Renderer>();
     unsigned viewports = renderer->GetNumViewports();
 
-    for (unsigned i = 0; i < loadedChunks_.Size(); ++i)
+    for (unsigned i = 0; i < loadedMaps_.Size(); ++i)
     {
-        loadedChunks_[i]->buildPrioirty_ = BUILD_UNSET;
-        loadedChunks_[i]->buildVisible_ = false;
+        loadedMaps_[i]->buildPrioirty_ = BUILD_UNSET;
+        loadedMaps_[i]->buildVisible_ = false;
     }
 
     for (unsigned i = 0; i < viewports; ++i)
@@ -355,14 +365,24 @@ void VoxelSet::SortLoadedChunks()
         int currentY = 0;
         int currentZ = 0;
 
-        for (unsigned i = 0; i < loadedChunks_.Size(); ++i)
+        float minRange = 10000000;
+        float maxRange = 0;
+        for (unsigned i = 0; i < loadedMaps_.Size(); ++i)
         {
-            VoxelChunk* chunk = loadedChunks_[i];
+            VoxelChunk* chunk = loadedMaps_[i];
             Node* chunkNode = chunk->GetNode();
             float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
             chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance);
-            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInsideFast(chunk->GetBoundingBox()) == INSIDE;
+            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInsideFast(chunk->GetBoundingBox()) != OUTSIDE;
+            if (!chunk->buildVisible_)
+            {
+                LOGINFO(String(chunkDistance));
+                minRange = Min(minRange, chunkDistance);
+                maxRange = Max(maxRange, chunkDistance);
+            }
         }
+
+        bool test = false;
     }
 
 }
@@ -402,11 +422,11 @@ void VoxelSet::AllocateAndSortVisibleChunks()
         if (!cameraNode)
             continue;
 
-        // make frustrum 1.5x as long as camera
+        // make frustrum 1.2x as long as camera
         Frustum visibleTest;
+        float viewDistance = camera->GetFarClip() * 1.2;
         visibleTest.Define(camera->GetFov(), camera->GetAspectRatio(), camera->GetZoom(), 
-            camera->GetNearClip(), camera->GetFarClip() * 1.5, camera->GetEffectiveWorldTransform());
-        float viewDistance = camera->GetFarClip() * 1.5;
+            camera->GetNearClip(), viewDistance, camera->GetEffectiveWorldTransform());
 
         int currentX = 0;
         int currentY = 0;
@@ -414,17 +434,17 @@ void VoxelSet::AllocateAndSortVisibleChunks()
 
         if (GetIndexFromWorldPosition(cameraNode->GetWorldPosition(), currentX, currentY, currentZ))
         {
-            unsigned radius = 20;
+            unsigned radius = (unsigned)ceilf(viewDistance / Max(chunkSpacing_.x_, chunkSpacing_.z_));
             CreateChunks(currentX, currentY, currentZ, radius, cameraNode->GetPosition(), visibleTest, viewDistance);
         }
 
         for (unsigned i = 0; i < buildQueue_.Size(); ++i)
         {
-            VoxelChunk* chunk = loadedChunks_[i];
+            VoxelChunk* chunk = loadedMaps_[i];
             Node* chunkNode = chunk->GetNode();
             float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
             chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance);
-            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInsideFast(chunk->GetBoundingBox()) == INSIDE;
+            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInsideFast(chunk->GetBoundingBox()) != OUTSIDE;
         }
     }
 }
