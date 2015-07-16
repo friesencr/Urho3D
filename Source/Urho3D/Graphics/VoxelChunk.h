@@ -13,7 +13,7 @@
 namespace Urho3D {
 
 class URHO3D_API VoxelSet;
-class URHO3D_API VoxelJob;
+struct VoxelJob;
 class URHO3D_API VoxelChunk : public Drawable
 {
     OBJECT(VoxelChunk);

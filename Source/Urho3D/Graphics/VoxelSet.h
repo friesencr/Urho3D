@@ -44,7 +44,7 @@ public:
     /// Sets voxel map for chunk
     virtual bool SetVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap);
     /// Gets Voxel Chunk at world position.
-    virtual VoxelChunk* GetVoxelChunkAtPosition(Vector3 position) const;
+    virtual VoxelChunk* GetVoxelChunkAtPosition(Vector3 position);
     /// Gets Voxel Chunk by index.
     virtual VoxelChunk* GetVoxelChunk(unsigned x, unsigned y, unsigned z);
     virtual VoxelMap* GetVoxelMap(unsigned x, unsigned y, unsigned z);

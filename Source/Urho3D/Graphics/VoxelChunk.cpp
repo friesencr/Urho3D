@@ -10,6 +10,8 @@
 #include "OcclusionBuffer.h"
 #include "DrawableEvents.h"
 
+#include "../DebugNew.h"
+
 namespace Urho3D {
 
     extern const char* GEOMETRY_CATEGORY;

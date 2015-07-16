@@ -13,6 +13,8 @@
 #include "Core/Profiler.h"
 #include "VoxelBuilder.h"
 
+#include "../DebugNew.h"
+
 namespace Urho3D {
 
 extern const char* GEOMETRY_CATEGORY;
@@ -106,7 +108,7 @@ void VoxelSet::CreateChunks(int indexX, int indexY, int indexZ, unsigned size, V
     {
         for (unsigned z = startZ; z < endZ; ++z)
         {
-            BoundingBox chunkBox = BoundingBox(chunkSpacing_ * Vector3(x, 0, z), chunkSpacing_ * Vector3(x, 0, z) + chunkSpacing_);
+            BoundingBox chunkBox = BoundingBox(chunkSpacing_ * Vector3((float)x, 0.0, (float)z), chunkSpacing_ * Vector3((float)x, 0.0, (float)z) + chunkSpacing_);
             Vector3 position = chunkBox.Center();
             if ((cameraPosition - position).Length() > viewDistance)
                 continue;
@@ -157,7 +159,7 @@ void VoxelSet::SetNumberOfChunks(unsigned x, unsigned y, unsigned z)
     numChunksZ = z;
     chunkZStride = y;
     chunkXStride = y * z;
-    setBox = BoundingBox(Vector3(0, 0, 0), Vector3(x, y, z) * chunkSpacing_);
+    setBox = BoundingBox(Vector3(0.0, 0.0, 0.0), Vector3((float)x, (float)y, (float)z) * chunkSpacing_);
     chunks_.Resize(numChunks);
     for (unsigned i = 0; i < numChunks; ++i)
         chunks_[i] = 0;
@@ -172,16 +174,17 @@ void VoxelSet::SetChunkSpacing(Vector3 chunkSpacing)
     chunkSpacing_ = chunkSpacing;
 }
 
-VoxelChunk* VoxelSet::GetVoxelChunkAtPosition(Vector3 position) const
+VoxelChunk* VoxelSet::GetVoxelChunkAtPosition(Vector3 position)
 {
-    Node* node = GetNode();
-    if (!node)
+    int x = 0;
+    int y = 0;
+    int z = 0;
+    if (GetIndexFromWorldPosition(position, x, y, z))
+        return chunks_[GetIndex(x, y, z)];
+    else
         return 0;
-
-    Matrix3x4 inverse = node->GetWorldTransform().Inverse();
-    Vector3 localPosition = inverse * position;
-    Vector3 voxelPosition = localPosition / Vector3(numChunksX, numChunksY, numChunksZ);
 }
+
 
 void VoxelSet::Build()
 {
@@ -286,7 +289,7 @@ bool VoxelSet::GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, 
 {
     Node* node = GetNode();
     if (!node)
-        return 0;
+        return false;
 
     Matrix3x4 inverse = node->GetWorldTransform().Inverse();
     Vector3 localPosition = inverse * worldPosition;
@@ -361,12 +364,6 @@ void VoxelSet::SortLoadedChunks()
         Frustum visibleTest = camera->GetFrustum();
         float viewDistance = camera->GetFarClip();
 
-        int currentX = 0;
-        int currentY = 0;
-        int currentZ = 0;
-
-        float minRange = 10000000;
-        float maxRange = 0;
         for (unsigned i = 0; i < loadedMaps_.Size(); ++i)
         {
             VoxelChunk* chunk = loadedMaps_[i];
@@ -374,15 +371,7 @@ void VoxelSet::SortLoadedChunks()
             float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
             chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance);
             chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInsideFast(chunk->GetBoundingBox()) != OUTSIDE;
-            if (!chunk->buildVisible_)
-            {
-                LOGINFO(String(chunkDistance));
-                minRange = Min(minRange, chunkDistance);
-                maxRange = Max(maxRange, chunkDistance);
-            }
         }
-
-        bool test = false;
     }
 
 }
@@ -424,7 +413,7 @@ void VoxelSet::AllocateAndSortVisibleChunks()
 
         // make frustrum 1.2x as long as camera
         Frustum visibleTest;
-        float viewDistance = camera->GetFarClip() * 1.2;
+        float viewDistance = camera->GetFarClip() * 1.2f;
         visibleTest.Define(camera->GetFov(), camera->GetAspectRatio(), camera->GetZoom(), 
             camera->GetNearClip(), viewDistance, camera->GetEffectiveWorldTransform());
 

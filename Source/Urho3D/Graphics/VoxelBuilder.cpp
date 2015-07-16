@@ -14,6 +14,7 @@
 #include "../Core/Profiler.h"
 #include "../Container/Sort.h"
 
+#include "../DebugNew.h"
 
 #define STB_VOXEL_RENDER_IMPLEMENTATION
 #define STBVOX_CONFIG_MODE  1
@@ -63,9 +64,9 @@ static float URHO3D_default_normals[32][3] =
 
 static float URHO3D_default_ambient[3][4] =
 {
-	{ 0, 1, 0, 0 }, // reversed lighting direction
-	{ 0.2, 0.2, 0.2, 0 }, // directional color
-	{ 0.0, 0.0, 0.0, 0 }, // constant color
+	{ 0.0f, 1.0f, 0.0f, 0.0f }, // reversed lighting direction
+	{ 0.2f, 0.2f, 0.2f, 0.0f }, // directional color
+	{ 0.0f, 0.0f, 0.0f, 0.0f }, // constant color
 };
 
 static float URHO3D_default_texscale[128][4] =
@@ -193,7 +194,8 @@ VoxelBuilder::VoxelBuilder(Context* context)
 
 VoxelBuilder::~VoxelBuilder()
 {
-
+    for (unsigned i = 0; i < jobs_.Size(); ++i)
+        delete jobs_[i];
 }
 
 void VoxelBuilder::AllocateWorkerBuffers()
@@ -303,7 +305,7 @@ void VoxelBuilder::DecodeWorkBuffer(VoxelWorkload* workload)
         unsigned int v1 = *workData++;
         // unsigned int v2 = *workData++;
 
-        Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0, (float)((v1 >> 7u) & 127u));
+        Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0f, (float)((v1 >> 7u) & 127u));
         //float amb_occ = (float)((v1 >> 23u) & 63u) / 63.0;
         //unsigned char tex1 = v2 & 0xFF;
         //unsigned char tex2 = (v2 >> 8) & 0xFF;
@@ -650,7 +652,8 @@ void VoxelBuilder::AbortSlot(VoxelWorkSlot* slot)
 
 void VoxelBuilder::CancelJob(VoxelJob* job)
 {
-    jobs_.Remove(job);
+    if (jobs_.Remove(job))
+        delete job;
 }
 
 bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
@@ -935,16 +938,16 @@ struct Quad {
     bool keep;
 
     Vector3 AVector() {
-        return Vector3 ((float)(a & 127u), (float)((a >> 14u) & 511u) / 2.0, (float)((a >> 7u) & 127u));
+        return Vector3 ((float)(a & 127u), (float)((a >> 14u) & 511u) / 2.0f, (float)((a >> 7u) & 127u));
     }
     Vector3 BVector() {
-        return Vector3 ((float)(b & 127u), (float)((b >> 14u) & 511u) / 2.0, (float)((b >> 7u) & 127u));
+        return Vector3 ((float)(b & 127u), (float)((b >> 14u) & 511u) / 2.0f, (float)((b >> 7u) & 127u));
     }
     Vector3 CVector() {
-        return Vector3 ((float)(c & 127u), (float)((c >> 14u) & 511u) / 2.0, (float)((c >> 7u) & 127u));
+        return Vector3 ((float)(c & 127u), (float)((c >> 14u) & 511u) / 2.0f, (float)((c >> 7u) & 127u));
     }
     Vector3 DVector() {
-        return Vector3 ((float)(d & 127u), (float)((d >> 14u) & 511u) / 2.0, (float)((d >> 7u) & 127u));
+        return Vector3 ((float)(d & 127u), (float)((d >> 14u) & 511u) / 2.0f, (float)((d >> 7u) & 127u));
     }
 
     Vector3 GetNormal() {

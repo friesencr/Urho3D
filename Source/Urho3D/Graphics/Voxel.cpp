@@ -5,6 +5,8 @@
 #include "../IO/Generator.h"
 #include "../Resource/ResourceCache.h"
 
+#include "../DebugNew.h"
+
 namespace Urho3D {
 
 	unsigned char VoxelEncodeColor(Color c, bool tex1Enabled, bool tex2Enabled)
