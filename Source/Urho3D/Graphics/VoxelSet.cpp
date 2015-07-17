@@ -271,7 +271,6 @@ void VoxelSet::BuildInternal(bool async)
         buildQueue_.Erase(0);
     }
 
-    if (!async)
         GetSubsystem<VoxelBuilder>()->CompleteWork();
 
     //for (unsigned i = 0; i < loadedChunks_.Size(); i++)

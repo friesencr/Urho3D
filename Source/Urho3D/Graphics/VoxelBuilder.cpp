@@ -212,11 +212,11 @@ void VoxelBuilder::AllocateWorkerBuffers()
     slots_.Resize(numSlots);
     for (unsigned i = 0; i < slots_.Size(); ++i)
     {
-        for (unsigned a = 0; a < 4; ++a)
+        for (unsigned a = 0; a < VOXEL_MAX_WORKERS; ++a)
             stbvox_init_mesh_maker(&slots_[i].meshMakers[a]);
 
         slots_[i].job = 0;
-        slots_[i].workloads.Resize(4);
+        slots_[i].workloads.Resize(VOXEL_MAX_WORKERS);
         FreeWorkSlot(&slots_[i]);
     }
 }
@@ -389,34 +389,38 @@ VoxelJob* VoxelBuilder::BuildVoxelChunk(SharedPtr<VoxelChunk> chunk, bool async)
 
 bool VoxelBuilder::RunJobs()
 {
-    if (!jobs_.Empty())
+    for (;;)
     {
-        int slotId = GetFreeWorkSlot();
-        if (slotId != -1)
+        for (unsigned i = 0; i < slots_.Size(); ++i)
         {
-            unsigned count = jobs_.Size();
-            VoxelJob* job = jobs_[0];
-            VoxelWorkSlot* slot = &slots_[slotId];
-            job->slot = slotId;
-            slot->job = job;
-            jobs_.Erase(0);
-            ProcessJob(job);
-        }
-    }
+            GetSubsystem<WorkQueue>()->Complete(0);
+            VoxelWorkSlot* slot = &slots_[i];
+            bool process = false;
+            {
+                MutexLock lock(slot->workMutex);
+                process = !slot->free && slot->upload;
+                slot->upload = false;
+            }
+            if (process)
+                ProcessSlot(slot);
 
-    GetSubsystem<WorkQueue>()->Complete(0);
+            if (jobs_.Size() == 0)
+                continue;
 
-    for (unsigned i = 0; i < slots_.Size(); ++i)
-    {
-        VoxelWorkSlot* slot = &slots_[i];
-        bool process = false;
-        {
-            MutexLock lock(slot->workMutex);
-            process = !slot->free && slot->upload;
-            slot->upload = false;
+            int slotId = GetFreeWorkSlot();
+            if (slotId != -1)
+            {
+                unsigned count = jobs_.Size();
+                VoxelJob* job = jobs_[0];
+                VoxelWorkSlot* slot = &slots_[slotId];
+                job->slot = slotId;
+                slot->job = job;
+                jobs_.Erase(0);
+                ProcessJob(job);
+            }
         }
-        if (process)
-            ProcessSlot(slot);
+        if (jobs_.Size() == 0)
+            return 0;
     }
 
     return jobs_.Size() > 0;

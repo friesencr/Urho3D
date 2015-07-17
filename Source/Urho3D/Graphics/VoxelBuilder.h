@@ -25,12 +25,13 @@ enum VoxelBuildStatus
     VOXEL_BUILD_UNLOADED
 };
 
-static const unsigned char VOXEL_WORKER_SIZE_X = 32;
-static const unsigned char VOXEL_WORKER_SIZE_Y = 128;
-static const unsigned char VOXEL_WORKER_SIZE_Z = 32;
+static const unsigned char VOXEL_WORKER_SIZE_X = 16;
+static const unsigned char VOXEL_WORKER_SIZE_Y = 255;
+static const unsigned char VOXEL_WORKER_SIZE_Z = 16;
+static const unsigned VOXEL_MAX_WORKERS = 4 * 4 * 1;
 
 // VOXEL CONFIG MODE 0 - is 2 uints per vertex
-static const unsigned VOXEL_WORKER_MAX_QUADS = 800000;
+static const unsigned VOXEL_WORKER_MAX_QUADS = 200000;
 static const unsigned VOXEL_WORKER_VERTEX_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4 * 4;
 static const unsigned VOXEL_WORKER_FACE_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4;
 
@@ -55,9 +56,9 @@ struct VoxelWorkSlot
     Vector<VoxelWorkload> workloads;
     VoxelProcessorWriters processorWriters;
     VoxelJob* job;
-    stbvox_mesh_maker meshMakers[4];
-    unsigned char workVertexBuffers[4][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
-    unsigned char workFaceBuffers[4][VOXEL_WORKER_FACE_BUFFER_SIZE];
+    stbvox_mesh_maker meshMakers[VOXEL_MAX_WORKERS];
+    unsigned char workVertexBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
+    unsigned char workFaceBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_FACE_BUFFER_SIZE];
     unsigned char workProcessorBuffers[7][VOXEL_PROCESSOR_SIZE];
     int numQuads;
     bool failed;

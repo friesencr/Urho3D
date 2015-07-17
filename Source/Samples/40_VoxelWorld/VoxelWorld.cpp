@@ -294,12 +294,13 @@ void VoxelWorld::Start()
 {
     Generator::RegisterGeneratorFunction("RandomTerrain", RandomTerrain);
 
+    //Graphics* graphics = GetSubsystem<Graphics>();
+    //IntVector2 resolution = graphics->GetResolutions()[0];
+    //graphics->SetMode(1920, 1080, true, false, false, false, false, 2);
+
     // Execute base class startup
     Sample::Start();
 
-    Graphics* graphics = GetSubsystem<Graphics>();
-    IntVector2 resolution = graphics->GetResolutions()[0];
-    //graphics->SetMode(resolution.x_, resolution.y_, true, false, false, false, false, 4);
     // Create the scene content
     CreateScene();
 
@@ -309,7 +310,7 @@ void VoxelWorld::Start()
     // Setup the viewport for displaying the scene
     SetupViewport();
 
-    procSky_->Initialize();
+    //procSky_->Initialize();
 
     // Hook up to the frame update events
     SubscribeToEvents();
@@ -352,7 +353,7 @@ void VoxelWorld::CreateScene()
     cameraNode_->SetPosition(Vector3(0.0, 50.0, 0.0));
 
     Node* skyNode = scene_->CreateChild("SkyNode");
-    procSky_ = skyNode->CreateComponent<ProcSky>();
+    //procSky_ = skyNode->CreateComponent<ProcSky>();
 
     //Create a directional light to the world so that we can see something. The light scene node's orientation controls the
     //light direction; we will use the SetDirection() function which calculates the orientation from a forward direction vector.
@@ -372,8 +373,8 @@ void VoxelWorld::CreateScene()
 
     Zone* zone = skyNode->CreateComponent<Zone>();
     zone->SetBoundingBox(BoundingBox(Vector3(-100000, 0, -100000), Vector3(100000, 128, 100000)));
-    zone->SetAmbientColor(Color(0.2, 0.2, 0.2));
-    zone->SetHeightFog(true);
+    zone->SetAmbientColor(Color(0.7, 0.7, 0.7));
+    //zone->SetHeightFog(true);
     //zone->SetAmbientGradient(true);
     zone->SetFogColor(Color(0.3, 0.3, 0.3));
     zone->SetFogStart(700.0f);
@@ -479,7 +480,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 200.0f;
+    const float MOVE_SPEED = 600.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
