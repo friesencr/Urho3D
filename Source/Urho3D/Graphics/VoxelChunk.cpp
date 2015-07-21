@@ -117,9 +117,9 @@ namespace Urho3D {
         worldBoundingBox_ = boundingBox_.Transformed(node_->GetWorldTransform());
     }
 
-    void VoxelChunk::SetOwner(VoxelSet* voxelSet)
+    void VoxelChunk::SetVoxelSet(VoxelSet* voxelSet)
     {
-        owner_ = voxelSet;
+        voxelSet_ = voxelSet;
     }
 
     void VoxelChunk::SetBoundingBox(const BoundingBox& box)
@@ -450,6 +450,9 @@ namespace Urho3D {
         updateMaterialParameters_[0] = true;
         if (!node_)
             return;
+
+		if (!keepVoxelData_ && !voxelSet_)
+			voxelMap_->Unload();
 
         using namespace VoxelChunkCreated;
         VariantMap& eventData = GetEventDataMap();

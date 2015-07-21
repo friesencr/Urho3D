@@ -19,8 +19,6 @@ class URHO3D_API VoxelChunk;
 class URHO3D_API VoxelSet : public Component
 {
 public:
-
-
     // Construct.
     VoxelSet(Context* context);
     // Destruct.
@@ -33,8 +31,6 @@ public:
     virtual void ApplyAttributes();
     /// Handle enabled/disabled state change.
     virtual void OnSetEnabled();
-    /// Sets the max number of chunks held in memory after peak is reached
-    virtual void SetMaxInMemoryChunksPeak(unsigned maxInMemoryChunksPeak);
     /// Sets the number of chunks that trigger removal.
     virtual void SetMaxInMemoryChunks(unsigned maxInMemoryChunks);
     /// Sets chunk size
@@ -50,7 +46,7 @@ public:
     virtual VoxelMap* GetVoxelMap(unsigned x, unsigned y, unsigned z);
     inline unsigned GetIndex(unsigned x, unsigned y, unsigned z);
     bool GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, int &z);
-    unsigned GetNumberOfLoadedChunks() { return loadedMaps_.Size(); }
+	unsigned GetNumberOfLoadedChunks() { return loadedMeshes_.Size(); }
 
 
     ///// Set material.
@@ -88,15 +84,13 @@ private:
     void CreateChunks(int x, int y,  int z, unsigned size, Vector3 cameraPosition, Frustum frustrum, float viewDistance);
     void AllocateAndSortVisibleChunks();
     void SortLoadedChunks();
+	VoxelMap* GetLoadedVoxelMapFromCache(unsigned x, unsigned y, unsigned z);
     VoxelChunk* FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z, VoxelMap* map);
     // Material.
     SharedPtr<Material> material_;
     // Voxel chunks.
     PODVector<VoxelChunk*> loadedMeshes_;
-    PODVector<VoxelChunk*> loadedMaps_;
     PODVector<VoxelChunk*> buildQueue_;
-    //Vector<WeakPtr<VoxelChunk> > builtChunks_;
-    //Vector<WeakPtr<VoxelChunk> > unbuiltChunks_;
     Vector<WeakPtr<VoxelChunk> > chunks_;
     Vector<SharedPtr<VoxelMap> > voxelMaps_;
     Vector3 lastBuildPosition;
@@ -110,9 +104,9 @@ private:
     unsigned numChunks;
     unsigned maxInMemoryMeshPeak_;
     unsigned maxInMemoryMesh_;
-    unsigned maxInMemoryMapPeak_;
     unsigned maxInMemoryMap_;
     Vector3 chunkSpacing_;
+	Vector<Pair<unsigned, WeakPtr<VoxelMap>>> mapCache_;
 };
 
 }

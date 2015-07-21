@@ -65,7 +65,7 @@ static float URHO3D_default_normals[32][3] =
 static float URHO3D_default_ambient[3][4] =
 {
 	{ 0.0f, 1.0f, 0.0f, 0.0f }, // reversed lighting direction
-	{ 0.2f, 0.2f, 0.2f, 0.0f }, // directional color
+	{ 0.1f, 0.1f, 0.1f, 0.0f }, // directional color
 	{ 0.0f, 0.0f, 0.0f, 0.0f }, // constant color
 };
 
@@ -381,19 +381,20 @@ VoxelJob* VoxelBuilder::BuildVoxelChunk(SharedPtr<VoxelChunk> chunk, bool async)
         return 0;
 
     VoxelJob* job = CreateJob(chunk);
-    if (!async)
-        RunJobs();
+	RunJobs(async);
 
     return job;
 }
 
-bool VoxelBuilder::RunJobs()
+bool VoxelBuilder::RunJobs(bool async)
 {
     for (;;)
     {
         for (unsigned i = 0; i < slots_.Size(); ++i)
         {
-            GetSubsystem<WorkQueue>()->Complete(0);
+			if (!async)
+				GetSubsystem<WorkQueue>()->Complete(0);
+
             VoxelWorkSlot* slot = &slots_[i];
             bool process = false;
             {
@@ -419,8 +420,8 @@ bool VoxelBuilder::RunJobs()
                 ProcessJob(job);
             }
         }
-        if (jobs_.Size() == 0)
-            return 0;
+        if (jobs_.Size() == 0 || async)
+            return jobs_.Size();
     }
 
     return jobs_.Size() > 0;

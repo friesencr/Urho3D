@@ -171,6 +171,40 @@ static void FillTerrainPerlin(Context* context, unsigned char* dataPtr, VariantM
     unsigned chunkX = parameters["TileX"].GetUInt() * w;
     unsigned chunkZ = parameters["TileZ"].GetUInt() * d;
 
+    int heightMap[w][d];
+    float detailMap[w][d];
+
+    // build the heightmap
+    for (unsigned x = 0; x < w; ++x)
+    {
+        for (unsigned z = 0; z < d; ++z)
+        {
+            // detail noise
+            float dt = 0.0;
+            for (int o = 3; o < 5; ++o)
+            {
+                float scale = (float)(1 << o);
+                float ns = stb_perlin_noise3((x + chunkX) / scale, (z + chunkZ) / scale, (float)-o, 256, 256, 256);
+                dt += Abs(ns);
+            }
+
+            // low frequency
+            float ht = 0.0;
+            for (int o = 3; o < 9; ++o)
+            {
+                float scale = (float)(1 << o);
+                float ns = stb_perlin_noise3((x + chunkX) / scale, (z + chunkZ) / scale, (float)o, 256, 256, 256);
+                ht += ns * noiseFactors[o];
+            }
+
+            // biome
+            //float biome = stb_perlin_noise3((x + chunkX) / 2048, (z + chunkZ) / 2048, 32.0, 256, 256, 256);
+
+            int height = (int)((ht + 0.2) * 45.0) + 32;
+            heightMap[x][z] = Clamp(height, 1, 128); 
+            detailMap[x][z] = dt;
+        }
+    }
 
     const int DEEP_WATER_BLOCK = 27;
     const int WATER_BLOCK = 28;
@@ -197,33 +231,13 @@ static void FillTerrainPerlin(Context* context, unsigned char* dataPtr, VariantM
     int heights[8] = {FLOOR_HEIGHT, SLATE_HEIGHT, DIRT_HEIGHT, DESERT_HEIGHT, GRASS_HEIGHT, SNOW_HEIGHT, LIGHT_SNOW_HEIGHT, WHITE_SNOW_HEIGHT };
     int numBlocks = 8;
 
+    // fill block type data based on heightmap
     for (unsigned x = 0; x < w; ++x)
     {
         for (unsigned z = 0; z < d; ++z)
         {
-            // detail noise
-            float dt = 0.0;
-            for (int o = 3; o < 5; ++o)
-            {
-                float scale = (float)(1 << o);
-                float ns = stb_perlin_noise3((x + chunkX) / scale, (z + chunkZ) / scale, (float)-o, 256, 256, 256);
-                dt += Abs(ns);
-            }
-
-            // low frequency
-            float ht = 0.0;
-            for (int o = 3; o < 9; ++o)
-            {
-                float scale = (float)(1 << o);
-                float ns = stb_perlin_noise3((x + chunkX) / scale, (z + chunkZ) / scale, (float)o, 256, 256, 256);
-                ht += ns * noiseFactors[o];
-            }
-
-            // biome
-            float biome = stb_perlin_noise3((x + chunkX) / 2048, (z + chunkZ) / 2048, 32.0, 256, 256, 256);
-
-            int height = (int)((ht + 0.2) * 45.0) + 32;
-            height = Clamp(height, 1, 128);
+            int height = heightMap[x][z];
+            float dt = detailMap[x][z];
 
             for (unsigned i = 0; i < height; ++i)
             {
@@ -402,8 +416,8 @@ void VoxelWorld::CreateScene()
 
     //voxelBlocktypeMap_->diffuse1Textures = texture;
 
-    unsigned numX = 256;
-    unsigned numZ = 256;
+    unsigned numX = 32;
+    unsigned numZ = 32;
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     voxelSet->SetNumberOfChunks(numX, 1, numZ);
     for (unsigned x = 0; x < numX; ++x)
@@ -422,16 +436,16 @@ void VoxelWorld::CreateScene()
             params["TileZ"] = z;
             terrainGenerator->SetParameters(params);
             map->SetSource(terrainGenerator);
-            //map->AddVoxelProcessor(AOVoxelLighting);
+            map->AddVoxelProcessor(AOVoxelLighting);
 #ifdef SMOOTH_TERRAIN
             map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING | VOXEL_BLOCK_GEOMETRY | VOXEL_BLOCK_VHEIGHT);
 #else
-            //map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+            map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
 #endif
             voxelSet->SetVoxelMap(x, 0, z, map);
         }
     }
-    voxelSet->BuildAsync();
+    voxelSet->Build();
 
     //   Node* spotNode = cameraNode_->CreateChild("PointLight");
     //   spotNode->SetPosition(Vector3(0.0, -15.0, 0.0));
@@ -480,7 +494,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 600.0f;
+    const float MOVE_SPEED = 200.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 

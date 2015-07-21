@@ -211,26 +211,26 @@ namespace Urho3D {
 		xStride = (height_ + 4) * (depth_ + 4);
 		size_ = (width_ + 4)*(height_ + 4)*(depth_ + 4);
 
-        if (dataMask_ & VOXEL_BLOCK_BLOCKTYPE)
-            blocktype = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
+		if (dataMask_ & VOXEL_BLOCK_BLOCKTYPE)
+			blocktype = source.ReadBuffer();
 
-        if (dataMask_ & VOXEL_BLOCK_COLOR)
-            color = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
+		if (dataMask_ & VOXEL_BLOCK_COLOR)
+			color = source.ReadBuffer();
 
         if (dataMask_ & VOXEL_BLOCK_GEOMETRY)
-            geometry = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
+            geometry = source.ReadBuffer();
 
         if (dataMask_ & VOXEL_BLOCK_VHEIGHT)
-            vHeight = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
+            vHeight = source.ReadBuffer();
 
         if (dataMask_ & VOXEL_BLOCK_LIGHTING)
-            lighting = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
+            lighting = source.ReadBuffer();
 
         if (dataMask_ & VOXEL_BLOCK_ROTATE)
-            rotate = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
+            rotate = source.ReadBuffer();
 
         if (dataMask_ & VOXEL_BLOCK_TEX2)
-            tex2 = PODVector<unsigned char>(&source.ReadBuffer().Front(), size_);
+            tex2 = source.ReadBuffer();
 
         return true;
     }

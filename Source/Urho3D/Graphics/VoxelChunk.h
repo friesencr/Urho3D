@@ -58,8 +58,11 @@ class URHO3D_API VoxelChunk : public Drawable
     /// Sets the voxel definition
     void SetVoxelMap(VoxelMap* voxelMap);
 
-    /// Set owner terrain.
-    void SetOwner(VoxelSet* voxelSet);
+	/// Get chunk voxel set
+	VoxelSet* GetVoxelSet() const { return voxelSet_;  }
+
+    /// Set chunk voxel set.
+    void SetVoxelSet(VoxelSet* voxelSet);
 
     /// Set material by mesh selector.
     void SetMaterial(unsigned selector, Material* material);
@@ -75,7 +78,8 @@ class URHO3D_API VoxelChunk : public Drawable
     void UnloadMesh();
     void UnloadMap();
     bool Reload(bool async = false);
-
+	bool GetKeepVoxelData() const { return keepVoxelData_; }
+	void SetKeepVoxelData(bool keepVoxelData) { keepVoxelData_ = keepVoxelData; }
 	unsigned GetNumMeshes() const { return numMeshes_; }
 	unsigned GetTotalQuads() const;
 	unsigned GetNumQuads(unsigned index) const { return numQuads_[index]; }
@@ -109,9 +113,10 @@ private:
     unsigned char size_[3];
     float buildPrioirty_;
     bool buildVisible_;
+	bool keepVoxelData_;
     unsigned numMeshes_;
     VoxelJob* buildJob_;
-    WeakPtr<VoxelSet> owner_;
+    WeakPtr<VoxelSet> voxelSet_;
     WeakPtr<VoxelMap> neighborNorth_;
     WeakPtr<VoxelMap> neighborWest_;
     WeakPtr<VoxelMap> neighborEast_;
