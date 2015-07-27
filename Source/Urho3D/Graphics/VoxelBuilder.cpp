@@ -188,6 +188,8 @@ VoxelBuilder::VoxelBuilder(Context* context)
     for (unsigned i = 0; i < 64; ++i)
         colorTable_[i] = Vector4(URHO3D_default_palette[i]);
 
+	frameTimer_.Reset();
+
     AllocateWorkerBuffers();
     SubscribeToEvent(E_BEGINFRAME, HANDLER(VoxelBuilder, HandleBeginFrame));
 }
@@ -204,7 +206,7 @@ void VoxelBuilder::AllocateWorkerBuffers()
 
     // the workers will build a chunk and then convert it to urho vertex buffers, while the vertex buffer is being built it will start more chunks
     // but stall if the mesh building gets too far ahead of the vertex converter this is based on chunk size and number of cpu threads
-    unsigned numSlots = 2; // (unsigned)Min((float)numChunks, Max(1.0f, ceil((float)queue->GetNumThreads() / (float)VOXEL_MAX_NUM_WORKERS_PER_CHUNK)) * 2.0f);
+    unsigned numSlots = 4; // (unsigned)Min((float)numChunks, Max(1.0f, ceil((float)queue->GetNumThreads() / (float)VOXEL_MAX_NUM_WORKERS_PER_CHUNK)) * 2.0f);
 
     if (numSlots == slots_.Size())
         return;
@@ -382,47 +384,51 @@ VoxelJob* VoxelBuilder::BuildVoxelChunk(SharedPtr<VoxelChunk> chunk, bool async)
 
     VoxelJob* job = CreateJob(chunk);
 	RunJobs(async);
+	if (!async)
+		CompleteWork();
 
     return job;
 }
 
 bool VoxelBuilder::RunJobs(bool async)
 {
-    for (;;)
-    {
-        for (unsigned i = 0; i < slots_.Size(); ++i)
-        {
-			if (!async)
-				GetSubsystem<WorkQueue>()->Complete(0);
+	for (unsigned i = 0; i < slots_.Size(); ++i)
+	{
+		if (jobs_.Size() > 0)
+		{
+			int slotId = GetFreeWorkSlot();
+			if (slotId != -1 && ReserveWorkSlot(slotId))
+			{
+				unsigned count = jobs_.Size();
+				VoxelJob* job = jobs_[0];
+				VoxelWorkSlot* slot = &slots_[slotId];
+				job->slot = slotId;
+				slot->job = job;
+				jobs_.Erase(0);
+				ProcessJob(job);
+				break;
+			}
+		}
+	}
 
-            VoxelWorkSlot* slot = &slots_[i];
-            bool process = false;
-            {
-                MutexLock lock(slot->workMutex);
-                process = !slot->free && slot->upload;
-                slot->upload = false;
-            }
-            if (process)
-                ProcessSlot(slot);
+	if (!async)
+	{
+		GetSubsystem<WorkQueue>()->Complete(0);
 
-            if (jobs_.Size() == 0)
-                continue;
-
-            int slotId = GetFreeWorkSlot();
-            if (slotId != -1)
-            {
-                unsigned count = jobs_.Size();
-                VoxelJob* job = jobs_[0];
-                VoxelWorkSlot* slot = &slots_[slotId];
-                job->slot = slotId;
-                slot->job = job;
-                jobs_.Erase(0);
-                ProcessJob(job);
-            }
-        }
-        if (jobs_.Size() == 0 || async)
-            return jobs_.Size();
-    }
+		for (unsigned i = 0; i < slots_.Size(); ++i)
+		{
+			VoxelWorkSlot* slot = &slots_[i];
+			bool process = false;
+			{
+				MutexLock lock(slot->workMutex);
+				process = !slot->free && slot->upload;
+				if (process)
+					slot->upload = false;
+			}
+			if (process)
+				ProcessSlot(slot);
+		}
+	}
 
     return jobs_.Size() > 0;
 }
@@ -451,105 +457,100 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
         VoxelMap* eastMap = chunk->GetNeighborEast();
         VoxelMap* westMap = chunk->GetNeighborWest();
 
-        const int TYPE_BLOCKTYPE = 0;
-        const int TYPE_VHEIGHT = 1;
-        const int TYPE_COLOR = 2;
-        const int TYPE_GEOMETRY = 3;
-        const int TYPE_ROTATE = 4;
-        const int TYPE_LIGHTING = 5;
-        const int TYPE_TEX2 = 6;
-
-        const int NUM_TRANSFERS = 7;
-
         const int MAP_NORTH = 0;
         const int MAP_SOUTH = 1;
         const int MAP_EAST = 2;
         const int MAP_WEST = 3;
         VoxelMap* maps[4] = { northMap, southMap, eastMap, westMap };
-        for (unsigned i = 0; i < NUM_TRANSFERS; ++i)
-        {
-            for (unsigned m = 0; m < 4; ++m)
-            {
-                VoxelMap* srcMap = maps[m];
+		for (unsigned m = 0; m < 4; ++m)
+		{
+			VoxelMap* srcMap = maps[m];
 
-                if (!srcMap)
-                    continue;
+			if (!srcMap)
+				continue;
 
-                if (!srcMap->IsLoaded())
-                {
-                    LOGERROR("Couldn't load neighbor voxel map information.");
-                    continue;
-                }
+			if (!srcMap->Reload())
+			{
+				LOGERROR("Couldn't load neighbor voxel map information (id: " + String(srcMap->GetID()) + ").");
+				continue;
+			}
 
-                bool exists = false;
-                switch (i)
-                {
-                    case TYPE_BLOCKTYPE: exists = srcMap->blocktype.Size() > 0 && voxelMap->blocktype.Size() > 0; break;
-                    case TYPE_VHEIGHT: exists = srcMap->vHeight.Size() > 0 && voxelMap->vHeight.Size() > 0; break;
-                    case TYPE_COLOR: exists = srcMap->color.Size() > 0 && voxelMap->color.Size() > 0; break;
-                    case TYPE_GEOMETRY: exists = srcMap->geometry.Size() > 0 && voxelMap->geometry.Size() > 0; break;
-                    case TYPE_LIGHTING: exists = srcMap->lighting.Size() > 0 && voxelMap->lighting.Size() > 0; break;
-                    case TYPE_ROTATE: exists = srcMap->rotate.Size() > 0  && voxelMap->rotate.Size() > 0; break;
-                    case TYPE_TEX2: exists = srcMap->tex2.Size() > 0 && voxelMap->tex2.Size() > 0; break;
-                }
-                if (!exists)
-                    continue;
+			if (!voxelMap->Reload())
+			{
+				LOGERROR("Couldn't load voxel map information (id: " + String(voxelMap->GetID()) + ").");
+				slot->failed = true;
+				return;
+			}
 
-                unsigned char* src = 0;
-                unsigned char* dst = 0;
+			PODVector<unsigned char>* srcDatas[VoxelMap::NUM_BASIC_STREAMS];
+			PODVector<unsigned char>* destDatas[VoxelMap::NUM_BASIC_STREAMS];
+			srcMap->GetBasicDataArrays(srcDatas);
+			voxelMap->GetBasicDataArrays(destDatas);
 
-                switch (i)
-                {
-                    case TYPE_BLOCKTYPE: src = &srcMap->blocktype.Front(); dst = &voxelMap->blocktype.Front(); break;
-                    case TYPE_VHEIGHT: src = &srcMap->vHeight.Front(); dst = &voxelMap->vHeight.Front(); break;
-                    case TYPE_COLOR: src = &srcMap->color.Front(); dst = &voxelMap->color.Front(); break;
-                    case TYPE_GEOMETRY: src = &srcMap->geometry.Front(); dst = &voxelMap->geometry.Front(); break;
-                    case TYPE_LIGHTING: src = &srcMap->lighting.Front(); dst = &voxelMap->lighting.Front(); break;
-                    case TYPE_ROTATE: src = &srcMap->rotate.Front(); dst = &voxelMap->rotate.Front(); break;
-                    case TYPE_TEX2: src = &srcMap->tex2.Front(); dst = &voxelMap->tex2.Front(); break;
-                }
+			for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
+			{
+				if (!voxelMap->dataMask_ & (1 << i))
+					continue;
 
-                unsigned char* srcPtr = src;
-                unsigned char* dstPtr = dst;
+				if (!srcMap->dataMask_ & (1 << i))
+					continue;
 
-                if (m == MAP_NORTH)
-                {
-                    for (unsigned x = 0; x < voxelMap->width_; ++x)
-                        for (unsigned y = 0; y < voxelMap->height_; ++y)
-                        {
-                            dstPtr[voxelMap->GetIndex(x, y, voxelMap->depth_)] = srcPtr[srcMap->GetIndex(x, y, 0)];
-                            dstPtr[voxelMap->GetIndex(x, y, voxelMap->depth_ + 1)] = srcPtr[srcMap->GetIndex(x, y, 1)];
-                        }
-                }
-                else if (m == MAP_SOUTH)
-                {
-                    for (unsigned x = 0; x < voxelMap->width_; ++x)
-                        for (unsigned y = 0; y < voxelMap->height_; ++y)
-                        {
-                            dstPtr[voxelMap->GetIndex(x, y, -1)] = srcPtr[srcMap->GetIndex(x, y, srcMap->depth_ - 1)];
-                            dstPtr[voxelMap->GetIndex(x, y, -2)] = srcPtr[srcMap->GetIndex(x, y, srcMap->depth_ - 2)];
-                        }
-                }
-                else if (m == MAP_EAST)
-                {
-                    for (unsigned z = 0; z < voxelMap->depth_; ++z)
-                        for (unsigned y = 0; y < voxelMap->height_; ++y)
-                        {
-                            dstPtr[voxelMap->GetIndex(voxelMap->width_, y, z)] = srcPtr[srcMap->GetIndex(0, y, z)];
-                            dstPtr[voxelMap->GetIndex(voxelMap->width_ + 1, y, z)] = srcPtr[srcMap->GetIndex(1, y, z)];
-                        }
-                }
-                else if (m == MAP_WEST)
-                {
-                    for (unsigned z = 0; z < voxelMap->depth_; ++z)
-                        for (unsigned y = 0; y < voxelMap->height_; ++y)
-                        {
-                            dstPtr[voxelMap->GetIndex(-1, y, z)] = srcPtr[srcMap->GetIndex(srcMap->width_ - 1, y, z)];
-                            dstPtr[voxelMap->GetIndex(-2, y, z)] = srcPtr[srcMap->GetIndex(srcMap->width_ - 2, y, z)];
-                        }
-                }
-            }
-        }
+				unsigned char* src = 0;
+				unsigned char* dst = 0;
+
+				if (srcDatas[i]->Size() == voxelMap->size_)
+				{
+					if (destDatas[i]->Size() == voxelMap->size_)
+					{
+						src = &srcDatas[i]->Front();
+						dst = &destDatas[i]->Front();
+					}
+				}
+
+				if (!(src && dst))
+					continue;
+
+				unsigned char* srcPtr = src;
+				unsigned char* dstPtr = dst;
+
+				if (m == MAP_NORTH)
+				{
+					for (unsigned x = 0; x < voxelMap->width_; ++x)
+						for (unsigned y = 0; y < voxelMap->height_; ++y)
+						{
+							dstPtr[voxelMap->GetIndex(x, y, voxelMap->depth_)] = srcPtr[srcMap->GetIndex(x, y, 0)];
+							dstPtr[voxelMap->GetIndex(x, y, voxelMap->depth_ + 1)] = srcPtr[srcMap->GetIndex(x, y, 1)];
+						}
+				}
+				else if (m == MAP_SOUTH)
+				{
+					for (unsigned x = 0; x < voxelMap->width_; ++x)
+						for (unsigned y = 0; y < voxelMap->height_; ++y)
+						{
+							dstPtr[voxelMap->GetIndex(x, y, -1)] = srcPtr[srcMap->GetIndex(x, y, srcMap->depth_ - 1)];
+							dstPtr[voxelMap->GetIndex(x, y, -2)] = srcPtr[srcMap->GetIndex(x, y, srcMap->depth_ - 2)];
+						}
+				}
+				else if (m == MAP_EAST)
+				{
+					for (unsigned z = 0; z < voxelMap->depth_; ++z)
+						for (unsigned y = 0; y < voxelMap->height_; ++y)
+						{
+							dstPtr[voxelMap->GetIndex(voxelMap->width_, y, z)] = srcPtr[srcMap->GetIndex(0, y, z)];
+							dstPtr[voxelMap->GetIndex(voxelMap->width_ + 1, y, z)] = srcPtr[srcMap->GetIndex(1, y, z)];
+						}
+				}
+				else if (m == MAP_WEST)
+				{
+					for (unsigned z = 0; z < voxelMap->depth_; ++z)
+						for (unsigned y = 0; y < voxelMap->height_; ++y)
+						{
+							dstPtr[voxelMap->GetIndex(-1, y, z)] = srcPtr[srcMap->GetIndex(srcMap->width_ - 1, y, z)];
+							dstPtr[voxelMap->GetIndex(-2, y, z)] = srcPtr[srcMap->GetIndex(srcMap->width_ - 2, y, z)];
+						}
+				}
+			}
+		}
     }
 
     if (voxelMap->GetVoxelProcessors().Size() > 0)
@@ -884,8 +885,9 @@ void VoxelBuilder::ProcessSlot(VoxelWorkSlot* slot)
 void VoxelBuilder::HandleBeginFrame(StringHash eventType, VariantMap& eventData)
 {
     PROFILE(VoxelWork);
-    Sort(jobs_.Begin(), jobs_.End(), CompareJobs);
-    RunJobs();
+	frameTimer_.Reset();
+    //Sort(jobs_.Begin(), jobs_.End(), CompareJobs);
+	while (RunJobs() && frameTimer_.GetMSec(false) < 2);
 }
 
 unsigned VoxelBuilder::DecrementWorkSlot(VoxelWorkSlot* slot)
@@ -922,11 +924,21 @@ int VoxelBuilder::GetFreeWorkSlot()
         if (slots_[i].free)
         {
             slot = &slots_[i];
-            slot->free = false;
             return i;
         }
     }
     return -1;
+}
+
+bool VoxelBuilder::ReserveWorkSlot(unsigned index)
+{
+    MutexLock lock(slotMutex_);
+	if (slots_[index].free)
+	{
+		slots_[index].free = false;
+		return true;
+	}
+	return false;
 }
 
 const unsigned QUAD_VERTEX_MASK = 0x007FFFFF;

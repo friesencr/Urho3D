@@ -31,8 +31,6 @@ public:
     virtual void ApplyAttributes();
     /// Handle enabled/disabled state change.
     virtual void OnSetEnabled();
-    /// Sets the number of chunks that trigger removal.
-    virtual void SetMaxInMemoryChunks(unsigned maxInMemoryChunks);
     /// Sets chunk size
     virtual void SetChunkSpacing(Vector3 spacing);
     /// Sets number of chunks in the set
@@ -79,8 +77,6 @@ public:
 
 private:
     void BuildInternal(bool async);
-    void ApplyInMemoryLimits();
-    void ApplyInMemoryLimitsForCamera(Camera* camera);
     void CreateChunks(int x, int y,  int z, unsigned size, Vector3 cameraPosition, Frustum frustrum, float viewDistance);
     void AllocateAndSortVisibleChunks();
     void SortLoadedChunks();
@@ -104,9 +100,7 @@ private:
     unsigned numChunks;
     unsigned maxInMemoryMeshPeak_;
     unsigned maxInMemoryMesh_;
-    unsigned maxInMemoryMap_;
     Vector3 chunkSpacing_;
-	Vector<Pair<unsigned, WeakPtr<VoxelMap>>> mapCache_;
 };
 
 }

@@ -61,6 +61,8 @@
 
 DEFINE_APPLICATION_MAIN(VoxelWorld)
 
+static Context* global_context_;
+
 static const int h = 128;
 static const int w = 64;
 static const int d = 64;
@@ -160,16 +162,17 @@ static void AOVoxelLighting(VoxelChunk* chunk, VoxelMap* src, VoxelProcessorWrit
     }
 }
 
-static void FillTerrainPerlin(Context* context, unsigned char* dataPtr, VariantMap& parameters, unsigned podIndex)
+static void FillTerrainPerlin(unsigned char* dataPtr, VariantMap& parameters, unsigned podIndex)
 {
+    unsigned tileX = parameters["TileX"].GetUInt();
+    unsigned tileZ = parameters["TileZ"].GetUInt();
+    unsigned chunkX = tileX * w;
+    unsigned chunkZ = tileZ * d;
+
     VoxelWriter writer;
     writer.SetSize(w, h, d);
     writer.InitializeBuffer(dataPtr);
     writer.Clear(0);
-    unsigned tileX = parameters["TileX"].GetUInt();
-    unsigned tileZ = parameters["TileZ"].GetUInt();
-    unsigned chunkX = parameters["TileX"].GetUInt() * w;
-    unsigned chunkZ = parameters["TileZ"].GetUInt() * d;
 
     int heightMap[w][d];
     float detailMap[w][d];
@@ -268,7 +271,7 @@ static void FillTerrainPerlin(Context* context, unsigned char* dataPtr, VariantM
     }
 }
 
-static unsigned RandomTerrain(Context* context, void* dest, unsigned size, unsigned position, VariantMap& parameters)
+static unsigned RandomTerrain(void* dest, unsigned size, unsigned position, VariantMap& parameters)
 {
     if (position < 4 * sizeof(unsigned))
     {
@@ -291,7 +294,7 @@ static unsigned RandomTerrain(Context* context, void* dest, unsigned size, unsig
     {
         unsigned podIndex = (position - headerSize) / podsize;
         unsigned char* dataPtr = (unsigned char*)dest;
-        FillTerrainPerlin(context, dataPtr, parameters, podIndex);
+        FillTerrainPerlin(dataPtr, parameters, podIndex);
         return dataSize;
     }
     return 0;
@@ -302,6 +305,7 @@ VoxelWorld::VoxelWorld(Context* context) :
 {
     ProcSky::RegisterObject(context);
     counter_ = 0;
+	global_context_ = context;
 }
 
 void VoxelWorld::Start()
@@ -416,8 +420,8 @@ void VoxelWorld::CreateScene()
 
     //voxelBlocktypeMap_->diffuse1Textures = texture;
 
-    unsigned numX = 32;
-    unsigned numZ = 32;
+    unsigned numX = 256;
+    unsigned numZ = 256;
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     voxelSet->SetNumberOfChunks(numX, 1, numZ);
     for (unsigned x = 0; x < numX; ++x)
@@ -428,24 +432,43 @@ void VoxelWorld::CreateScene()
             map->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
             map->SetSize(w, h, d);
             map->blocktypeMap = voxelBlocktypeMap_;
-            SharedPtr<Generator> terrainGenerator(new Generator(context_));
-            terrainGenerator->SetSize(generatorSize);
-            terrainGenerator->SetName("RandomTerrain");
+#if 0
+			String name = "VoxelMap" + String(x) + "_" + String(z) + ".bin";
+			ResourceRef ref = ResourceRef(File::GetTypeStatic(), name);
+			map->SetSource(ref);
+#else
+			Generator terrainGenerator;
+            terrainGenerator.SetSize(generatorSize);
+            terrainGenerator.SetName("RandomTerrain");
             VariantMap params;
             params["TileX"] = x;
             params["TileZ"] = z;
-            terrainGenerator->SetParameters(params);
+            terrainGenerator.SetParameters(params);
             map->SetSource(terrainGenerator);
-            map->AddVoxelProcessor(AOVoxelLighting);
+#endif
+
+            //map->AddVoxelProcessor(AOVoxelLighting);
 #ifdef SMOOTH_TERRAIN
             map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING | VOXEL_BLOCK_GEOMETRY | VOXEL_BLOCK_VHEIGHT);
 #else
-            map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+            //map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
 #endif
             voxelSet->SetVoxelMap(x, 0, z, map);
         }
     }
-    voxelSet->Build();
+    voxelSet->BuildAsync();
+	return;
+	
+	for (unsigned x = 0; x < numX; ++x)
+	{
+		for (unsigned z = 0; z < numZ; ++z)
+		{
+			VoxelMap* map = voxelSet->GetVoxelMap(x, 0, z);
+			File file(context_);
+			if (file.Open("VoxelMap" + String(x) + "_" + String(z) + ".bin", FILE_WRITE))
+				map->Save(file);
+		}
+	}
 
     //   Node* spotNode = cameraNode_->CreateChild("PointLight");
     //   spotNode->SetPosition(Vector3(0.0, -15.0, 0.0));

@@ -29,9 +29,8 @@ namespace Urho3D
 /// Generator function registry.
 static HashMap<String, GeneratorFunction> generatorFunctionRegistry_;
 
-Generator::Generator(Context* context) :
-    Resource(context),
-    generatorFunction_(0)
+Generator::Generator() :
+	generatorFunction_(0)
 {
 }
 
@@ -45,30 +44,30 @@ void Generator::RegisterGeneratorFunction(String functionName, GeneratorFunction
 }
 
 
-bool Generator::BeginLoad(Deserializer& source)
-{
-    if (source.ReadFileID() != "GENR")
-    {
-        LOGERROR(source.GetName() + " is not a valid generator file");
-        return false;
-    }
-
-    parameters_.Clear();
-    generatorFunction_ = 0;
-
-    unsigned memoryUse = sizeof(Generator);
-    SetName(source.ReadString());
-    SetSize(source.ReadUInt());
-    parameters_ = source.ReadVariantMap();
-    return true;
-}
+//bool Generator::BeginLoad(Deserializer& source)
+//{
+//    if (source.ReadFileID() != "GENR")
+//    {
+//        LOGERROR(source.GetName() + " is not a valid generator file");
+//        return false;
+//    }
+//
+//    parameters_.Clear();
+//    generatorFunction_ = 0;
+//
+//    unsigned memoryUse = sizeof(Generator);
+//    SetName(source.ReadString());
+//    SetSize(source.ReadUInt());
+//    parameters_ = source.ReadVariantMap();
+//    return true;
+//}
 
 unsigned Generator::Read(void* dest, unsigned size)
 {
     if (!generatorFunction_)
         return 0;
 
-    unsigned bytesRead = generatorFunction_(context_, dest, size, position_, parameters_);
+    unsigned bytesRead = generatorFunction_(dest, size, position_, parameters_);
     position_ += bytesRead;
     return bytesRead;
 }
@@ -80,7 +79,6 @@ unsigned Generator::Seek(unsigned position)
 
 void Generator::SetName(const String& name)
 {
-    Resource::SetName(name);
     generatorFunction_ = generatorFunctionRegistry_[name];
 }
 
@@ -89,17 +87,17 @@ void Generator::SetParameters(VariantMap parameters)
     parameters_ = parameters;
 }
 
-bool Generator::Save(Serializer& dest) const
-{
-    // Write ID
-    if (!dest.WriteFileID("GENR"))
-        return false;
-
-    dest.WriteString(Resource::GetName());
-    dest.WriteUInt(GetSize());
-    dest.WriteVariantMap(parameters_);
-
-    return true;
-}
+//bool Generator::Save(Serializer& dest) const
+//{
+//    // Write ID
+//    if (!dest.WriteFileID("GENR"))
+//        return false;
+//
+//    dest.WriteString(Resource::GetName());
+//    dest.WriteUInt(GetSize());
+//    dest.WriteVariantMap(parameters_);
+//
+//    return true;
+//}
 
 }

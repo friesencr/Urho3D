@@ -7,6 +7,7 @@
 #include "Texture2DArray.h"
 #include "../Container/ArrayPtr.h"
 #include "../Scene/Serializable.h"
+#include "../IO/Generator.h"
 
 namespace Urho3D {
 
@@ -77,13 +78,23 @@ enum VoxelFaceRotation
     VOXEL_FACEROT_270
 };
 
-static const unsigned VOXEL_BLOCK_BLOCKTYPE = 0x00000001;
-static const unsigned VOXEL_BLOCK_COLOR     = 0x00000002;
-static const unsigned VOXEL_BLOCK_GEOMETRY  = 0x00000004;
-static const unsigned VOXEL_BLOCK_VHEIGHT   = 0x00000008;
-static const unsigned VOXEL_BLOCK_LIGHTING  = 0x00000010;
-static const unsigned VOXEL_BLOCK_ROTATE    = 0x00000020;
-static const unsigned VOXEL_BLOCK_TEX2      = 0x00000040;
+static const unsigned VOXEL_BLOCK_BLOCKTYPE      = 0x00000001;
+static const unsigned VOXEL_BLOCK_COLOR2         = 0x00000002;
+static const unsigned VOXEL_BLOCK_COLOR2FACEMASK = 0x00000004;
+static const unsigned VOXEL_BLOCK_COLOR3         = 0x00000008;
+static const unsigned VOXEL_BLOCK_COLOR3FACEMASK = 0x00000010;
+static const unsigned VOXEL_BLOCK_COLOR          = 0x00000020;
+static const unsigned VOXEL_BLOCK_ECOLOR         = 0x00000040;
+static const unsigned VOXEL_BLOCK_ECOLORFACEMASK = 0x00000080;
+static const unsigned VOXEL_BLOCK_EXTENDEDCOLOR  = 0x00000100;
+static const unsigned VOXEL_BLOCK_GEOMETRY       = 0x00000200;
+static const unsigned VOXEL_BLOCK_LIGHTING       = 0x00000400;
+static const unsigned VOXEL_BLOCK_OVERLAY        = 0x00000800;
+static const unsigned VOXEL_BLOCK_ROTATE         = 0x00001000;
+static const unsigned VOXEL_BLOCK_TEX2           = 0x00002000;
+static const unsigned VOXEL_BLOCK_TEX2FACEMASK   = 0x00004000;
+static const unsigned VOXEL_BLOCK_TEX2REPLACE    = 0x00008000;
+static const unsigned VOXEL_BLOCK_VHEIGHT        = 0x00010000;
 
 unsigned char VoxelEncodeColor(Color c, bool tex1Enabled, bool tex2Enabled);
 
@@ -281,8 +292,14 @@ public:
     }
 };
 
+static unsigned voxelMapID = 0;
+
 class URHO3D_API VoxelMap : public Serializable {
     OBJECT(VoxelMap);
+    friend class VoxelBuilder;
+    static const unsigned MAX_LOADED_MAPS = 100;
+    static const unsigned NUM_BASIC_STREAMS = 17;
+private:
 
 public:
     SharedPtr<VoxelBlocktypeMap> blocktypeMap;
@@ -298,13 +315,17 @@ public:
     PODVector<unsigned char> color3;
     PODVector<unsigned char> color3Facemask;
     PODVector<unsigned char> extendedColor;
+    PODVector<unsigned char> eColor;
+    PODVector<unsigned char> eColorFaceMask;
     PODVector<unsigned char> geometry;
     PODVector<unsigned char> vHeight;
     PODVector<unsigned char> lighting;
     PODVector<unsigned char> rotate;
     PODVector<unsigned char> tex2;
+    PODVector<unsigned char> tex2Replace;
     PODVector<unsigned char> tex2Facemask;
 
+    unsigned id_;
     unsigned dataMask_;
     unsigned processorDataMask_;
     unsigned height_;
@@ -313,8 +334,10 @@ public:
     unsigned size_;
     unsigned xStride;
     unsigned zStride;
+	unsigned char dataSourceType;
     Vector<VoxelProcessorFunc> voxelProcessors_;
-    SharedPtr<Object> source_;
+    ResourceRef resourceRef_;
+    Generator generator_;
 
     /// Construct empty.
     VoxelMap(Context* context);
@@ -337,19 +360,24 @@ public:
     virtual void Unload();
 
     /// Reloads the voxel map if source is available.
-    virtual bool Reload();
+    virtual bool Reload(bool force=false);
 
     /// See if voxel map is loaded into memory.
     virtual bool IsLoaded();
 
-    /// Sets the deserializer to load the data when chunk is built.
-    virtual void SetSource(Object* deserializer);
+    /// Sets the data source to a generator
+    virtual void SetSource(Generator generator);
+
+    /// Sets the data source to a resource reference
+    virtual void SetSource(ResourceRef resourceRef);
 
     /// Sets the block type data mask.
     virtual void SetDataMask(unsigned dataMask) { dataMask_ = dataMask; }
 
     /// Sets the block type data mask.
     virtual void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
+
+	unsigned GetID() const { return id_;  }
 
     inline unsigned GetIndex(int x, int y, int z) { return (y + 2) + ((z + 2) * zStride) + ((x + 2) * xStride); }
     void SetSize(unsigned width, unsigned height, unsigned depth);
@@ -396,6 +424,33 @@ public:
         geometry[GetIndex(x, y, z)] = VoxelEncodeGeometry(voxelGeometry);
     }
 
+private:
+
+    void GetBasicDataArrays(PODVector<unsigned char>** datas)
+    {
+            datas[0] = &blocktype;
+            datas[1] = &color2;
+            datas[2] = &color2Facemask;
+            datas[3] = &color3;
+            datas[4] = &color3Facemask;
+            datas[5] = &color;
+            datas[6] = &eColor;
+            datas[7] = &eColorFaceMask;
+            datas[8] = &extendedColor;
+            datas[9] = &geometry;
+            datas[10] = &lighting;
+            datas[11] = &overlay;
+            datas[12] = &rotate;
+            datas[13] = &tex2;
+            datas[14] = &tex2Facemask;
+            datas[15] = &tex2Replace;
+            datas[16] = &vHeight;
+    }
+
+    /// Gets the next free voxel map id.
+    unsigned GetNextFreeID() { 
+		return ++voxelMapID; 
+	}
 };
 
 struct VoxelProcessorWriters

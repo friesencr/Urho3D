@@ -4,40 +4,67 @@
 #include "../IO/Deserializer.h"
 #include "../IO/Generator.h"
 #include "../Resource/ResourceCache.h"
+#include "../IO/Log.h"
 
 #include "../DebugNew.h"
 
 namespace Urho3D {
 
-	unsigned char VoxelEncodeColor(Color c, bool tex1Enabled, bool tex2Enabled)
-	{
-		return STBVOX_MAKE_COLOR(c.ToUInt(), tex1Enabled, tex2Enabled);
-	}
+    static Vector<WeakPtr<VoxelMap> > voxelMapCache_;
+	static void TouchCache(VoxelMap* voxelMap)
+    {
+		if (!voxelMap)
+			return;
 
-	unsigned char VoxelEncodeVHeight(VoxelHeight southWest, VoxelHeight southEast, VoxelHeight northWest, VoxelHeight northEast)
-	{
-		return STBVOX_MAKE_VHEIGHT(southWest, southEast, northWest, northEast);
-	}
+        for (unsigned i = 0; i < voxelMapCache_.Size(); ++i)
+        {
+			if (voxelMapCache_[i]->GetID() == voxelMap->GetID())
+            {
+				voxelMapCache_.Erase(i);
+				break;
+            }
+        }
+		voxelMapCache_.Insert(0, WeakPtr<VoxelMap>(voxelMap));
+		while (voxelMapCache_.Size() > VoxelMap::MAX_LOADED_MAPS)
+		{
+			VoxelMap* unloadMap = voxelMapCache_[VoxelMap::MAX_LOADED_MAPS];
+			if (unloadMap)
+			{
+				unloadMap->Unload();
+				voxelMapCache_.Erase(VoxelMap::MAX_LOADED_MAPS);
+			}
+		}
+    }
 
-	unsigned char VoxelEncodeVHeight(VoxelHeight voxelHeight)
-	{
-		return STBVOX_MAKE_VHEIGHT(voxelHeight, voxelHeight, voxelHeight, voxelHeight);
-	}
+    unsigned char VoxelEncodeColor(Color c, bool tex1Enabled, bool tex2Enabled)
+    {
+	    return STBVOX_MAKE_COLOR(c.ToUInt(), tex1Enabled, tex2Enabled);
+    }
 
-	unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot, VoxelHeight height)
-	{
-		return STBVOX_MAKE_GEOMETRY(geometry, rot, height);
-	}
+    unsigned char VoxelEncodeVHeight(VoxelHeight southWest, VoxelHeight southEast, VoxelHeight northWest, VoxelHeight northEast)
+    {
+	    return STBVOX_MAKE_VHEIGHT(southWest, southEast, northWest, northEast);
+    }
 
-	unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot)
-	{
-		return STBVOX_MAKE_GEOMETRY(geometry, rot, 0);
-	}
+    unsigned char VoxelEncodeVHeight(VoxelHeight voxelHeight)
+    {
+	    return STBVOX_MAKE_VHEIGHT(voxelHeight, voxelHeight, voxelHeight, voxelHeight);
+    }
 
-	unsigned char VoxelEncodeGeometry(VoxelGeometry geometry)
-	{
-		return STBVOX_MAKE_GEOMETRY(geometry, VOXEL_FACE_EAST,0);
-	}
+    unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot, VoxelHeight height)
+    {
+	    return STBVOX_MAKE_GEOMETRY(geometry, rot, height);
+    }
+
+    unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot)
+    {
+	    return STBVOX_MAKE_GEOMETRY(geometry, rot, 0);
+    }
+
+    unsigned char VoxelEncodeGeometry(VoxelGeometry geometry)
+    {
+	    return STBVOX_MAKE_GEOMETRY(geometry, VOXEL_FACE_EAST,0);
+    }
 
     /// Register object factory.
     void VoxelTextureMap::RegisterObject(Context* context)
@@ -174,9 +201,10 @@ namespace Urho3D {
         width_(0),
         height_(0),
         depth_(0),
-        dataMask_(0)
+        dataMask_(0),
+		dataSourceType(0)
 	{
-
+		id_ = GetNextFreeID();
 	}
 
     VoxelMap::~VoxelMap()
@@ -198,6 +226,8 @@ namespace Urho3D {
         if (!BeginLoad(source))
             return false;
 
+		TouchCache(this);
+		//LOGINFO(String(id_) + " Loaded");
         return true;
     }
 
@@ -211,26 +241,13 @@ namespace Urho3D {
 		xStride = (height_ + 4) * (depth_ + 4);
 		size_ = (width_ + 4)*(height_ + 4)*(depth_ + 4);
 
-		if (dataMask_ & VOXEL_BLOCK_BLOCKTYPE)
-			blocktype = source.ReadBuffer();
-
-		if (dataMask_ & VOXEL_BLOCK_COLOR)
-			color = source.ReadBuffer();
-
-        if (dataMask_ & VOXEL_BLOCK_GEOMETRY)
-            geometry = source.ReadBuffer();
-
-        if (dataMask_ & VOXEL_BLOCK_VHEIGHT)
-            vHeight = source.ReadBuffer();
-
-        if (dataMask_ & VOXEL_BLOCK_LIGHTING)
-            lighting = source.ReadBuffer();
-
-        if (dataMask_ & VOXEL_BLOCK_ROTATE)
-            rotate = source.ReadBuffer();
-
-        if (dataMask_ & VOXEL_BLOCK_TEX2)
-            tex2 = source.ReadBuffer();
+		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
+		GetBasicDataArrays(datas);
+		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
+		{
+			if (dataMask_ & (1 << i))
+				*datas[i] = source.ReadBuffer();
+		}
 
         return true;
     }
@@ -240,60 +257,71 @@ namespace Urho3D {
         if (width_ == 0 || height_ == 0 || depth_ == 0 || dataMask_ == 0)
             return false;
 
-        if (dataMask_ & VOXEL_BLOCK_BLOCKTYPE && blocktype.Size() != size_)
-            return false;
-
-        if (dataMask_ & VOXEL_BLOCK_COLOR && color.Size() != size_)
-            return false;
-
-        if (dataMask_ & VOXEL_BLOCK_GEOMETRY && geometry.Size() != size_)
-            return false;
-
-        if (dataMask_ & VOXEL_BLOCK_VHEIGHT && vHeight.Size() != size_)
-            return false;
-
-        if (dataMask_ & VOXEL_BLOCK_ROTATE && rotate.Size() != size_)
-            return false;
-
-        if (dataMask_ & VOXEL_BLOCK_TEX2 && tex2.Size() != size_)
-            return false;
+		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
+		GetBasicDataArrays(datas);
+		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
+		{
+			if ((dataMask_ & (1 << i)) && datas[i]->Size() != size_)
+				return false;
+		}
 
         return true;
     }
 
     bool VoxelMap::Save(Serializer& dest)
     {
+		dest.WriteUInt(width_);
+		dest.WriteUInt(height_);
+		dest.WriteUInt(depth_);
+		dest.WriteUInt(dataMask_);
+
+		if (!Reload())
+			return false;
+
+		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
+		GetBasicDataArrays(datas);
+		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
+		{
+			if (dataMask_ & (1 << i))
+				dest.WriteBuffer(*datas[i]);
+		}
         return true;
     }
 
     void VoxelMap::Unload()
     {
-        blocktype.Clear();
-        blocktype.Compact();
-        color.Clear();
-        color.Compact();
-        geometry.Clear();
-        geometry.Compact();
-        vHeight.Clear();
-        vHeight.Compact();
-        lighting.Clear();
-        lighting.Compact();
-        rotate.Clear();
-        rotate.Compact();
-        tex2.Clear();
-        tex2.Compact();
+		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
+		GetBasicDataArrays(datas);
+		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
+		{
+			datas[i]->Clear();
+			datas[i]->Compact();
+		}
+		//LOGINFO(String(id_) + " Unloaded");
     }
 
-    bool VoxelMap::Reload()
+    bool VoxelMap::Reload(bool force)
     {
-        if (source_.NotNull())
-        {
-            Generator* sourceGenerator = (Generator*)source_.Get();
-            Generator copy(context_);
-            copy.SetName(sourceGenerator->GetName());
-            copy.SetParameters(sourceGenerator->GetParameters());
-            return Load(copy);
-        }
+		if (!force && IsLoaded())
+		{
+			TouchCache(this);
+			return true;
+		}
+
+		if (dataSourceType == 1)
+		{
+			Generator copy = generator_;
+			return Load(copy);
+		}
+		else if (dataSourceType == 2)
+		{
+			ResourceCache* cache = GetSubsystem<ResourceCache>();
+			SharedPtr<File> file = cache->GetFile(resourceRef_.name_);
+			if (file && file->IsOpen())
+				return Load(*file);
+			else
+				return false;
+		}
         else
             return false;
     }
@@ -344,8 +372,15 @@ namespace Urho3D {
 		memset(&geometry.Front(), initialValue, sizeof(char) * size_);
 	}
 
-    void VoxelMap::SetSource(Object* deserializer) 
+    void VoxelMap::SetSource(Generator generator) 
     {
-        source_ = deserializer;
+		dataSourceType = 1;
+		generator_ = generator;
     }
+
+	void VoxelMap::SetSource(ResourceRef resourceRef)
+	{
+		dataSourceType = 2;
+		resourceRef_ = resourceRef;
+	}
 }

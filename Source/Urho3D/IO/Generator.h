@@ -31,31 +31,28 @@
 namespace Urho3D
 {
 
-typedef unsigned (*GeneratorFunction)(Context* context, void* dest, unsigned size, unsigned position, VariantMap& parameters);
+typedef unsigned (*GeneratorFunction)(void* dest, unsigned size, unsigned position, VariantMap& parameters);
 
 /// %File opened either through the filesystem or from within a package file.
-class URHO3D_API Generator : public Deserializer, public Resource
+//class URHO3D_API Generator : public Deserializer, public Resource
+class URHO3D_API Generator : public Deserializer
 {
-    OBJECT(Generator);
-    BASEOBJECT(Resource);
 
 public:
     /// Construct.
-    Generator(Context* context);
+    Generator();
     /// Destruct. Close the file if open.
     virtual ~Generator();
     /// Registers a generator function.
     static void RegisterGeneratorFunction(String functionName, GeneratorFunction generatorFunction);
     /// Load resource from stream. May be called from a worker thread. Return true if successful.
-    virtual bool BeginLoad(Deserializer& source);
+    //virtual bool BeginLoad(Deserializer& source);
     /// Read bytes from the file. Return number of bytes actually read.
     virtual unsigned Read(void* dest, unsigned size);
     /// Set position from the beginning of the file.
     virtual unsigned Seek(unsigned position);
     /// Save resource. Return true if successful.
-    virtual bool Save(Serializer& dest) const;
-    /// Gets the function name.
-    virtual String GetName() { return Resource::GetName(); }
+    //virtual bool Save(Serializer& dest) const;
     /// Gets the parameters.
     virtual VariantMap GetParameters() { return parameters_; }
     /// Change the function name.
@@ -68,8 +65,8 @@ public:
 private:
     /// Parameters.
     VariantMap parameters_;
-    /// Generator function hash.
-    StringHash generatorFunctionHash_;
+    ///// Generator function hash.
+    //StringHash generatorFunctionHash_;
     /// Generator function.
     GeneratorFunction generatorFunction_;
 };

@@ -28,9 +28,8 @@ inline bool CompareChunks(VoxelChunk* lhs, VoxelChunk* rhs)
 
 VoxelSet::VoxelSet(Context* context) :
     Component(context),
-    maxInMemoryMeshPeak_(M_MAX_UNSIGNED),
-    maxInMemoryMesh_(M_MAX_UNSIGNED),
-    maxInMemoryMap_(100),
+    maxInMemoryMeshPeak_(2048),
+    maxInMemoryMesh_(1500),
     chunkSpacing_(Vector3(64.0, 128.0, 64.0))
 {
 }
@@ -54,11 +53,6 @@ void VoxelSet::OnSetAttribute(const AttributeInfo& attr, const Variant& src)
 	//    recreateTerrain_ = true;
 }
 
-void VoxelSet::SetMaxInMemoryChunks(unsigned maxInMemoryChunks)
-{
-    maxInMemoryMap_ = maxInMemoryChunks;
-}
-
 void VoxelSet::ApplyAttributes()
 {
 	//if (recreateTerrain_)
@@ -77,7 +71,7 @@ void VoxelSet::OnSetEnabled()
 
 void VoxelSet::HandleSceneUpdate(StringHash eventType, VariantMap& eventData)
 {
-    if (loadedMeshes_.Size() == chunks_.Size())
+	if (loadedMeshes_.Size() == numChunks)
         return;
 
     BuildInternal(true);
@@ -104,10 +98,7 @@ void VoxelSet::CreateChunks(int indexX, int indexY, int indexZ, unsigned size, V
         {
             BoundingBox chunkBox = BoundingBox(chunkSpacing_ * Vector3((float)x, 0.0, (float)z), chunkSpacing_ * Vector3((float)x, 0.0, (float)z) + chunkSpacing_);
             Vector3 position = chunkBox.Center();
-            if ((cameraPosition - position).Length() > viewDistance)
-                continue;
-
-            if (frustrum.IsInsideFast(chunkBox) == OUTSIDE)
+            if (frustrum.IsInside(chunkBox) == OUTSIDE)
                 continue;
 
             VoxelMap* voxelMap = GetVoxelMap(x, 0, z);
@@ -128,32 +119,9 @@ VoxelMap* VoxelSet::GetLoadedVoxelMapFromCache(unsigned x, unsigned y, unsigned 
         return false;
 
 	unsigned index = GetIndex(x, y, z);
-	WeakPtr<VoxelMap> voxelMap;
-	for (unsigned i = 0; i < mapCache_.Size(); ++i)
-	{
-		if (mapCache_[i].first_ == index)
-		{
-			voxelMap = mapCache_[i].second_;
-			mapCache_.Erase(i);
-		}
-	}
-
-	if (!voxelMap)
-		voxelMap = voxelMaps_[index];
-
-	if (voxelMap)
-	{
-		if (voxelMap->IsLoaded() || (!voxelMap->IsLoaded() && voxelMap->Reload()))
-		{
-			mapCache_.Insert(0, MakePair(index, voxelMap));
-			while (mapCache_.Size() > maxInMemoryMap_)
-			{
-				mapCache_[maxInMemoryMap_].second_->Unload();
-				mapCache_.Erase(maxInMemoryMap_);
-			}
-			return voxelMap;
-		}
-	}
+	WeakPtr<VoxelMap> voxelMap = voxelMaps_[index];
+	if (voxelMap && voxelMap->Reload())
+		return voxelMap;
 
     return 0;
 }
@@ -231,20 +199,10 @@ void VoxelSet::Build()
             for (unsigned y = 0; y < numChunksY; ++y)
             {
                 VoxelChunk* chunk = FindOrCreateVoxelChunk(x, y, z, GetVoxelMap(x, y, z));
-				unsigned x = chunk->GetIndexX();
-				unsigned z = chunk->GetIndexZ();
-				VoxelMap* voxelMap = GetLoadedVoxelMapFromCache(x, 0, z);
-				if (voxelMap && voxelMap->IsLoaded())
-				{
-					GetLoadedVoxelMapFromCache(x, 0, z + 1);
-					GetLoadedVoxelMapFromCache(x, 0, z - 1);
-					GetLoadedVoxelMapFromCache(x + 1, 0, z);
-					GetLoadedVoxelMapFromCache(x - 1, 0, z);
-					chunk->BuildAsync();
-					loadedMeshes_.Push(chunk);
-					if (buildCounter++ % 2 == 0) // TODO: use num slots
-						builder->CompleteWork();
-				}
+				chunk-> BuildAsync();
+				loadedMeshes_.Push(chunk);
+				if (loadedMeshes_.Size() > maxInMemoryMeshPeak_)
+					return;
             }
         }
     }
@@ -260,6 +218,9 @@ void VoxelSet::BuildAsync()
 void VoxelSet::BuildInternal(bool async)
 {
     PROFILE(BuildInternal);
+
+	if (numChunks == 0)
+		return;
 
     AllocateAndSortVisibleChunks();
 
@@ -287,22 +248,10 @@ void VoxelSet::BuildInternal(bool async)
     {
         VoxelChunk* chunk = buildQueue_[0];
 		buildQueue_.Erase(0);
-		unsigned x = chunk->GetIndexX();
-		unsigned z = chunk->GetIndexZ();
-		VoxelMap* voxelMap = GetLoadedVoxelMapFromCache(x, 0, z);
-		if (voxelMap && voxelMap->IsLoaded())
-		{
-			GetLoadedVoxelMapFromCache(x, 0, z + 1);
-			GetLoadedVoxelMapFromCache(x, 0, z - 1);
-			GetLoadedVoxelMapFromCache(x + 1, 0, z);
-			GetLoadedVoxelMapFromCache(x - 1, 0, z);
-			chunk->BuildAsync();
-			loadedMeshes_.Push(chunk);
-			if (buildCounter++ % 2 == 0) // TODO: use num slots
-				voxelBuilder->CompleteWork();
-		}
+		chunk->BuildAsync();
+		loadedMeshes_.Push(chunk);
     }
-	voxelBuilder->CompleteWork();
+	//voxelBuilder->CompleteWork();
 }
 
 bool VoxelSet::GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, int &z)
@@ -389,7 +338,7 @@ void VoxelSet::SortLoadedChunks()
             Node* chunkNode = chunk->GetNode();
             float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
             chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance);
-            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInsideFast(chunk->GetBoundingBox()) != OUTSIDE;
+            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInside(chunk->GetBoundingBox()) != OUTSIDE;
         }
     }
 
@@ -433,7 +382,7 @@ void VoxelSet::AllocateAndSortVisibleChunks()
         // make frustrum 1.2x as long as camera
         Frustum visibleTest;
         float viewDistance = camera->GetFarClip() * 1.2f;
-        visibleTest.Define(camera->GetFov(), camera->GetAspectRatio(), camera->GetZoom(), 
+        visibleTest.Define(camera->GetFov() * 1.2f, camera->GetAspectRatio(), camera->GetZoom(), 
             camera->GetNearClip(), viewDistance, camera->GetEffectiveWorldTransform());
 
         int currentX = 0;
@@ -452,7 +401,7 @@ void VoxelSet::AllocateAndSortVisibleChunks()
             Node* chunkNode = chunk->GetNode();
             float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
             chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance);
-            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInsideFast(chunk->GetBoundingBox()) != OUTSIDE;
+            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInside(chunk->GetBoundingBox()) != OUTSIDE;
         }
     }
 }

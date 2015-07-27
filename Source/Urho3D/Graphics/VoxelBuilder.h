@@ -15,10 +15,10 @@
  
 namespace Urho3D {
 
-static const unsigned char VOXEL_WORKER_SIZE_X = 16;
+static const unsigned char VOXEL_WORKER_SIZE_X = 32;
 static const unsigned char VOXEL_WORKER_SIZE_Y = 255;
-static const unsigned char VOXEL_WORKER_SIZE_Z = 16;
-static const unsigned VOXEL_MAX_WORKERS = 4 * 4 * 1;
+static const unsigned char VOXEL_WORKER_SIZE_Z = 32;
+static const unsigned VOXEL_MAX_WORKERS = 2 * 2 * 1;
 
 // VOXEL CONFIG MODE 0 - is 2 uints per vertex
 static const unsigned VOXEL_WORKER_MAX_QUADS = 200000;
@@ -113,6 +113,7 @@ private:
     // slot management
     //
     int GetFreeWorkSlot();
+    bool ReserveWorkSlot(unsigned index);
     void AbortSlot(VoxelWorkSlot* slot);
     unsigned DecrementWorkSlot(VoxelWorkSlot* slot);
     void FreeWorkSlot(VoxelWorkSlot* slot);
@@ -131,6 +132,7 @@ private:
     // 
     // state
     //
+	Timer frameTimer_;
     Vector<VoxelJob*> jobs_;
     SharedPtr<IndexBuffer> sharedIndexBuffer_;
     Vector<VoxelWorkSlot> slots_;

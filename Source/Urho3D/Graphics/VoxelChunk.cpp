@@ -20,7 +20,8 @@ namespace Urho3D {
         Drawable(context, DRAWABLE_GEOMETRY),
         numMeshes_(0),
         buildPrioirty_(0.0),
-        buildVisible_(false)
+        buildVisible_(false),
+		buildJob_(0)
     {
         size_[0] = 0; size_[1] = 0; size_[2] = 0;
         index_[0] = 0; index_[1] = 0; index_[2] = 0;
@@ -386,7 +387,7 @@ namespace Urho3D {
         if (voxelMap.Null())
             return false;
 
-        if (!voxelMap->IsLoaded() && !voxelMap->Reload())
+        if (!voxelMap->Reload())
             return false;
 
         buildJob_ = builder->BuildVoxelChunk(SharedPtr<VoxelChunk>(this), async);
