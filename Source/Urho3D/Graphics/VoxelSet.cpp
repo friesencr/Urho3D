@@ -12,6 +12,8 @@
 #include "Octree.h"
 #include "Core/Profiler.h"
 #include "VoxelBuilder.h"
+#include "../Physics/CollisionShape.h"
+#include "../Physics/RigidBody.h"
 
 #include "../DebugNew.h"
 
@@ -30,6 +32,10 @@ VoxelSet::VoxelSet(Context* context) :
     Component(context),
     maxInMemoryMeshPeak_(2048),
     maxInMemoryMesh_(1500),
+	numChunks(0),
+	numChunksX(0),
+	numChunksY(0),
+	numChunksZ(0),
     chunkSpacing_(Vector3(64.0, 128.0, 64.0))
 {
 }
@@ -244,14 +250,21 @@ void VoxelSet::BuildInternal(bool async)
     Sort(buildQueue_.Begin(), buildQueue_.End(), CompareChunks);
 	int buildCounter = 0;
 	VoxelBuilder* voxelBuilder = GetSubsystem<VoxelBuilder>();
-    while (buildQueue_.Size())
+  //  while (buildQueue_.Size())
+  //  {
+  //      VoxelChunk* chunk = buildQueue_[0];
+		//buildQueue_.Erase(0);
+		//chunk->BuildAsync();
+		//loadedMeshes_.Push(chunk);
+  //  }
+	for (unsigned i = 0; i < buildQueue_.Size(); ++i)
     {
-        VoxelChunk* chunk = buildQueue_[0];
-		buildQueue_.Erase(0);
+        VoxelChunk* chunk = buildQueue_[i];
 		chunk->BuildAsync();
 		loadedMeshes_.Push(chunk);
     }
-	//voxelBuilder->CompleteWork();
+	buildQueue_.Clear();
+	voxelBuilder->CompleteWork();
 }
 
 bool VoxelSet::GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, int &z)
@@ -287,6 +300,9 @@ VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z,
 	chunk->SetVoxelSet(this);
     //chunk->SetCastShadows(false);
     chunk->buildPrioirty_ = BUILD_UNSET;
+	//CollisionShape* cs = chunkNode->CreateComponent<CollisionShape>();
+	//cs->SetVoxelTriangleMesh(true);
+	
     VoxelMap* north = GetVoxelMap(x, 0, z+1);
     VoxelMap* south = GetVoxelMap(x, 0, z-1);
     VoxelMap* east  = GetVoxelMap(x+1, 0, z);
@@ -359,11 +375,11 @@ void VoxelSet::AllocateAndSortVisibleChunks()
     Renderer* renderer = GetSubsystem<Renderer>();
     unsigned viewports = renderer->GetNumViewports();
 
-    for (unsigned i = 0; i < buildQueue_.Size(); ++i)
-    {
-        buildQueue_[i]->buildPrioirty_ = BUILD_UNSET;
-        buildQueue_[i]->buildVisible_ = false;
-    }
+    //for (unsigned i = 0; i < buildQueue_.Size(); ++i)
+    //{
+    //    buildQueue_[i]->buildPrioirty_ = BUILD_UNSET;
+    //    buildQueue_[i]->buildVisible_ = false;
+    //}
 
     for (unsigned i = 0; i < viewports; ++i)
     {
@@ -381,8 +397,8 @@ void VoxelSet::AllocateAndSortVisibleChunks()
 
         // make frustrum 1.2x as long as camera
         Frustum visibleTest;
-        float viewDistance = camera->GetFarClip() * 1.2f;
-        visibleTest.Define(camera->GetFov() * 1.2f, camera->GetAspectRatio(), camera->GetZoom(), 
+        float viewDistance = camera->GetFarClip() * 1.0f;
+        visibleTest.Define(camera->GetFov() * 1.0f, camera->GetAspectRatio(), camera->GetZoom(), 
             camera->GetNearClip(), viewDistance, camera->GetEffectiveWorldTransform());
 
         int currentX = 0;
@@ -395,14 +411,14 @@ void VoxelSet::AllocateAndSortVisibleChunks()
             CreateChunks(currentX, currentY, currentZ, radius, cameraNode->GetPosition(), visibleTest, viewDistance);
         }
 
-        for (unsigned i = 0; i < buildQueue_.Size(); ++i)
-        {
-            VoxelChunk* chunk = buildQueue_[i];
-            Node* chunkNode = chunk->GetNode();
-            float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
-            chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance);
-            chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInside(chunk->GetBoundingBox()) != OUTSIDE;
-        }
+        //for (unsigned i = 0; i < buildQueue_.Size(); ++i)
+        //{
+        //    VoxelChunk* chunk = buildQueue_[i];
+        //    Node* chunkNode = chunk->GetNode();
+        //    float chunkDistance = (cameraNode->GetPosition() - chunkNode->GetPosition()).Length();
+        //    chunk->buildPrioirty_ = Min(chunk->buildPrioirty_, chunkDistance);
+        //    chunk->buildVisible_ = chunk->buildVisible_ || visibleTest.IsInside(chunk->GetBoundingBox()) != OUTSIDE;
+        //}
     }
 }
 

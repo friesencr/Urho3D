@@ -58,6 +58,8 @@
 #include <Urho3D/DebugNew.h>
 
 //#define SMOOTH_TERRAIN
+//#define LOAD_FILE_MAPS
+//#define SAVE_FILE_MAPS
 
 DEFINE_APPLICATION_MAIN(VoxelWorld)
 
@@ -66,14 +68,20 @@ static Context* global_context_;
 static const int h = 128;
 static const int w = 64;
 static const int d = 64;
+static const int WORKLOAD_SIZE_X = 16;
+static const int WORKLOAD_SIZE_Z = 16;
+static const int WORKLOAD_NUM_X = 4;
+static const int WORKLOAD_NUM_Z = 4;
+static const int CHUNKS_X = 256;
+static const int CHUNKS_Z = 256;
 
 // spoofing a VoxelMap load
 // uint height, uint width, uint depth, unit datamask
 static const unsigned chunkHeader[4] = { w, h, d, VOXEL_BLOCK_BLOCKTYPE };
 static const unsigned headerSize = sizeof(chunkHeader);
 static const unsigned dataSize = (h + 4) * (w + 4) * (d + 4);
-static const unsigned podsize = dataSize + 3;
-static const unsigned generatorSize = headerSize + podsize;
+//static const unsigned podsize = dataSize + 4;
+static const unsigned generatorSize = headerSize + dataSize;
 
 float noiseFactors[10] = {
     1.0, 1.0, 1.0, 0.3,
@@ -94,7 +102,7 @@ static void AOVoxelLighting(VoxelChunk* chunk, VoxelMap* src, VoxelProcessorWrit
             for (int y = -1; y < (int)src->height_+1; y++)
             {
                 int index = src->GetIndex(x, y, z);
-                bt = &src->blocktype[index];
+                bt = &src->GetBlocktype()->At(index);
 
 #ifdef SMOOTH_TERRAIN
                 if (bt[0] > 0)
@@ -162,32 +170,37 @@ static void AOVoxelLighting(VoxelChunk* chunk, VoxelMap* src, VoxelProcessorWrit
     }
 }
 
-static void FillTerrainPerlin(unsigned char* dataPtr, VariantMap& parameters, unsigned podIndex)
+struct TerrainWorkload
 {
-    unsigned tileX = parameters["TileX"].GetUInt();
-    unsigned tileZ = parameters["TileZ"].GetUInt();
-    unsigned chunkX = tileX * w;
-    unsigned chunkZ = tileZ * d;
+	unsigned chunkX;
+	unsigned chunkZ;
+	unsigned x;
+	unsigned z;
+	unsigned char* data;
+};
+
+void FillTerrainPerlinWorker(const WorkItem* workItem, unsigned threadIndex)
+{
+	TerrainWorkload* workload = (TerrainWorkload*)workItem->aux_;
 
     VoxelWriter writer;
     writer.SetSize(w, h, d);
-    writer.InitializeBuffer(dataPtr);
-    writer.Clear(0);
+    writer.InitializeBuffer(workload->data);
 
-    int heightMap[w][d];
-    float detailMap[w][d];
+    int heightMap[WORKLOAD_SIZE_X][WORKLOAD_SIZE_Z];
+    float detailMap[WORKLOAD_SIZE_X][WORKLOAD_SIZE_Z];
 
     // build the heightmap
-    for (unsigned x = 0; x < w; ++x)
+    for (unsigned x = 0; x < WORKLOAD_SIZE_X; ++x)
     {
-        for (unsigned z = 0; z < d; ++z)
+        for (unsigned z = 0; z < WORKLOAD_SIZE_Z; ++z)
         {
             // detail noise
             float dt = 0.0;
             for (int o = 3; o < 5; ++o)
             {
                 float scale = (float)(1 << o);
-                float ns = stb_perlin_noise3((x + chunkX) / scale, (z + chunkZ) / scale, (float)-o, 256, 256, 256);
+                float ns = stb_perlin_noise3((x + workload->x + workload->chunkX) / scale, (z + workload->z + workload->chunkZ) / scale, (float)-o, 256, 256, 256);
                 dt += Abs(ns);
             }
 
@@ -196,7 +209,7 @@ static void FillTerrainPerlin(unsigned char* dataPtr, VariantMap& parameters, un
             for (int o = 3; o < 9; ++o)
             {
                 float scale = (float)(1 << o);
-                float ns = stb_perlin_noise3((x + chunkX) / scale, (z + chunkZ) / scale, (float)o, 256, 256, 256);
+                float ns = stb_perlin_noise3((x + workload->x + workload->chunkX) / scale, (z + workload->z + workload->chunkZ) / scale, (float)o, 256, 256, 256);
                 ht += ns * noiseFactors[o];
             }
 
@@ -235,9 +248,9 @@ static void FillTerrainPerlin(unsigned char* dataPtr, VariantMap& parameters, un
     int numBlocks = 8;
 
     // fill block type data based on heightmap
-    for (unsigned x = 0; x < w; ++x)
+    for (unsigned x = 0; x < WORKLOAD_SIZE_X; ++x)
     {
-        for (unsigned z = 0; z < d; ++z)
+        for (unsigned z = 0; z < WORKLOAD_SIZE_Z; ++z)
         {
             int height = heightMap[x][z];
             float dt = detailMap[x][z];
@@ -254,7 +267,7 @@ static void FillTerrainPerlin(unsigned char* dataPtr, VariantMap& parameters, un
                         break;
                     }
                 }
-                writer.SetBlocktype(x, i, z, blocks[b] + (dt > 0.5 ? 1 : 0));
+                writer.SetBlocktype(x + workload->x, i, z + workload->z, blocks[b] + (dt > 0.5 ? 1 : 0));
             }
 
             if (height < WATER_HEIGHT)
@@ -262,40 +275,63 @@ static void FillTerrainPerlin(unsigned char* dataPtr, VariantMap& parameters, un
                 for (unsigned i = 0; i < WATER_HEIGHT; ++i)
                 {
                     if (height > WATER_HEIGHT - 5 && i > WATER_HEIGHT - 5)
-                        writer.SetBlocktype(x, i, z, WATER_BLOCK);
+                        writer.SetBlocktype(x + workload->x, i, z + workload->z, WATER_BLOCK);
                     else
-                        writer.SetBlocktype(x, i, z, DEEP_WATER_BLOCK +(dt > 0.7 ? 1 : 0));
+                        writer.SetBlocktype(x + workload->x, i, z + workload->z, DEEP_WATER_BLOCK +(dt > 0.7 ? 1 : 0));
                 }
             }
         }
     }
+	delete workload;
+}
+
+static void FillTerrainPerlin(unsigned char* dataPtr, VariantMap& parameters, unsigned podIndex)
+{
+    unsigned tileX = parameters["TileX"].GetUInt();
+    unsigned tileZ = parameters["TileZ"].GetUInt();
+    unsigned chunkX = tileX * w;
+    unsigned chunkZ = tileZ * d;
+
+    VoxelWriter writer;
+    writer.SetSize(w, h, d);
+    writer.InitializeBuffer(dataPtr);
+    writer.Clear(0);
+
+	WorkQueue* queue = global_context_->GetSubsystem<WorkQueue>();
+	for (unsigned x = 0; x < WORKLOAD_NUM_X; ++x)
+	{
+		for (unsigned z = 0; z < WORKLOAD_NUM_Z; ++z)
+		{
+			SharedPtr<WorkItem> workItem(new WorkItem());
+			TerrainWorkload* workload = new TerrainWorkload();
+			workload->chunkX = chunkX;
+			workload->chunkZ = chunkZ;
+			workload->x = x * WORKLOAD_SIZE_X;
+			workload->z = z * WORKLOAD_SIZE_Z;
+			workload->data = dataPtr;
+			workItem->aux_ = workload;
+			workItem->priority_ = M_MAX_UNSIGNED;
+			workItem->workFunction_ = FillTerrainPerlinWorker;
+			queue->AddWorkItem(workItem);
+		}
+	}
+	queue->Complete(M_MAX_UNSIGNED);
 }
 
 static unsigned RandomTerrain(void* dest, unsigned size, unsigned position, VariantMap& parameters)
 {
-    if (position < 4 * sizeof(unsigned))
+    if (position < headerSize)
     {
         unsigned* dataPtr = (unsigned*)dest;
         *dataPtr++ = chunkHeader[position/4];
         return 4;
     }
-    else if ((position - headerSize) % podsize < 3)
-    {
-        unsigned char* dataPtr = (unsigned char*)dest;
-        unsigned char vle[3];
-        vle[0] = (unsigned char)(dataSize | 0x80);
-        vle[1] = (unsigned char)((dataSize >> 7) | 0x80);
-        vle[2] = dataSize >> 14;
-        *((unsigned char*)dataPtr) = vle[(position - headerSize) % podsize];
-        dataPtr += 1;
-        return 1;
-    }
     else
     {
-        unsigned podIndex = (position - headerSize) / podsize;
+        unsigned podIndex = (position - headerSize) / dataSize;
         unsigned char* dataPtr = (unsigned char*)dest;
         FillTerrainPerlin(dataPtr, parameters, podIndex);
-        return dataSize;
+        return size;
     }
     return 0;
 }
@@ -364,7 +400,7 @@ void VoxelWorld::CreateScene()
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
     cameraNode_ = scene_->CreateChild("Camera");
     Camera* camera = cameraNode_->CreateComponent<Camera>();
-    camera->SetFarClip(900.0);
+    camera->SetFarClip(1400.0);
 
     // Set an initial position for the camera scene node above the plane
     //cameraNode_->SetPosition(Vector3(1024.0, 128.0, 1024.0));
@@ -420,8 +456,8 @@ void VoxelWorld::CreateScene()
 
     //voxelBlocktypeMap_->diffuse1Textures = texture;
 
-    unsigned numX = 256;
-    unsigned numZ = 256;
+    unsigned numX = CHUNKS_X;
+    unsigned numZ = CHUNKS_Z;
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     voxelSet->SetNumberOfChunks(numX, 1, numZ);
     for (unsigned x = 0; x < numX; ++x)
@@ -432,7 +468,7 @@ void VoxelWorld::CreateScene()
             map->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
             map->SetSize(w, h, d);
             map->blocktypeMap = voxelBlocktypeMap_;
-#if 0
+#ifdef LOAD_FILE_MAPS
 			String name = "VoxelMap" + String(x) + "_" + String(z) + ".bin";
 			ResourceRef ref = ResourceRef(File::GetTypeStatic(), name);
 			map->SetSource(ref);
@@ -457,8 +493,8 @@ void VoxelWorld::CreateScene()
         }
     }
     voxelSet->BuildAsync();
-	return;
-	
+
+#ifdef SAVE_FILE_MAPS
 	for (unsigned x = 0; x < numX; ++x)
 	{
 		for (unsigned z = 0; z < numZ; ++z)
@@ -469,6 +505,7 @@ void VoxelWorld::CreateScene()
 				map->Save(file);
 		}
 	}
+#endif
 
     //   Node* spotNode = cameraNode_->CreateChild("PointLight");
     //   spotNode->SetPosition(Vector3(0.0, -15.0, 0.0));

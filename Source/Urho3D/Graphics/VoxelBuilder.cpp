@@ -471,13 +471,13 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
 
 			if (!srcMap->Reload())
 			{
-				LOGERROR("Couldn't load neighbor voxel map information (id: " + String(srcMap->GetID()) + ").");
+				LOGERROR("Couldn't load neighbor voxel map information");
 				continue;
 			}
 
 			if (!voxelMap->Reload())
 			{
-				LOGERROR("Couldn't load voxel map information (id: " + String(voxelMap->GetID()) + ").");
+				LOGERROR("Couldn't load voxel map information");
 				slot->failed = true;
 				return;
 			}
@@ -553,6 +553,7 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
 		}
     }
 
+#if 0
     if (voxelMap->GetVoxelProcessors().Size() > 0)
     {
 
@@ -595,6 +596,7 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
             processors[p](chunk, voxelMap, slot->processorWriters);
         }
     }
+#endif
 
     unsigned char workloadsX = (unsigned char)ceil((float)voxelMap->width_ / (float)VOXEL_WORKER_SIZE_X);
     unsigned char workloadsY = (unsigned char)ceil((float)voxelMap->height_ / (float)VOXEL_WORKER_SIZE_Y);
@@ -625,7 +627,7 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
                 index++;
 
                 SharedPtr<WorkItem> workItem(new WorkItem());
-                workItem->priority_ = M_MAX_UNSIGNED;
+                workItem->priority_ = 0;
                 workItem->aux_ = workload;
                 workItem->start_ = slot;
                 workItem->workFunction_ = BuildWorkloadHandler;
@@ -689,14 +691,15 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
 
     // Set voxel maps for stb voxel
     int zero = voxelMap->GetIndex(0, 0, 0);
-    stbvox_map->blocktype = voxelMap->blocktype.Empty() ? 0 : &voxelMap->blocktype[zero];
-    stbvox_map->vheight =  voxelMap->vHeight.Empty() ? 0 : &voxelMap->vHeight[zero];
-    stbvox_map->color =  voxelMap->color.Empty() ? 0 : &voxelMap->color[zero];
-    stbvox_map->geometry =  voxelMap->geometry.Empty() ? 0 : &voxelMap->geometry[zero];
-    stbvox_map->rotate =  voxelMap->rotate.Empty() ? 0 : &voxelMap->rotate[zero];
-    stbvox_map->lighting =  voxelMap->lighting.Empty() ? 0 : &voxelMap->lighting[zero];
-    stbvox_map->tex2 =  voxelMap->tex2.Empty() ? 0 : &voxelMap->tex2[zero];
+	stbvox_map->blocktype = &voxelMap->GetBlocktypeRaw()[zero];
+	//stbvox_map->vheight = voxelMap->GetVHeight()->Empty() ? 0 : &voxelMap->GetVHeight()->Front();
+	//stbvox_map->color = voxelMap->GetColor()->Empty() ? 0 : &voxelMap->GetColor()->Front();
+	//stbvox_map->geometry = voxelMap->GetGeometry()->Empty() ? 0 : &voxelMap->GetGeometry()->Front();
+	//stbvox_map->rotate = voxelMap->GetRotate()->Empty() ? 0 : &voxelMap->GetRotate()->Front();
+	//stbvox_map->lighting = voxelMap->GetLighting()->Empty() ? 0 : &voxelMap->GetLighting()->Front();
+ //   stbvox_map->tex2 = voxelMap->GetTex2()->Empty() ? 0 : &voxelMap->GetTex2()->Front();
 
+#if 0
     if (voxelMap->GetVoxelProcessors().Size() > 0)
     {
         if (voxelMap->processorDataMask_ & VOXEL_BLOCK_BLOCKTYPE)
@@ -714,6 +717,7 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
         if (voxelMap->processorDataMask_ & VOXEL_BLOCK_TEX2)
             stbvox_map->tex2 = &slot->workProcessorBuffers[6][zero];
     }
+#endif
 
     stbvox_reset_buffers(mm);
     stbvox_set_buffer(mm, 0, 0, slot->workVertexBuffers[workload->workloadIndex], VOXEL_WORKER_VERTEX_BUFFER_SIZE);
@@ -788,7 +792,7 @@ bool VoxelBuilder::UploadGpuData(VoxelWorkSlot* slot, bool append)
     if (!faceData->SetSize(slot->numQuads, true, false))
         return false;
 
-    //// raw vertices
+    // raw vertices
     //SharedArrayPtr<unsigned char> vertexData(new unsigned char[slot->numQuads * 4 * sizeof(unsigned)]);
 
     //// normal memory
@@ -798,7 +802,7 @@ bool VoxelBuilder::UploadGpuData(VoxelWorkSlot* slot, bool append)
     for (int i = 0; i < slot->numWorkloads; ++i)
     {
         VoxelWorkload* workload = &slot->workloads[i];
-        //memcpy(&vertexData[copyIndex*4], slot->workVertexBuffers[workload->workloadIndex], workload->numQuads * sizeof(unsigned) * 4);
+        //memcpy(&vertexData[start*4], slot->workVertexBuffers[workload->workloadIndex], workload->numQuads * sizeof(unsigned) * 4);
         //memcpy(&normalData[copyIndex], slot->workFaceBuffers[workload->workloadIndex], workload->numQuads * sizeof(unsigned));
         //copyIndex += workload->numQuads * sizeof(unsigned);
 
@@ -830,7 +834,7 @@ bool VoxelBuilder::UploadGpuData(VoxelWorkSlot* slot, bool append)
     geo->SetRawVertexData(SharedArrayPtr<unsigned char>(newMeshPtr), sizeof(Vector3), MASK_POSITION);
 #else
     //chunk->reducedQuadCount_[0] = slot->numQuads;
-    //geo->SetRawVertexData(vertexData, sizeof(Vector3), MASK_POSITION);
+    //geo->SetRawVertexData(vertexData, sizeof(unsigned), MASK_DATA);
 #endif
 
 

@@ -203,7 +203,7 @@ namespace Urho3D {
         {
             updateMaterialParameters_[i] = false;
             vertexData_[i] = new VertexBuffer(context_);
-            vertexData_[i]->SetShadowed(true);
+            vertexData_[i]->SetShadowed(false);
             faceData_[i] = new IndexBuffer(context_);
             faceData_[i]->SetShadowed(true);
             faceBuffer_[i] = new TextureBuffer(context_);
@@ -345,17 +345,12 @@ namespace Urho3D {
             GetSubsystem<VoxelBuilder>()->CancelJob(buildJob_);
             buildJob_ = 0;
         }
-        if (voxelMap_)
-            voxelMap_->Unload();
+		if (voxelMap_)
+			voxelMap_ = 0;
     }
 
     void VoxelChunk::Unload()
     {
-        if (buildJob_)
-        {
-            GetSubsystem<VoxelBuilder>()->CancelJob(buildJob_);
-            buildJob_ = 0;
-        }
         UnloadMap();
         UnloadMesh();
     }
