@@ -413,6 +413,8 @@ namespace Urho3D
 - %Success : bool
 - %Resource : Resource pointer
 
+### ChangeLanguage
+
 ## %Scene events
 
 ### SceneUpdate
@@ -1925,6 +1927,7 @@ namespace Urho3D
 - %Text %Alignment : int
 - %Row %Spacing : float
 - %Word %Wrap : bool
+- %Auto %Localizable : bool
 - %Selection %Color : Color
 - %Hover %Color : Color
 - %Text %Effect : int
@@ -2242,6 +2245,7 @@ namespace Urho3D
 <a href="#Class_Light"><b>Light</b></a>
 <a href="#Class_LineEdit"><b>LineEdit</b></a>
 <a href="#Class_ListView"><b>ListView</b></a>
+<a href="#Class_Localization"><b>Localization</b></a>
 <a href="#Class_Log"><b>Log</b></a>
 <a href="#Class_Material"><b>Material</b></a>
 <a href="#Class_Matrix3"><b>Matrix3</b></a>
@@ -3133,6 +3137,8 @@ Methods:
 - Intersection IsInside(const BoundingBox&) const
 - Intersection IsInside(const Sphere&) const
 - Intersection IsInside(const Vector3&) const
+- Intersection IsInsideFast(const BoundingBox&) const
+- Intersection IsInsideFast(const Sphere&) const
 - void Merge(const BoundingBox&)
 - void Merge(const Frustum&)
 - void Merge(const Polyhedron&)
@@ -5501,6 +5507,7 @@ Methods:
 - BoundingBox ReadBoundingBox()
 - int8 ReadByte()
 - Color ReadColor()
+- double ReadDouble()
 - String ReadFileID()
 - float ReadFloat()
 - int ReadInt()
@@ -6077,6 +6084,7 @@ Methods:
 - BoundingBox ReadBoundingBox()
 - int8 ReadByte()
 - Color ReadColor()
+- double ReadDouble()
 - String ReadFileID()
 - float ReadFloat()
 - int ReadInt()
@@ -6110,6 +6118,7 @@ Methods:
 - bool WriteBoundingBox(const BoundingBox&)
 - bool WriteByte(int8)
 - bool WriteColor(const Color&)
+- bool WriteDouble(double)
 - bool WriteFileID(const String&)
 - bool WriteFloat(float)
 - bool WriteInt(int)
@@ -6281,6 +6290,8 @@ Methods:
 - Intersection IsInside(const BoundingBox&)
 - Intersection IsInside(const Sphere&)
 - Intersection IsInside(const Vector3&)
+- Intersection IsInsideFast(const BoundingBox&) const
+- Intersection IsInsideFast(const Sphere&) const
 - void Transform(const Matrix3&)
 - void Transform(const Matrix3x4&)
 - Frustum Transformed(const Matrix3&) const
@@ -6391,6 +6402,7 @@ Methods:
 - BoundingBox ReadBoundingBox()
 - int8 ReadByte()
 - Color ReadColor()
+- double ReadDouble()
 - String ReadFileID()
 - float ReadFloat()
 - int ReadInt()
@@ -6459,10 +6471,10 @@ Methods:
 - bool Resize(int, int)
 - bool Save(File@) const
 - bool Save(VectorBuffer&) const
-- void SaveBMP(const String&) const
-- void SaveJPG(const String&, int) const
-- void SavePNG(const String&) const
-- void SaveTGA(const String&) const
+- bool SaveBMP(const String&) const
+- bool SaveJPG(const String&, int) const
+- bool SavePNG(const String&) const
+- bool SaveTGA(const String&) const
 - void SendEvent(const String&, VariantMap& = VariantMap ( ))
 - void SetPixel(int, int, const Color&)
 - void SetPixel(int, int, int, const Color&)
@@ -6473,17 +6485,20 @@ Methods:
 
 Properties:
 
+- bool array // readonly
 - StringHash baseType // readonly
 - String category // readonly
 - uint components // readonly
 - bool compressed // readonly
 - CompressedFormat compressedFormat // readonly
+- bool cubemap // readonly
 - int depth // readonly
 - int height // readonly
 - uint memoryUse // readonly
 - String name
 - uint numCompressedLevels // readonly
 - int refs // readonly
+- bool sRGB // readonly
 - StringHash type // readonly
 - String typeName // readonly
 - uint useTimer // readonly
@@ -6648,6 +6663,7 @@ Methods:
 
 - void AddBool(bool)
 - void AddColor(const Color&)
+- void AddDouble(double)
 - void AddFloat(float)
 - void AddInt(int)
 - void AddIntRect(const IntRect&)
@@ -6674,6 +6690,8 @@ Methods:
 - String[]@ GetChildNames() const
 - Color GetColor(const String&) const
 - Color GetColor(uint) const
+- double GetDouble(const String&) const
+- double GetDouble(uint) const
 - float GetFloat(const String&) const
 - float GetFloat(uint) const
 - int GetInt(const String&) const
@@ -6711,6 +6729,7 @@ Methods:
 - Variant GetVectorVariant(uint) const
 - void SetBool(const String&, bool)
 - void SetColor(const String&, const Color&)
+- void SetDouble(const String&, double)
 - void SetFloat(const String&, float)
 - void SetInt(const String&, int)
 - void SetIntRect(const String&, const IntRect&)
@@ -7207,6 +7226,34 @@ Properties:
 - bool visible
 - int weakRefs // readonly
 - int width
+
+<a name="Class_Localization"></a>
+
+### Localization
+
+Methods:
+
+- String Get(const String&)
+- String GetLanguage(int)
+- int GetLanguageIndex(const String&)
+- void LoadJSON(const JSONValue&)
+- void LoadJSONFile(const String&)
+- void Reset()
+- void SendEvent(const String&, VariantMap& = VariantMap ( ))
+- void SetLanguage(const String&)
+- void SetLanguage(int)
+
+Properties:
+
+- StringHash baseType // readonly
+- String category // readonly
+- String language // readonly
+- int languageIndex // readonly
+- int numLanguages // readonly
+- int refs // readonly
+- StringHash type // readonly
+- String typeName // readonly
+- int weakRefs // readonly
 
 <a name="Class_Log"></a>
 
@@ -7951,6 +7998,7 @@ Methods:
 - void RemoveComponent(Component@)
 - void RemoveComponent(const String&)
 - void RemoveComponents(bool, bool)
+- void RemoveComponents(const String&)
 - void RemoveInstanceDefault()
 - void ResetDeepEnabled()
 - void ResetToDefault()
@@ -9380,6 +9428,7 @@ Methods:
 - void RemoveComponent(Component@)
 - void RemoveComponent(const String&)
 - void RemoveComponents(bool, bool)
+- void RemoveComponents(const String&)
 - void RemoveInstanceDefault()
 - void ResetToDefault()
 - void Roll(float, TransformSpace = TS_LOCAL)
@@ -9980,6 +10029,7 @@ Methods:
 - bool WriteBoundingBox(const BoundingBox&)
 - bool WriteByte(int8)
 - bool WriteColor(const Color&)
+- bool WriteDouble(double)
 - bool WriteFileID(const String&)
 - bool WriteFloat(float)
 - bool WriteInt(int)
@@ -10552,6 +10602,8 @@ Methods:
 - Intersection IsInside(const BoundingBox&) const
 - Intersection IsInside(const Sphere&) const
 - Intersection IsInside(const Vector3&) const
+- Intersection IsInsideFast(const BoundingBox&) const
+- Intersection IsInsideFast(const Sphere&) const
 - void Merge(const BoundingBox&)
 - void Merge(const Frustum&)
 - void Merge(const Sphere&)
@@ -11083,6 +11135,7 @@ Methods:
 - String SubstringUTF8(uint, uint) const
 - bool ToBool() const
 - Color ToColor() const
+- double ToDouble() const
 - float ToFloat() const
 - int ToInt() const
 - IntRect ToIntRect() const
@@ -11388,6 +11441,7 @@ Properties:
 - Variant[] attributeDefaults // readonly
 - AttributeInfo[] attributeInfos // readonly
 - Variant[] attributes
+- bool autoLocalizable
 - StringHash baseType // readonly
 - bool bringToBack
 - bool bringToFront
@@ -12391,6 +12445,7 @@ Methods:
 - void FromString(const String&, const String&)
 - bool GetBool() const
 - VectorBuffer GetBuffer() const
+- double GetDouble() const
 - float GetFloat() const
 - int GetInt() const
 - RefCounted@ GetPtr() const
@@ -12444,6 +12499,7 @@ Properties:
 
 Methods:
 
+- Vector2 Abs() const
 - float AbsDotProduct(const Vector2&) const
 - float DotProduct(const Vector2&) const
 - bool Equals(const Vector2&) const
@@ -12467,6 +12523,7 @@ Properties:
 
 Methods:
 
+- Vector3 Abs() const
 - float AbsDotProduct(const Vector3&) const
 - float Angle(const Vector3&) const
 - Vector3 CrossProduct(const Vector3&) const
@@ -12493,6 +12550,7 @@ Properties:
 
 Methods:
 
+- Vector4 Abs() const
 - float AbsDotProduct(const Vector4&) const
 - float DotProduct(const Vector4&) const
 - bool Equals(const Vector4&) const
@@ -12520,6 +12578,7 @@ Methods:
 - BoundingBox ReadBoundingBox()
 - int8 ReadByte()
 - Color ReadColor()
+- double ReadDouble()
 - String ReadFileID()
 - float ReadFloat()
 - int ReadInt()
@@ -12554,6 +12613,7 @@ Methods:
 - bool WriteBoundingBox(const BoundingBox&)
 - bool WriteByte(int8)
 - bool WriteColor(const Color&)
+- bool WriteDouble(double)
 - bool WriteFileID(const String&)
 - bool WriteFloat(float)
 - bool WriteInt(int)
@@ -13001,6 +13061,7 @@ Methods:
 - BoundingBox GetBoundingBox() const
 - XMLElement GetChild(const String& = String ( )) const
 - Color GetColor(const String&) const
+- double GetDouble(const String&) const
 - float GetFloat(const String&) const
 - int GetInt(const String&) const
 - Matrix3 GetMatrix3(const String&) const
@@ -13034,6 +13095,7 @@ Methods:
 - bool SetBool(const String&, bool)
 - bool SetBoundingBox(const BoundingBox&)
 - bool SetColor(const String&, const Color&)
+- bool SetDouble(const String&, double)
 - bool SetFloat(const String&, float)
 - bool SetInt(const String&, int)
 - bool SetMatrix3(const String&, const Matrix3&)
@@ -13414,6 +13476,9 @@ Properties:
 ### InterpolationMode
 
 - BEZIER_CURVE
+- CATMULL_ROM_CURVE
+- LINEAR_CURVE
+- CATMULL_ROM_FULL_CURVE
 
 
 ### Intersection
@@ -13685,6 +13750,7 @@ Properties:
 - VAR_MATRIX3
 - VAR_MATRIX3X4
 - VAR_MATRIX4
+- VAR_DOUBLE
 
 
 ### VerticalAlignment
@@ -13815,6 +13881,7 @@ Properties:
 - FileSystem@ fileSystem
 - Graphics@ graphics
 - Input@ input
+- Localization@ localization
 - Log@ log
 - Network@ network
 - Node@ node

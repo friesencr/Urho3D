@@ -97,3 +97,5 @@ if (URHO3D_URHO2D)
     # add_subdirectory (33_Urho2DSpriterAnimation)
     # add_subdirectory (36_Urho2DTileMap)
 endif ()
+add_sample_subdirectory (40_Localization)
+

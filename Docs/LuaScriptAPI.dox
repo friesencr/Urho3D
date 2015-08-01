@@ -98,6 +98,7 @@ namespace Urho3D
 <a href="#Class_Light"><b>Light</b></a>
 <a href="#Class_LineEdit"><b>LineEdit</b></a>
 <a href="#Class_ListView"><b>ListView</b></a>
+<a href="#Class_Localization"><b>Localization</b></a>
 <a href="#Class_Log"><b>Log</b></a>
 <a href="#Class_LuaScriptInstance"><b>LuaScriptInstance</b></a>
 <a href="#Class_Material"><b>Material</b></a>
@@ -1810,6 +1811,7 @@ Methods:
 - char ReadUByte()
 - bool ReadBool()
 - float ReadFloat()
+- double ReadDouble()
 - IntRect ReadIntRect()
 - IntVector2 ReadIntVector2()
 - Rect ReadRect()
@@ -2066,6 +2068,7 @@ Methods:
 - char ReadUByte()
 - bool ReadBool()
 - float ReadFloat()
+- double ReadDouble()
 - IntRect ReadIntRect()
 - IntVector2 ReadIntVector2()
 - Rect ReadRect()
@@ -2102,6 +2105,7 @@ Methods:
 - bool WriteUByte(char value)
 - bool WriteBool(bool value)
 - bool WriteFloat(float value)
+- bool WriteDouble(double value)
 - bool WriteIntRect(const IntRect& value)
 - bool WriteIntVector2(const IntVector2& value)
 - bool WriteRect(const Rect& value)
@@ -2494,6 +2498,9 @@ Methods:
 - CompressedFormat GetCompressedFormat() const
 - unsigned GetNumCompressedLevels() const
 - Image* GetSubimage(const IntRect& rect) const
+- bool IsCubemap() const
+- bool IsArray() const
+- bool IsSRGB() const
 
 Properties:
 
@@ -2504,6 +2511,9 @@ Properties:
 - bool compressed (readonly)
 - CompressedFormat compressedFormat (readonly)
 - unsigned numCompressedLevels (readonly)
+- bool cubemap (readonly)
+- bool array (readonly)
+- bool sRGB (readonly)
 
 <a name="Class_IndexBuffer"></a>
 ### IndexBuffer : Object
@@ -2691,6 +2701,7 @@ Methods:
 - void SetInt(const String name, int value)
 - void SetBool(const String name, bool value)
 - void SetFloat(const String name, float value)
+- void SetDouble(const String name, double value)
 - void SetVector2(const String name, const Vector2& value)
 - void SetVector3(const String name, const Vector3& value)
 - void SetVector4(const String name, const Vector4& value)
@@ -2713,6 +2724,7 @@ Methods:
 - int GetInt(const String name) const
 - bool GetBool(const String name) const
 - float GetFloat(const String name) const
+- double GetDouble(const String name) const
 - Vector2 GetVector2(const String name) const
 - Vector3 GetVector3(const String name) const
 - Vector4 GetVector4(const String name) const
@@ -2735,6 +2747,7 @@ Methods:
 - void AddInt(int value)
 - void AddBool(bool value)
 - void AddFloat(float value)
+- void AddDouble(double value)
 - void AddVector2(const Vector2& value)
 - void AddVector3(const Vector3& value)
 - void AddVector4(const Vector4& value)
@@ -2756,6 +2769,7 @@ Methods:
 - int GetInt(unsigned index) const
 - bool GetBool(unsigned index) const
 - float GetFloat(unsigned index) const
+- double GetDouble(unsigned index) const
 - Vector2 GetVector2(unsigned index) const
 - Vector3 GetVector3(unsigned index) const
 - Vector4 GetVector4(unsigned index) const
@@ -2975,6 +2989,29 @@ Properties:
 - bool selectOnClickEnd
 - bool hierarchyMode
 - int baseIndent
+
+<a name="Class_Localization"></a>
+### Localization : Object
+
+Methods:
+
+- int GetNumLanguages() const
+- int GetLanguageIndex() const
+- int GetLanguageIndex(const String language)
+- String GetLanguage()
+- String GetLanguage(int index)
+- void SetLanguage(int index)
+- void SetLanguage(const String language)
+- String Get(const String id)
+- void Reset()
+- void LoadJSON(const JSONValue& source)
+- void LoadJSONFile(const String name)
+
+Properties:
+
+- int numLanguages (readonly)
+- int languageIndex (readonly)
+- String language (readonly)
 
 <a name="Class_Log"></a>
 ### Log : Object
@@ -3588,8 +3625,9 @@ Methods:
 - void RemoveComponent(Component* component)
 - void RemoveComponent(StringHash type)
 - void RemoveComponent(const String type)
-- void RemoveAllComponents()
 - void RemoveComponents(bool removeReplicated, bool removeLocal)
+- void RemoveComponents(const String type)
+- void RemoveAllComponents()
 - Node* Clone(CreateMode mode = REPLICATED)
 - void Remove()
 - void SetParent(Node* parent)
@@ -5090,6 +5128,7 @@ Methods:
 - bool WriteUByte(char value)
 - bool WriteBool(bool value)
 - bool WriteFloat(float value)
+- bool WriteDouble(double value)
 - bool WriteIntRect(const IntRect& value)
 - bool WriteIntVector2(const IntVector2& value)
 - bool WriteRect(const Rect& value)
@@ -5699,6 +5738,8 @@ Methods:
 - void SetHoverColor(const Color& color)
 - void SetTextEffect(TextEffect textEffect)
 - void SetEffectColor(const Color& effectColor)
+- bool GetAutoLocalizable() const
+- void SetAutoLocalizable(bool enable)
 - Font* GetFont() const
 - int GetFontSize() const
 - const String GetText() const
@@ -5728,6 +5769,7 @@ Properties:
 - HorizontalAlignment textAlignment
 - float rowSpacing
 - bool wordwrap
+- bool autoLocalizable
 - unsigned selectionStart (readonly)
 - unsigned selectionLength (readonly)
 - Color& selectionColor
@@ -6385,6 +6427,8 @@ Methods:
 - Variant* new(bool value)
 - Variant(float value) (GC)
 - Variant* new(float value)
+- Variant(double value) (GC)
+- Variant* new(double value)
 - Variant(const Vector2& value) (GC)
 - Variant* new(const Vector2& value)
 - Variant(const Vector3& value) (GC)
@@ -6428,6 +6472,7 @@ Methods:
 - bool operator==(unsigned rhs) const
 - bool operator==(bool rhs) const
 - bool operator==(float rhs) const
+- bool operator==(double rhs) const
 - bool operator==(const Vector2& rhs)
 - bool operator==(const Vector3& rhs) const
 - bool operator==(const Vector4& rhs) const
@@ -6447,6 +6492,7 @@ Methods:
 - void SetStringHash(const StringHash& value)
 - void SetBool(bool value)
 - void SetFloat(float value)
+- void SetDouble(double value)
 - void SetVector2(const Vector2& value)
 - void SetVector3(const Vector3& value)
 - void SetVector4(const Vector4& value)
@@ -6466,6 +6512,7 @@ Methods:
 - StringHash GetStringHash()
 - bool GetBool() const
 - float GetFloat() const
+- double GetDouble() const
 - const Vector2& GetVector2() const
 - const Vector3& GetVector3() const
 - const Vector4& GetVector4() const
@@ -6507,6 +6554,7 @@ Methods:
 - void SetStringHash(const String key, const StringHash& value)
 - void SetBool(const String key, bool value)
 - void SetFloat(const String key, float value)
+- void SetDouble(const String key, double value)
 - void SetVector2(const String key, const Vector2 value)
 - void SetVector3(const String key, const Vector3 value)
 - void SetVector4(const String key, const Vector4 value)
@@ -6527,6 +6575,7 @@ Methods:
 - StringHash GetStringHash(const String key)
 - bool GetBool(const String key)
 - float GetFloat(const String key)
+- double GetDouble(const String key)
 - const Vector2& GetVector2(const String key)
 - const Vector3& GetVector3(const String key)
 - const Vector4& GetVector4(const String key)
@@ -6715,6 +6764,7 @@ Methods:
 - char ReadUByte()
 - bool ReadBool()
 - float ReadFloat()
+- double ReadDouble()
 - IntRect ReadIntRect()
 - IntVector2 ReadIntVector2()
 - Rect ReadRect()
@@ -6751,6 +6801,7 @@ Methods:
 - bool WriteUByte(char value)
 - bool WriteBool(bool value)
 - bool WriteFloat(float value)
+- bool WriteDouble(double value)
 - bool WriteIntRect(const IntRect& value)
 - bool WriteIntVector2(const IntVector2& value)
 - bool WriteRect(const Rect& value)
@@ -6935,6 +6986,7 @@ Methods:
 - bool SetBoundingBox(const BoundingBox& value)
 - bool SetColor(const String name, const Color& value)
 - bool SetFloat(const String name, float value)
+- bool SetDouble(const String name, double value)
 - bool SetUInt(const String name, unsigned value)
 - bool SetInt(const String name, int value)
 - bool SetIntRect(const String name, const IntRect& value)
@@ -6972,6 +7024,7 @@ Methods:
 - BoundingBox GetBoundingBox() const
 - Color GetColor(const String name) const
 - float GetFloat(const String name) const
+- double GetDouble(const String name) const
 - unsigned GetUInt(const String name) const
 - int GetInt(const String name) const
 - IntRect GetIntRect(const String name) const
@@ -7279,6 +7332,9 @@ Properties:
 ### InterpolationMode
 
 - int BEZIER_CURVE
+- int CATMULL_ROM_CURVE
+- int LINEAR_CURVE
+- int CATMULL_ROM_FULL_CURVE
 
 ### Intersection
 
@@ -7529,6 +7585,7 @@ Properties:
 - int VAR_MATRIX3
 - int VAR_MATRIX3X4
 - int VAR_MATRIX4
+- int VAR_DOUBLE
 - int MAX_VAR_TYPES
 
 ### VertexElement
@@ -7609,6 +7666,7 @@ Properties:
 - Graphics* GetGraphics()
 - Input* GetInput()
 - String GetInternalPath(const String pathName)
+- Localization* GetLocalization()
 - Log* GetLog()
 - String GetNativePath(const String pathName)
 - Network* GetNetwork()
@@ -7636,11 +7694,11 @@ Properties:
 - void PrintLine(const String str, bool error = false)
 - int Rand()
 - float RandStandardNormal()
-- float Random()
-- float Random(float min, float max)
 - float Random(float range)
-- int RandomInt(int min, int max)
+- float Random(float min, float max)
+- float Random()
 - int RandomInt(int range)
+- int RandomInt(int min, int max)
 - float RandomNormal(float meanValue, float variance)
 - String RemoveTrailingSlash(const String pathName)
 - String ReplaceExtension(const String fullPath, const String newExtension)
@@ -7651,8 +7709,8 @@ Properties:
 - float Sign(float value)
 - float Sin(float angle)
 - float SmoothStep(float lhs, float rhs, float t)
-- void SubscribeToEvent(void* sender, const String eventName, void* functionOrFunctionName)
 - void SubscribeToEvent(const String eventName, void* functionOrFunctionName)
+- void SubscribeToEvent(void* sender, const String eventName, void* functionOrFunctionName)
 - float Tan(float angle)
 - bool ToBool(const String source)
 - Color ToColor(const String source)
@@ -7675,8 +7733,8 @@ Properties:
 - Vector4 ToVector4(const String source, bool allowMissingCoords = false)
 - void UnsubscribeFromAllEvents()
 - void UnsubscribeFromAllEventsExcept(const Vector<String>& exceptionNames)
-- void UnsubscribeFromEvent(Object* sender, const String eventName)
 - void UnsubscribeFromEvent(const String eventName)
+- void UnsubscribeFromEvent(Object* sender, const String eventName)
 - void UnsubscribeFromEvents(Object* sender)
 
 
@@ -7689,6 +7747,7 @@ Properties:
 - FileSystem* fileSystem (readonly)
 - Graphics* graphics (readonly)
 - Input* input (readonly)
+- Localization* localization (readonly)
 - Log* log (readonly)
 - Network* network (readonly)
 - Renderer* renderer (readonly)

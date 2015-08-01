@@ -100,12 +100,13 @@ if (CMAKE_PROJECT_NAME STREQUAL Urho3D)
         set (URHO3D_DEFAULT_LUA_RAW TRUE)
     endif ()
     cmake_dependent_option (URHO3D_LUA_RAW_SCRIPT_LOADER "Prefer loading raw script files from the file system before falling back on Urho3D resource cache. Useful for debugging (e.g. breakpoints), but less performant (Lua/LuaJIT only)" ${URHO3D_DEFAULT_LUA_RAW} "URHO3D_LUA OR URHO3D_LUAJIT" FALSE)
- 
+
     option (URHO3D_SAMPLES "Build sample applications")
     cmake_dependent_option (URHO3D_TOOLS "Build tools (native and RPI only)" TRUE "NOT IOS AND NOT ANDROID AND NOT EMSCRIPTEN" FALSE)
     cmake_dependent_option (URHO3D_EXTRAS "Build extras (native and RPI only)" FALSE "NOT IOS AND NOT ANDROID AND NOT EMSCRIPTEN" FALSE)
     option (URHO3D_DOCS "Generate documentation as part of normal build")
     option (URHO3D_DOCS_QUIET "Generate documentation as part of normal build, suppress generation process from sending anything to stdout")
+    option (URHO3D_PCH "Enable PCH support" TRUE)
     cmake_dependent_option (URHO3D_MINIDUMPS "Enable minidumps on crash (VS only)" TRUE "MSVC" FALSE)
     option (URHO3D_FILEWATCHER "Enable filewatcher support" TRUE)
     if (CPACK_SYSTEM_NAME STREQUAL Linux)
@@ -361,13 +362,8 @@ if (NOT URHO3D_LIB_TYPE STREQUAL SHARED)
     add_definitions (-DURHO3D_STATIC_DEFINE)
 endif ()
 
-# Find Direct3D include & library directories for Visual Studio in MS Windows SDK or DirectX SDK.
-# The SDK is not searched for with MinGW as it is incompatible, rather, it is assumed that MinGW
-# itself comes with the necessary headers & libraries.
-# Note that when building for OpenGL, any libraries are not used, but the include directory may
-# be necessary for DirectInput & DirectSound headers, if those are not present in the compiler's own
-# default includes.
-if (WIN32)
+# Find Direct3D include & library directories in MS Windows SDK or DirectX SDK when not using OpenGL.
+if (WIN32 AND NOT URHO3D_OPENGL)
     find_package (Direct3D REQUIRED)
     if (DIRECT3D_INCLUDE_DIRS)
         include_directories (${DIRECT3D_INCLUDE_DIRS})
@@ -503,6 +499,10 @@ else ()
             # Reduce GCC optimization level from -O3 to -O2 for stability in RELEASE build configuration
             set (CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
             set (CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+        else ()
+            # Not Android and not Emscripten and not MinGW derivative
+            set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")     # This will emit '-DREENTRANT' to compiler and '-lpthread' to linker on Linux and Mac OSX platform
+            set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread") # However, it may emit other equivalent compiler define and/or linker flag on other *nix platforms
         endif ()
         set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DDEBUG -D_DEBUG")
         set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG -D_DEBUG")
@@ -530,6 +530,14 @@ macro (set_output_directories OUTPUT_PATH)
             set (CMAKE_${TYPE}_OUTPUT_DIRECTORY_${CONFIG} ${OUTPUT_PATH})
         endforeach ()
     endforeach ()
+endmacro ()
+
+# Macro for setting runtime output directories for tools
+macro (set_tool_output_directories)
+    set_output_directories (${CMAKE_BINARY_DIR}/bin/tool RUNTIME PDB)
+    if (DEST_RUNTIME_DIR STREQUAL bin)
+        set (DEST_RUNTIME_DIR bin/tool)
+    endif ()
 endmacro ()
 
 # Set common binary output directory for all platforms
@@ -670,9 +678,12 @@ macro (enable_pch HEADER_PATHNAME)
                 # Determine the dependency list
                 execute_process (COMMAND ${CMAKE_CXX_COMPILER} @${CMAKE_CURRENT_BINARY_DIR}/${HEADER_FILENAME}.${CONFIG}.pch.rsp -MTdeps -MM -o ${CMAKE_CURRENT_BINARY_DIR}/${HEADER_FILENAME}.${CONFIG}.pch.deps ${CMAKE_CURRENT_SOURCE_DIR}/${HEADER_PATHNAME} RESULT_VARIABLE CXX_COMPILER_EXIT_CODE)
                 if (NOT CXX_COMPILER_EXIT_CODE EQUAL 0)
-                    message (FATAL_ERROR "The configured compiler toolchain in the build tree is not able to handle all the compiler flags required to build the project. "
-                        "Please kindly update your compiler toolchain to its latest version. If you are using MinGW then make sure it is MinGW-W64 instead of MinGW-W32 or TDM-GCC (Code::Blocks default). "
-                        "However, if you think there is something wrong with the compiler flags being used then please file a bug report to the project devs.")
+                    message (FATAL_ERROR
+                        "The configured compiler toolchain in the build tree is not able to handle all the compiler flags required to build the project with PCH enabled. "
+                        "Please kindly update your compiler toolchain to its latest version. "
+                        "If you are using MinGW then make sure it is MinGW-W64 instead of MinGW-W32 or TDM-GCC (Code::Blocks default). "
+                        "Or disable the PCH build support by passing the '-DURHO3D_PCH=0' when retrying to configure/generate the build tree. "
+                        "However, if you think there is something wrong with our build system then kindly file a bug report to the project devs.")
                 endif ()
                 file (STRINGS ${CMAKE_CURRENT_BINARY_DIR}/${HEADER_FILENAME}.${CONFIG}.pch.deps DEPS)
                 string (REGEX REPLACE "^deps: *| *\\; +" ";" DEPS ${DEPS})
@@ -1194,13 +1205,13 @@ macro (define_dependency_libs TARGET)
         if (WIN32)
             list (APPEND LIBS user32 gdi32 winmm imm32 ole32 oleaut32 version uuid)
         elseif (APPLE)
-            list (APPEND LIBS dl pthread)
+            list (APPEND LIBS dl)
         elseif (ANDROID)
             list (APPEND LIBS dl log android)
         else ()
             # Linux
             if (NOT EMSCRIPTEN)
-                list (APPEND LIBS dl pthread rt)
+                list (APPEND LIBS dl rt)
             endif ()
             if (RPI)
                 list (APPEND ABSOLUTE_PATH_LIBS ${BCM_VC_LIBRARIES})
@@ -1212,8 +1223,6 @@ macro (define_dependency_libs TARGET)
     if (${TARGET} MATCHES Civetweb|kNet|Urho3D)
         if (WIN32)
             list (APPEND LIBS ws2_32)
-        elseif (NOT ANDROID AND NOT EMSCRIPTEN)
-            list (APPEND LIBS pthread)
         endif ()
     endif ()
 
@@ -1232,8 +1241,6 @@ macro (define_dependency_libs TARGET)
             if (URHO3D_MINIDUMPS)
                 list (APPEND LIBS dbghelp)
             endif ()
-        elseif (NOT ANDROID AND NOT EMSCRIPTEN)
-            list (APPEND LIBS pthread)
         endif ()
 
         # Graphics

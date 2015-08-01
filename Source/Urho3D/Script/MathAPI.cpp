@@ -20,13 +20,12 @@
 // THE SOFTWARE.
 //
 
-#include "../Script/APITemplates.h"
-#include "../Math/Color.h"
+#include "../Precompiled.h"
+
 #include "../Math/Frustum.h"
 #include "../Math/Polyhedron.h"
 #include "../Math/Ray.h"
-
-#include <AngelScript/angelscript.h>
+#include "../Script/APITemplates.h"
 
 namespace Urho3D
 {
@@ -37,7 +36,7 @@ static void RegisterMathFunctions(asIScriptEngine* engine)
     engine->RegisterEnumValue("Intersection", "OUTSIDE", OUTSIDE);
     engine->RegisterEnumValue("Intersection", "INTERSECTS", INTERSECTS);
     engine->RegisterEnumValue("Intersection", "INSIDE", INSIDE);
-    
+
     engine->RegisterGlobalProperty("const float M_INFINITY", (void*)&M_INFINITY);
     engine->RegisterGlobalProperty("const float M_EPSILON", (void*)&M_EPSILON);
     engine->RegisterGlobalProperty("const float M_LARGE_EPSILON", (void*)&M_LARGE_EPSILON);
@@ -51,7 +50,7 @@ static void RegisterMathFunctions(asIScriptEngine* engine)
     engine->RegisterGlobalProperty("const int M_MAX_INT", (void*)&M_MAX_INT);
     engine->RegisterGlobalProperty("const uint M_MIN_UNSIGNED", (void*)&M_MIN_UNSIGNED);
     engine->RegisterGlobalProperty("const uint M_MAX_UNSIGNED", (void*)&M_MAX_UNSIGNED);
-    
+
     engine->RegisterGlobalFunction("bool Equals(float, float)", asFUNCTION(Equals), asCALL_CDECL);
     engine->RegisterGlobalFunction("bool IsNaN(float)", asFUNCTION(IsNaN), asCALL_CDECL);
     engine->RegisterGlobalFunction("float Sin(float)", asFUNCTION(Sin), asCALL_CDECL);
@@ -236,6 +235,7 @@ static void RegisterVector2(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Vector2", "void Normalize()", asMETHOD(Vector2, Normalize), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector2", "float DotProduct(const Vector2&in) const", asMETHOD(Vector2, DotProduct), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector2", "float AbsDotProduct(const Vector2&in) const", asMETHOD(Vector2, AbsDotProduct), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Vector2", "Vector2 Abs() const", asMETHOD(Vector2, Abs), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector2", "Vector2 Lerp(const Vector2&in, float) const", asMETHOD(Vector2, Lerp), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector2", "bool Equals(const Vector2&in) const", asMETHOD(Vector2, Equals), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector2", "bool IsNaN() const", asMETHOD(Vector2, IsNaN), asCALL_THISCALL);
@@ -317,6 +317,7 @@ static void RegisterVector3(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Vector3", "float DotProduct(const Vector3&in) const", asMETHOD(Vector3, DotProduct), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector3", "float AbsDotProduct(const Vector3&in) const", asMETHOD(Vector3, AbsDotProduct), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector3", "Vector3 CrossProduct(const Vector3&in) const", asMETHOD(Vector3, CrossProduct), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Vector3", "Vector3 Abs() const", asMETHOD(Vector3, Abs), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector3", "Vector3 Lerp(const Vector3&in, float) const", asMETHOD(Vector3, Lerp), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector3", "bool Equals(const Vector3&in) const", asMETHOD(Vector3, Equals), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector3", "bool IsNaN() const", asMETHOD(Vector3, IsNaN), asCALL_THISCALL);
@@ -386,6 +387,7 @@ static void RegisterVector4(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Vector4", "Vector4 opDiv(float) const", asMETHODPR(Vector4, operator /, (float) const, Vector4), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector4", "float DotProduct(const Vector4&in) const", asMETHOD(Vector4, DotProduct), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector4", "float AbsDotProduct(const Vector4&in) const", asMETHOD(Vector4, AbsDotProduct), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Vector4", "Vector4 Abs() const", asMETHOD(Vector4, Abs), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector4", "Vector4 Lerp(const Vector4&in, float) const", asMETHOD(Vector4, Lerp), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector4", "bool Equals(const Vector4&in) const", asMETHOD(Vector4, Equals), asCALL_THISCALL);
     engine->RegisterObjectMethod("Vector4", "bool IsNaN() const", asMETHOD(Vector4, IsNaN), asCALL_THISCALL);
@@ -683,7 +685,7 @@ static void RegisterMatrix3x4(asIScriptEngine* engine)
     engine->RegisterObjectProperty("Matrix3x4", "float m21", offsetof(Matrix3x4, m21_));
     engine->RegisterObjectProperty("Matrix3x4", "float m22", offsetof(Matrix3x4, m22_));
     engine->RegisterObjectProperty("Matrix3x4", "float m23", offsetof(Matrix3x4, m23_));
-    
+
     engine->RegisterObjectMethod("Matrix4", "Matrix4 opMul(const Matrix3x4&) const", asMETHODPR(Matrix4, operator *, (const Matrix3x4&) const, Matrix4), asCALL_THISCALL);
 }
 
@@ -948,7 +950,7 @@ void PolyhedronAddFaceArray(CScriptArray* arr, Polyhedron* ptr)
 {
     PODVector<Vector3> face;
     unsigned numVertices = arr->GetSize();
-    
+
     face.Resize(numVertices);
     for (unsigned i = 0; i < numVertices; ++i)
         face[i] = *((Vector3*)arr->At(i));
@@ -981,7 +983,7 @@ static void RegisterVolumes(asIScriptEngine* engine)
     engine->RegisterObjectType("Frustum", sizeof(Frustum), asOBJ_VALUE | asOBJ_APP_CLASS_CDAK);
     engine->RegisterObjectType("Polyhedron", sizeof(Polyhedron), asOBJ_VALUE | asOBJ_APP_CLASS_CDK);
     engine->RegisterObjectType("Sphere", sizeof(Sphere), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_CAK);
-    
+
     engine->RegisterObjectBehaviour("BoundingBox", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructBoundingBox), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("BoundingBox", asBEHAVE_CONSTRUCT, "void f(const BoundingBox&in)", asFUNCTION(ConstructBoundingBoxCopy), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("BoundingBox", asBEHAVE_CONSTRUCT, "void f(const Rect&in)", asFUNCTION(ConstructBoundingBoxRect), asCALL_CDECL_OBJLAST);
@@ -1010,7 +1012,9 @@ static void RegisterVolumes(asIScriptEngine* engine)
     engine->RegisterObjectMethod("BoundingBox", "void Transform(const Matrix3x4&in)", asMETHODPR(BoundingBox, Transform, (const Matrix3x4&), void), asCALL_THISCALL);
     engine->RegisterObjectMethod("BoundingBox", "Intersection IsInside(const Vector3&in) const", asMETHODPR(BoundingBox, IsInside, (const Vector3&) const, Intersection), asCALL_THISCALL);
     engine->RegisterObjectMethod("BoundingBox", "Intersection IsInside(const Sphere&in) const", asMETHODPR(BoundingBox, IsInside, (const Sphere&) const, Intersection), asCALL_THISCALL);
+    engine->RegisterObjectMethod("BoundingBox", "Intersection IsInsideFast(const Sphere&in) const", asMETHODPR(BoundingBox, IsInsideFast, (const Sphere&) const, Intersection), asCALL_THISCALL);
     engine->RegisterObjectMethod("BoundingBox", "Intersection IsInside(const BoundingBox&in) const", asMETHODPR(BoundingBox, IsInside, (const BoundingBox&) const, Intersection), asCALL_THISCALL);
+    engine->RegisterObjectMethod("BoundingBox", "Intersection IsInsideFast(const BoundingBox&in) const", asMETHODPR(BoundingBox, IsInsideFast, (const BoundingBox&) const, Intersection), asCALL_THISCALL);
     engine->RegisterObjectMethod("BoundingBox", "BoundingBox Transformed(const Matrix3&in) const", asMETHODPR(BoundingBox, Transformed, (const Matrix3&) const, BoundingBox), asCALL_THISCALL);
     engine->RegisterObjectMethod("BoundingBox", "BoundingBox Transformed(const Matrix3x4&in) const", asMETHODPR(BoundingBox, Transformed, (const Matrix3x4&) const, BoundingBox), asCALL_THISCALL);
     engine->RegisterObjectMethod("BoundingBox", "Rect Projected(const Matrix4&in) const", asMETHODPR(BoundingBox, Projected, (const Matrix4&) const, Rect), asCALL_THISCALL);
@@ -1021,7 +1025,7 @@ static void RegisterVolumes(asIScriptEngine* engine)
     engine->RegisterObjectProperty("BoundingBox", "Vector3 min", offsetof(BoundingBox, min_));
     engine->RegisterObjectProperty("BoundingBox", "Vector3 max", offsetof(BoundingBox, max_));
     engine->RegisterObjectProperty("BoundingBox", "bool defined", offsetof(BoundingBox, defined_));
-    
+
     engine->RegisterObjectBehaviour("Frustum", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructFrustum), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("Frustum", asBEHAVE_CONSTRUCT, "void f(const Frustum&in)", asFUNCTION(ConstructFrustumCopy), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("Frustum", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(DestructFrustum), asCALL_CDECL_OBJLAST);
@@ -1034,12 +1038,14 @@ static void RegisterVolumes(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Frustum", "void Transform(const Matrix3x4&in)", asMETHODPR(Frustum, Transform, (const Matrix3x4&), void), asCALL_THISCALL);
     engine->RegisterObjectMethod("Frustum", "Intersection IsInside(const Vector3&in)", asMETHODPR(Frustum, IsInside, (const Vector3&) const, Intersection), asCALL_THISCALL);
     engine->RegisterObjectMethod("Frustum", "Intersection IsInside(const BoundingBox&in)", asMETHODPR(Frustum, IsInside, (const BoundingBox&) const, Intersection), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Frustum", "Intersection IsInsideFast(const BoundingBox&in) const", asMETHODPR(Frustum, IsInsideFast, (const BoundingBox&) const, Intersection), asCALL_THISCALL);
     engine->RegisterObjectMethod("Frustum", "Intersection IsInside(const Sphere&in)", asMETHODPR(Frustum, IsInside, (const Sphere&) const, Intersection), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Frustum", "Intersection IsInsideFast(const Sphere&in) const", asMETHODPR(Frustum, IsInsideFast, (const Sphere&) const, Intersection), asCALL_THISCALL);
     engine->RegisterObjectMethod("Frustum", "float Distance(const Vector3&in) const", asMETHOD(Frustum, Distance), asCALL_THISCALL);
     engine->RegisterObjectMethod("Frustum", "Frustum Transformed(const Matrix3&in) const", asMETHODPR(Frustum, Transformed, (const Matrix3&) const, Frustum), asCALL_THISCALL);
     engine->RegisterObjectMethod("Frustum", "Frustum Transformed(const Matrix3x4&in) const", asMETHODPR(Frustum, Transformed, (const Matrix3x4&) const, Frustum), asCALL_THISCALL);
     engine->RegisterObjectMethod("Frustum", "Vector3 get_vertices(uint) const", asFUNCTION(FrustumGetVertex), asCALL_CDECL_OBJLAST);
-    
+
     engine->RegisterObjectBehaviour("Polyhedron", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructPolyhedron), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("Polyhedron", asBEHAVE_CONSTRUCT, "void f(const Polyhedron&in)", asFUNCTION(ConstructPolyhedronCopy), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("Polyhedron", asBEHAVE_CONSTRUCT, "void f(const BoundingBox&in)", asFUNCTION(ConstructPolyhedronBoundingBox), asCALL_CDECL_OBJLAST);
@@ -1060,7 +1066,7 @@ static void RegisterVolumes(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Polyhedron", "Polyhedron Transformed(const Matrix3x4&in) const", asMETHODPR(Polyhedron, Transformed, (const Matrix3x4&) const, Polyhedron), asCALL_THISCALL);
     engine->RegisterObjectMethod("Polyhedron", "uint get_numFaces() const", asFUNCTION(PolyhedronGetNumFaces), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectMethod("Polyhedron", "Array<Vector3>@ get_face(uint) const", asFUNCTION(PolyhedronGetFace), asCALL_CDECL_OBJLAST);
-    
+
     engine->RegisterObjectBehaviour("Sphere", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructSphere), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("Sphere", asBEHAVE_CONSTRUCT, "void f(const Sphere&in)", asFUNCTION(ConstructSphereCopy), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("Sphere", asBEHAVE_CONSTRUCT, "void f(const Vector3&in, float)", asFUNCTION(ConstructSphereInit), asCALL_CDECL_OBJLAST);
@@ -1081,7 +1087,9 @@ static void RegisterVolumes(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Sphere", "void Clear()", asMETHOD(Sphere, Clear), asCALL_THISCALL);
     engine->RegisterObjectMethod("Sphere", "Intersection IsInside(const Vector3&in) const", asMETHODPR(Sphere, IsInside, (const Vector3&) const, Intersection), asCALL_THISCALL);
     engine->RegisterObjectMethod("Sphere", "Intersection IsInside(const Sphere&in) const", asMETHODPR(Sphere, IsInside, (const Sphere&) const, Intersection), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Sphere", "Intersection IsInsideFast(const Sphere&in) const", asMETHODPR(Sphere, IsInsideFast, (const Sphere&) const, Intersection), asCALL_THISCALL);
     engine->RegisterObjectMethod("Sphere", "Intersection IsInside(const BoundingBox&in) const", asMETHODPR(Sphere, IsInside, (const BoundingBox&) const, Intersection), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Sphere", "Intersection IsInsideFast(const BoundingBox&in) const", asMETHODPR(Sphere, IsInsideFast, (const BoundingBox&) const, Intersection), asCALL_THISCALL);
     engine->RegisterObjectMethod("Sphere", "float Distance(const Vector3&in) const", asMETHOD(Sphere, Distance), asCALL_THISCALL);
     engine->RegisterObjectProperty("Sphere", "Vector3 center", offsetof(Sphere, center_));
     engine->RegisterObjectProperty("Sphere", "float radius", offsetof(Sphere, radius_));

@@ -293,7 +293,9 @@ Whenever there is some hierarchical composition, it is recommended (and in fact 
 
 %Scene nodes can be freely reparented. In contrast components are always created to the node they belong to, and can not be moved between nodes. Both child nodes and components are stored using SharedPtr containers; this means that detaching a child node from its parent or removing a component will also destroy it, if no other references to it exist. Both Node & Component provide the \ref Node::Remove "Remove()" function to accomplish this without having to go through the parent. Note that no operations on the node or component in question are safe after calling that function.
 
-It is also legal to create a Node that does not belong to a scene. This is useful for example with a camera moving in a scene that may be loaded or saved, because then the camera will not be saved along with the actual scene, and will not be destroyed when the scene is loaded. However, note that creating geometry, physics or script components to an unattached node, and then moving it into a scene later will cause those components to not work correctly.
+It is also legal to create a Node that does not belong to a scene. This is useful for example with a camera moving in a scene that may be loaded or saved, because then the camera will not be saved along with the actual scene, and will not be destroyed when the scene is loaded.
+
+However, depending on the components used, creating components to a node outside the scene, then moving the node to a scene later may not work completely as expected. For example, a RigidBody component can not store its velocities if it does not have access to the scene's physics world component to actually create the Bullet rigid body object.
 
 \section SceneModel_Update Scene updates
 
@@ -389,6 +391,86 @@ Finally the maximum time (in milliseconds) spent each frame on finishing backgro
 When writing new resource types, the background loading mechanism requires implementing two functions: \ref Resource::BeginLoad "BeginLoad()" and \ref Resource::EndLoad "EndLoad()". BeginLoad() is potentially called in a background thread and should do as much work (such as file I/O) as possible without violating the \ref Multithreading "multithreading" rules. EndLoad() should perform the main thread finishing step, such as GPU upload. Either step can return false to indicate failure to load the resource.
 
 If a resource depends on other resources, writing efficient threaded loading for it can be hard, as calling GetResource() is not allowed inside BeginLoad() when background loading. There are a few options: it is allowed to queue new background load requests by calling BackgroundLoadResource() within BeginLoad(), or if the needed resource does not need to be permanently stored in the cache and is safe to load outside the main thread (for example Image or XMLFile, which do not possess any GPU-side data), \ref ResourceCache::GetTempResource "GetTempResource()" can be called inside BeginLoad.
+
+\page Localization Localization
+
+The Localization subsystem provides a simple way to creating multilingual applications.
+
+\section LocalizationInit Initialization
+
+Before using the subsystem, the localization string collection(s) need to be loaded. A common practice is to do this at application startup. Multiple collection files can be loaded, and each can define either just one or several languages. For example:
+
+\code
+Localization* l10n = GetSubsystem<Localization>();
+l10n->LoadJSONFile("StringsEnRu.json");
+l10n->LoadJSONFile("StringsDe.json");
+\endcode
+
+JSON files must be in UTF8 encoding without BOM. Sample files are in the bin/Data directory. The JSON files have the following format:
+
+\code
+{
+	"string id 1":{
+		"language 1":"value11",
+		"language 2":"value12",
+		"language 3":"value13"
+	},
+	"string id 2":{
+		"language 1":"value21",
+		"language 2":"value22",
+		"language 3":"value23"
+	}
+}
+\endcode
+
+Any number of languages can be defined. Remember that language names and string identifiers are case sensitive. "En" and "en" are considered different languages.
+During the loading process languages are numbered in order of finding. Indexing starts from zero. The first found language is set to be initially active.
+
+\section LocalizationUsing Using
+
+The Get function returns a string with the specified string identifier in the current language.
+
+\code
+Text* t = new Text(context_);
+t->SetName("Text1");
+Localization* l10n = GetSubsystem<Localization>();
+t->SetText(l10n->Get("string 1"));
+\endcode
+
+If the string id is empty, an empty string will be returned. If the translation is not found, the id will be returned unmodified and a warning will be logged.
+
+Use SetLanguage() function to change language at runtime.
+
+\code
+Localization* l10n = GetSubsystem<Localization>();
+l10n->SetLanguage("language 2");
+\endcode
+
+When the language is changed, the E_CHANGELANGUAGE event will be sent. Subscribe to it to perform the necessary relocalization of your user interface (texts, sprites etc.)
+
+\code
+SubscribeToEvent(E_CHANGELANGUAGE, HANDLER(Game, HandleChangeLanguage));
+
+void Game::HandleChangeLanguage(StringHash eventType, VariantMap& eventData)
+{
+    Localization* l10n = GetSubsystem<Localization>();
+    ...
+    Text* t = static_cast<Text*>(uiRoot->GetChild("Text1", true));
+    t->SetText(l10n->Get("string 1"));
+}
+\endcode
+
+Text %UI elements also support automatic translation to avoid manual work.
+
+\code
+Text* t2 = new Text(context_);
+t2->SetText("string 2");
+t2->SetAutoLocalizable(true);
+\endcode
+
+Wherein text value is used as an identifier.
+
+Also see the example 40_Localization.
 
 \page Scripting Scripting
 
@@ -1257,7 +1339,7 @@ An example render path for readable hardware depth exists in bin/CoreData/Render
 
 The render path starts by allocating a readable depth-stencil texture the same size as the destination viewport, clearing its depth, then rendering a depth-only pass to it. Next the destination color rendertarget is cleared normally, while the readable depth texture is used as the depth-stencil for that and all subsequent commands. Any command after the depth render pass could now bind the depth texture to an unit for sampling, for example for smooth particle or SSAO effects.
 
-The ForwardDepth.xml render path does the same, but using a linear depth rendertarget instead of a hardware depth texture. The advantage is better compatibility (guaranteed to work without checking \ref Graphics::GetReadableDepthSupport "GetReadableDepthSupport()") but it has worse performance as it will fill the hardware depth-stencil twice.
+The ForwardDepth.xml render path does the same, but using a linear depth rendertarget instead of a hardware depth texture. The advantage is better compatibility (guaranteed to work without checking \ref Graphics::GetReadableDepthSupport "GetReadableDepthSupport()") but it has worse performance as it will perform an additional full scene rendering pass.
 
 \section RenderPaths_ForwardLighting Forward lighting special considerations
 
@@ -2860,7 +2942,7 @@ byte[]     Bytecode, produced by AngelScript serializer
 
 - Indent style is Allman (BSD) -like, ie. brace on the next line from a control statement, indented on the same level. In switch-case statements the cases are on the same indent level as the switch statement.
 
-- Indents use 4 spaces instead of tabs.
+- Indents use 4 spaces instead of tabs. Indents on empty lines should not be kept.
 
 - Class and struct names are in camelcase beginning with an uppercase letter. They should be nouns. For example DebugRenderer, FreeTypeLibrary, Graphics.
 
@@ -2911,7 +2993,7 @@ Third, there are requirements for new code that come from Urho3D striving to be 
 
 - Mark all application-usable classes, structs and functions with the macro URHO3D_API so that they are exported correctly in a shared library build.
 
-- When you add a new third-party library, insert its license statement to the License.txt in the root directory.
+- When you add a new third-party library, insert its license statement to the License.txt in the root directory. Only libraries with permissive licenses such as BSD/MIT/zlib are accepted, because complying for example with the LGPL is difficult on mobile platforms, and would leave the application in a legal grey area.
 
 - Please heed all the \ref CodingConventions "coding conventions" and study existing code where unsure. Ensure that your text editor or IDE is configured to show whitespace, so that you don't accidentally mix spaces and tabs.
 */

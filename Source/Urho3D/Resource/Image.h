@@ -138,6 +138,12 @@ public:
     bool SaveTGA(const String& fileName) const;
     /// Save in JPG format with compression quality. Return true if successful.
     bool SaveJPG(const String& fileName, int quality) const;
+    /// Whether this texture is detected as a cubemap, only relevant for DDS.
+    bool IsCubemap() const { return cubemap_; }
+    /// Whether this texture has been detected as a volume, only relevant for DDS.
+    bool IsArray() const { return array_; }
+    /// Whether this texture is in sRGB, only relevant for DDS.
+    bool IsSRGB() const { return sRGB_; }
 
     /// Return a 2D pixel color.
     Color GetPixel(int x, int y) const;
@@ -151,24 +157,35 @@ public:
     Color GetPixelBilinear(float x, float y) const;
     /// Return a trilinearly sampled 3D pixel color. X, Y and Z have the range 0-1.
     Color GetPixelTrilinear(float x, float y, float z) const;
+
     /// Return width.
     int GetWidth() const { return width_; }
+
     /// Return height.
     int GetHeight() const { return height_; }
+
     /// Return depth.
     int GetDepth() const { return depth_; }
+
     /// Return number of color components.
     unsigned GetComponents() const { return components_; }
+
     /// Return pixel data.
     unsigned char* GetData() const { return data_; }
+
     /// Return whether is compressed.
     bool IsCompressed() const { return compressedFormat_ != CF_NONE; }
+
     /// Return compressed format.
     CompressedFormat GetCompressedFormat() const { return compressedFormat_; }
+
     /// Return number of compressed mip levels.
     unsigned GetNumCompressedLevels() const { return numCompressedLevels_; }
+
     /// Return next mip level by bilinear filtering.
     SharedPtr<Image> GetNextLevel() const;
+    /// Return the next sibling image of an array or cubemap.
+    SharedPtr<Image> GetNextSibling() const { return nextSibling_;  }
     /// Return image converted to 4-component (RGBA) to circumvent modern rendering API's not supporting e.g. the luminance-alpha format.
     SharedPtr<Image> ConvertToRGBA() const;
     /// Return a compressed mip level.
@@ -196,12 +213,20 @@ private:
     unsigned components_;
     /// Number of compressed mip levels.
     unsigned numCompressedLevels_;
+    /// Cubemap status if DDS.
+    bool cubemap_;
+    /// Texture array status if DDS.
+    bool array_;
+    /// Data is sRGB.
+    bool sRGB_;
     /// Compressed format.
     CompressedFormat compressedFormat_;
     /// Pixel data.
     SharedArrayPtr<unsigned char> data_;
     /// Precalculated mip level image.
     SharedPtr<Image> nextLevel_;
+    /// Next texture array or cube map image.
+    SharedPtr<Image> nextSibling_;
 };
 
 }

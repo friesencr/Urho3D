@@ -105,6 +105,8 @@ public:
     void SetRowSpacing(float spacing);
     /// Set wordwrap. In wordwrap mode the text element will respect its current width. Otherwise it resizes itself freely.
     void SetWordwrap(bool enable);
+    /// The text will be automatically translated. The text value used as string identifier.
+    void SetAutoLocalizable(bool enable);
     /// Set selection. When length is not provided, select until the text ends.
     void SetSelection(unsigned start, unsigned length = M_MAX_UNSIGNED);
     /// Clear selection.
@@ -120,34 +122,52 @@ public:
 
     /// Return font.
     Font* GetFont() const { return font_; }
+
     /// Return font size.
     int GetFontSize() const { return fontSize_; }
+
     /// Return text.
     const String& GetText() const { return text_; }
+
     /// Return row alignment.
     HorizontalAlignment GetTextAlignment() const { return textAlignment_; }
+
     /// Return row spacing.
     float GetRowSpacing() const { return rowSpacing_; }
+
     /// Return wordwrap mode.
     bool GetWordwrap() const { return wordWrap_; }
+
+    /// Return auto localizable mode.
+    bool GetAutoLocalizable() const { return autoLocalizable_; }
+
     /// Return selection start.
     unsigned GetSelectionStart() const { return selectionStart_; }
+
     /// Return selection length.
     unsigned GetSelectionLength() const { return selectionLength_; }
+
     /// Return selection background color.
     const Color& GetSelectionColor() const { return selectionColor_; }
+
     /// Return hover background color.
     const Color& GetHoverColor() const { return hoverColor_; }
+
     /// Return text effect.
     TextEffect GetTextEffect() const { return textEffect_; }
+
     /// Return effect color.
     const Color& GetEffectColor() const { return effectColor_; }
+
     /// Return row height.
     int GetRowHeight() const { return rowHeight_; }
+
     /// Return number of rows.
     unsigned GetNumRows() const { return rowWidths_.Size(); }
+
     /// Return number of characters.
     unsigned GetNumChars() const { return unicodeText_.Size(); }
+
     /// Return width of row by index.
     int GetRowWidth(unsigned index) const;
     /// Return position of character by index relative to the text element origin.
@@ -159,8 +179,10 @@ public:
     void SetUsedInText3D(bool usedInText3D);
     /// Set text effect Z bias. Zero by default, adjusted only in 3D mode.
     void SetEffectDepthBias(float bias);
+
     /// Return effect Z bias.
     float GetEffectDepthBias() const { return effectDepthBias_; }
+
     /// Set font attribute.
     void SetFontAttr(const ResourceRef& value);
     /// Return font attribute.
@@ -178,7 +200,9 @@ protected:
     /// Return row start X position.
     int GetRowStartPosition(unsigned rowIndex) const;
     /// Contruct batch.
-    void ConstructBatch(UIBatch& pageBatch, const PODVector<GlyphLocation>& pageGlyphLocation, int dx = 0, int dy = 0, Color* color = 0, float depthBias = 0.0f);
+    void ConstructBatch
+        (UIBatch& pageBatch, const PODVector<GlyphLocation>& pageGlyphLocation, int dx = 0, int dy = 0, Color* color = 0,
+            float depthBias = 0.0f);
 
     /// Used in Text3D.
     bool usedInText3D_;
@@ -226,6 +250,14 @@ protected:
     Vector<PODVector<GlyphLocation> > pageGlyphLocations_;
     /// Cached locations of each character in the text.
     PODVector<CharLocation> charLocations_;
+    /// The text will be automatically translated.
+    bool autoLocalizable_;
+    /// Storage string id. Used when enabled autoLocalizable.
+    String stringId_;
+    /// Handle change Language.
+    void HandleChangeLanguage(StringHash eventType, VariantMap& eventData);
+    /// UTF8 to Unicode.
+    void DecodeToUnicode();
 };
 
 }

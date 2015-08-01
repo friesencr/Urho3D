@@ -20,18 +20,20 @@
 // THE SOFTWARE.
 //
 
-#include "../Graphics/Camera.h"
+#include "../Precompiled.h"
+
 #include "../Core/Context.h"
-#include "../UI/Font.h"
+#include "../Graphics/Camera.h"
 #include "../Graphics/Geometry.h"
-#include "../IO/Log.h"
 #include "../Graphics/Material.h"
-#include "../Scene/Node.h"
-#include "../Resource/ResourceCache.h"
 #include "../Graphics/Technique.h"
+#include "../Graphics/VertexBuffer.h"
+#include "../IO/Log.h"
+#include "../Resource/ResourceCache.h"
+#include "../Scene/Node.h"
+#include "../UI/Font.h"
 #include "../UI/Text.h"
 #include "../UI/Text3D.h"
-#include "../Graphics/VertexBuffer.h"
 
 namespace Urho3D
 {
@@ -52,7 +54,8 @@ Text3D::Text3D(Context* context) :
     customWorldTransform_(Matrix3x4::IDENTITY),
     faceCameraMode_(FC_NONE),
     textDirty_(true),
-    geometryDirty_(true)
+    geometryDirty_(true),
+    usingSDFShader_(false)
 {
     text_.SetUsedInText3D(true);
     text_.SetEffectDepthBias(DEFAULT_EFFECT_DEPTH_BIAS);
@@ -68,7 +71,8 @@ void Text3D::RegisterObject(Context* context)
 
     ACCESSOR_ATTRIBUTE("Is Enabled", IsEnabled, SetEnabled, bool, true, AM_DEFAULT);
     MIXED_ACCESSOR_ATTRIBUTE("Font", GetFontAttr, SetFontAttr, ResourceRef, ResourceRef(Font::GetTypeStatic()), AM_DEFAULT);
-    MIXED_ACCESSOR_ATTRIBUTE("Material", GetMaterialAttr, SetMaterialAttr, ResourceRef, ResourceRef(Material::GetTypeStatic()), AM_DEFAULT);
+    MIXED_ACCESSOR_ATTRIBUTE("Material", GetMaterialAttr, SetMaterialAttr, ResourceRef, ResourceRef(Material::GetTypeStatic()),
+        AM_DEFAULT);
     ATTRIBUTE("Font Size", int, text_.fontSize_, DEFAULT_FONT_SIZE, AM_DEFAULT);
     ATTRIBUTE("Text", String, text_.text_, String::EMPTY, AM_DEFAULT);
     ENUM_ATTRIBUTE("Text Alignment", text_.textAlignment_, horizontalAlignments, HA_LEFT, AM_DEFAULT);
@@ -78,8 +82,10 @@ void Text3D::RegisterObject(Context* context)
     ENUM_ATTRIBUTE("Face Camera Mode", faceCameraMode_, faceCameraModeNames, FC_NONE, AM_DEFAULT);
     ACCESSOR_ATTRIBUTE("Draw Distance", GetDrawDistance, SetDrawDistance, float, 0.0f, AM_DEFAULT);
     ACCESSOR_ATTRIBUTE("Width", GetWidth, SetWidth, int, 0, AM_DEFAULT);
-    ENUM_ACCESSOR_ATTRIBUTE("Horiz Alignment", GetHorizontalAlignment, SetHorizontalAlignment, HorizontalAlignment, horizontalAlignments, HA_LEFT, AM_DEFAULT);
-    ENUM_ACCESSOR_ATTRIBUTE("Vert Alignment", GetVerticalAlignment, SetVerticalAlignment, VerticalAlignment, verticalAlignments, VA_TOP, AM_DEFAULT);
+    ENUM_ACCESSOR_ATTRIBUTE("Horiz Alignment", GetHorizontalAlignment, SetHorizontalAlignment, HorizontalAlignment,
+        horizontalAlignments, HA_LEFT, AM_DEFAULT);
+    ENUM_ACCESSOR_ATTRIBUTE("Vert Alignment", GetVerticalAlignment, SetVerticalAlignment, VerticalAlignment, verticalAlignments,
+        VA_TOP, AM_DEFAULT);
     ACCESSOR_ATTRIBUTE("Color", GetColorAttr, SetColor, Color, Color::WHITE, AM_DEFAULT);
     ATTRIBUTE("Top Left Color", Color, text_.color_[0], Color::WHITE, AM_DEFAULT);
     ATTRIBUTE("Top Right Color", Color, text_.color_[1], Color::WHITE, AM_DEFAULT);
@@ -125,8 +131,8 @@ void Text3D::UpdateGeometry(const FrameInfo& frame)
         for (unsigned i = 0; i < batches_.Size(); ++i)
         {
             Geometry* geometry = geometries_[i];
-            geometry->SetDrawRange(TRIANGLE_LIST, 0, 0, uiBatches_[i].vertexStart_, (uiBatches_[i].vertexEnd_ -
-                uiBatches_[i].vertexStart_) / UI_VERTEX_SIZE);
+            geometry->SetDrawRange(TRIANGLE_LIST, 0, 0, uiBatches_[i].vertexStart_,
+                (uiBatches_[i].vertexEnd_ - uiBatches_[i].vertexStart_) / UI_VERTEX_SIZE);
         }
     }
 
@@ -503,6 +509,9 @@ void Text3D::UpdateTextBatches()
 
 void Text3D::UpdateTextMaterials(bool forceUpdate)
 {
+    Font* font = GetFont();
+    bool isSDFFont = font ? font->IsSDFFont() : false;
+
     batches_.Resize(uiBatches_.Size());
     geometries_.Resize(uiBatches_.Size());
 
@@ -515,7 +524,7 @@ void Text3D::UpdateTextMaterials(bool forceUpdate)
             batches_[i].geometry_ = geometries_[i] = geometry;
         }
 
-        if (!batches_[i].material_ || forceUpdate)
+        if (!batches_[i].material_ || forceUpdate || isSDFFont != usingSDFShader_)
         {
             // If material not defined, create a reasonable default from scratch
             if (!material_)
@@ -526,7 +535,7 @@ void Text3D::UpdateTextMaterials(bool forceUpdate)
                 pass->SetVertexShader("Text");
                 pass->SetPixelShader("Text");
 
-                if (GetFont()->IsSDFFont())
+                if (isSDFFont)
                 {
                     switch (GetTextEffect())
                     {
@@ -552,13 +561,16 @@ void Text3D::UpdateTextMaterials(bool forceUpdate)
             }
             else
                 batches_[i].material_ = material_->Clone();
+
+            // Note: custom material is assumed to use the right kind of shader; it is not modified to define SIGNED_DISTANCE_FIELD
+            usingSDFShader_ = isSDFFont;
         }
 
         Material* material = batches_[i].material_;
         Texture* texture = uiBatches_[i].texture_;
         material->SetTexture(TU_DIFFUSE, texture);
 
-        if (GetFont()->IsSDFFont())
+        if (isSDFFont)
         {
             switch (GetTextEffect())
             {

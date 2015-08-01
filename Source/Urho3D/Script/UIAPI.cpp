@@ -20,13 +20,14 @@
 // THE SOFTWARE.
 //
 
+#include "../Precompiled.h"
+
+#include "../Input/Input.h"
 #include "../Script/APITemplates.h"
 #include "../UI/CheckBox.h"
-#include "../UI/Cursor.h"
 #include "../UI/DropDownList.h"
 #include "../UI/FileSelector.h"
 #include "../UI/Font.h"
-#include "../Input/Input.h"
 #include "../UI/LineEdit.h"
 #include "../UI/ListView.h"
 #include "../UI/MessageBox.h"
@@ -38,7 +39,6 @@
 #include "../UI/ToolTip.h"
 #include "../UI/UI.h"
 #include "../UI/View3D.h"
-#include "../UI/Window.h"
 
 #include "../DebugNew.h"
 
@@ -376,6 +376,8 @@ static void RegisterText(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Text", "float get_rowSpacing() const", asMETHOD(Text, GetRowSpacing), asCALL_THISCALL);
     engine->RegisterObjectMethod("Text", "void set_wordwrap(bool)", asMETHOD(Text, SetWordwrap), asCALL_THISCALL);
     engine->RegisterObjectMethod("Text", "bool get_wordwrap() const", asMETHOD(Text, GetWordwrap), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Text", "void set_autoLocalizable(bool)", asMETHOD(Text, SetAutoLocalizable), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Text", "bool get_autoLocalizable() const", asMETHOD(Text, GetAutoLocalizable), asCALL_THISCALL);
     engine->RegisterObjectMethod("Text", "uint get_selectionStart() const", asMETHOD(Text, GetSelectionStart), asCALL_THISCALL);
     engine->RegisterObjectMethod("Text", "uint get_selectionLength() const", asMETHOD(Text, GetSelectionLength), asCALL_THISCALL);
     engine->RegisterObjectMethod("Text", "void set_selectionColor(const Color&in)", asMETHOD(Text, SetSelectionColor), asCALL_THISCALL);

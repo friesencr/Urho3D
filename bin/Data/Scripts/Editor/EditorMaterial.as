@@ -22,10 +22,11 @@ void CreateMaterialEditor()
     materialWindow.opacity = uiMaxOpacity;
 
     InitMaterialPreview();
+    InitModelPreviewList();
     RefreshMaterialEditor();
 
-    int height = Min(ui.root.height - 60, 500);
-    materialWindow.SetSize(300, height);
+    int height = Min(ui.root.height - 60, 600);
+    materialWindow.SetSize(400, height);
     CenterDialog(materialWindow);
 
     HideMaterialEditor();
@@ -101,6 +102,13 @@ void InitMaterialPreview()
     SubscribeToEvent(materialPreview, "DragMove", "RotateMaterialPreview");
 }
 
+void InitModelPreviewList()
+{
+    DropDownList@ modelPreview = materialWindow.GetChild("ModelPreview", true);
+    modelPreview.selection = 1;
+    SubscribeToEvent(materialWindow.GetChild("ModelPreview", true), "ItemSelected", "EditModelPreviewChange");
+}
+
 void EditMaterial(Material@ mat)
 {
     if (editMaterial !is null)
@@ -140,7 +148,7 @@ void RefreshMaterialName()
         nameEdit.text = editMaterial.name;
     SubscribeToEvent(nameEdit, "TextFinished", "EditMaterialName");
 
-    Button@ pickButton = CreateResourcePickerButton(container, null, 0, 0, "Pick");
+    Button@ pickButton = CreateResourcePickerButton(container, null, 0, 0, "smallButtonPick");
     SubscribeToEvent(pickButton, "Released", "PickEditMaterial");
 }
 
@@ -167,9 +175,9 @@ void RefreshMaterialTechniques(bool fullUpdate = true)
             LineEdit@ nameEdit = CreateAttributeLineEdit(container, null, i, 0);
             nameEdit.name = "TechniqueNameEdit" + String(i);
 
-            Button@ pickButton = CreateResourcePickerButton(container, null, i, 0, "Pick");
+            Button@ pickButton = CreateResourcePickerButton(container, null, i, 0, "smallButtonPick");
             SubscribeToEvent(pickButton, "Released", "PickMaterialTechnique");
-            Button@ openButton = CreateResourcePickerButton(container, null, i, 0, "Open");
+            Button@ openButton = CreateResourcePickerButton(container, null, i, 0, "smallButtonOpen");
             SubscribeToEvent(openButton, "Released", "OpenResource");
 
             if (entry.technique !is null)
@@ -236,9 +244,9 @@ void RefreshMaterialTextures(bool fullUpdate = true)
             LineEdit@ nameEdit = CreateAttributeLineEdit(container, null, i, 0);
             nameEdit.name = "TextureNameEdit" + String(i);
 
-            Button@ pickButton = CreateResourcePickerButton(container, null, i, 0, "Pick");
+            Button@ pickButton = CreateResourcePickerButton(container, null, i, 0, "smallButtonPick");
             SubscribeToEvent(pickButton, "Released", "PickMaterialTexture");
-            Button@ openButton = CreateResourcePickerButton(container, null, i, 0, "Open");
+            Button@ openButton = CreateResourcePickerButton(container, null, i, 0, "smallButtonOpen");
             SubscribeToEvent(openButton, "Released", "OpenResource");
 
             if (editMaterial !is null)
@@ -365,7 +373,7 @@ void PickEditMaterial()
     String lastPath = resourcePicker.lastPath;
     if (lastPath.empty)
         lastPath = sceneResourcePath;
-    CreateFileSelector("Pick " + resourcePicker.typeName, "OK", "Cancel", lastPath, resourcePicker.filters, resourcePicker.lastFilter);
+    CreateFileSelector(localization.Get("Pick ") + resourcePicker.typeName, "OK", "Cancel", lastPath, resourcePicker.filters, resourcePicker.lastFilter, false);
     SubscribeToEvent(uiFileSelector, "FileSelected", "PickEditMaterialDone");
 }
 
@@ -473,6 +481,42 @@ void SaveMaterialAsDone(StringHash eventType, VariantMap& eventData)
     }
 }
 
+void EditModelPreviewChange(StringHash eventType, VariantMap& eventData)
+{
+    if (materialPreview is null)
+        return;
+        
+    previewModelNode.scale = Vector3(1.0, 1.0, 1.0);
+    
+    DropDownList@ element = eventData["Element"].GetPtr();
+    
+    switch (element.selection)
+    {
+        case 0:
+            previewModel.model = cache.GetResource("Model", "Models/Box.mdl");
+            break;
+        case 1:
+            previewModel.model = cache.GetResource("Model", "Models/Sphere.mdl");
+            break;
+        case 2:
+            previewModel.model = cache.GetResource("Model", "Models/Plane.mdl");
+            break;
+        case 3:
+            previewModel.model = cache.GetResource("Model", "Models/Cylinder.mdl");
+            previewModelNode.scale = Vector3(0.8, 0.8, 0.8);
+            break;
+        case 4:
+            previewModel.model = cache.GetResource("Model", "Models/Cone.mdl");
+            break;
+        case 5:
+            previewModel.model = cache.GetResource("Model", "Models/TeaPot.mdl");
+            break;
+    }
+        
+    materialPreview.QueueUpdate();
+    
+}
+
 void EditShaderParameter(StringHash eventType, VariantMap& eventData)
 {
     if (editMaterial is null)
@@ -570,7 +614,7 @@ void PickMaterialTexture(StringHash eventType, VariantMap& eventData)
     String lastPath = resourcePicker.lastPath;
     if (lastPath.empty)
         lastPath = sceneResourcePath;
-    CreateFileSelector("Pick " + resourcePicker.typeName, "OK", "Cancel", lastPath, resourcePicker.filters, resourcePicker.lastFilter);
+    CreateFileSelector(localization.Get("Pick ") + resourcePicker.typeName, "OK", "Cancel", lastPath, resourcePicker.filters, resourcePicker.lastFilter, false);
     SubscribeToEvent(uiFileSelector, "FileSelected", "PickMaterialTextureDone");
 }
 
@@ -661,7 +705,7 @@ void PickMaterialTechnique(StringHash eventType, VariantMap& eventData)
     String lastPath = resourcePicker.lastPath;
     if (lastPath.empty)
         lastPath = sceneResourcePath;
-    CreateFileSelector("Pick " + resourcePicker.typeName, "OK", "Cancel", lastPath, resourcePicker.filters, resourcePicker.lastFilter);
+    CreateFileSelector(localization.Get("Pick ") + resourcePicker.typeName, "OK", "Cancel", lastPath, resourcePicker.filters, resourcePicker.lastFilter, false);
     SubscribeToEvent(uiFileSelector, "FileSelected", "PickMaterialTechniqueDone");
 }
 
