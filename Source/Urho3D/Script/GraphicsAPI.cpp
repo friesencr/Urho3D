@@ -49,6 +49,10 @@
 #include "../Graphics/TextureCube.h"
 #include "../Graphics/Skybox.h"
 #include "../Graphics/VertexBuffer.h"
+#include "../Graphics/Voxel.h"
+#include "../Graphics/VoxelBuilder.h"
+#include "../Graphics/VoxelSet.h"
+#include "../Graphics/VoxelChunk.h"
 #include "../Graphics/Zone.h"
 #include "../Script/APITemplates.h"
 #include "../Scene/Scene.h"
@@ -1466,6 +1470,128 @@ static void RegisterTerrain(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Terrain", "uint get_maxLights() const", asMETHOD(Terrain, GetMaxLights), asCALL_THISCALL);
 }
 
+static void RegisterVoxel(asIScriptEngine* engine)
+{
+    RegisterDrawable<VoxelChunk>(engine, "VoxelChunk");
+    RegisterComponent<VoxelSet>(engine, "VoxelSet");
+	RegisterResource<VoxelBlocktypeMap>(engine, "VoxelBlocktypeMap");
+	RegisterResource<VoxelColorPalette>(engine, "VoxelColorPallete");
+	RegisterResource<VoxelMap>(engine, "VoxelMap");
+	RegisterResource<VoxelOverlayMap>(engine, "VoxelOverlayMap");
+
+    engine->RegisterEnum("LightType");
+    engine->RegisterEnumValue("LightType", "LIGHT_DIRECTIONAL", LIGHT_DIRECTIONAL);
+    engine->RegisterEnumValue("LightType", "LIGHT_SPOT", LIGHT_SPOT);
+    engine->RegisterEnumValue("LightType", "LIGHT_POINT", LIGHT_POINT);
+
+    engine->RegisterEnum("VoxelGeometry");
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_EMPTY", VOXEL_GEOMETRY_EMPTY);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_KNOCKOUT", VOXEL_GEOMETRY_KNOCKOUT);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_SOLID", VOXEL_GEOMETRY_SOLID);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_TRANSP", VOXEL_GEOMETRY_TRANSP);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_SLAB_UPPER", VOXEL_GEOMETRY_SLAB_UPPER);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_SLAB_LOWER", VOXEL_GEOMETRY_SLAB_LOWER);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_FLOOR_SLOPE_NORTH_IS_TOP", VOXEL_GEOMETRY_FLOOR_SLOPE_NORTH_IS_TOP);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_CEIL_SLOPE_NORTH_IS_BOTTOM", VOXEL_GEOMETRY_CEIL_SLOPE_NORTH_IS_BOTTOM);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_FLOOR_SLOPE_NORTH_IS_TOP_AS_WALL_UNIMPLEMENTED", VOXEL_GEOMETRY_FLOOR_SLOPE_NORTH_IS_TOP_AS_WALL_UNIMPLEMENTED);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_CEIL_SLOPE_NORTH_IS_BOTTOM_AS_WALL_UNIMPLEMENTED", VOXEL_GEOMETRY_CEIL_SLOPE_NORTH_IS_BOTTOM_AS_WALL_UNIMPLEMENTED);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_CROSSED_PAIR", VOXEL_GEOMETRY_CROSSED_PAIR);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_FORCE", VOXEL_GEOMETRY_FORCE);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_FLOOR_VHEIGHT_03", VOXEL_GEOMETRY_FLOOR_VHEIGHT_03);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_FLOOR_VHEIGHT_12", VOXEL_GEOMETRY_FLOOR_VHEIGHT_12);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_CEIL_VHEIGHT_03", VOXEL_GEOMETRY_CEIL_VHEIGHT_03);
+    engine->RegisterEnumValue("VoxelGeometry", "VOXEL_GEOMETRY_CEIL_VHEIGHT_12", VOXEL_GEOMETRY_CEIL_VHEIGHT_12);
+
+    engine->RegisterEnum("VoxelRotation");
+    engine->RegisterEnumValue("VoxelRotation", "VOXEL_FACE_EAST", VOXEL_FACE_EAST);
+    engine->RegisterEnumValue("VoxelRotation", "VOXEL_FACE_NORTH", VOXEL_FACE_NORTH);
+    engine->RegisterEnumValue("VoxelRotation", "VOXEL_FACE_WEST", VOXEL_FACE_WEST);
+    engine->RegisterEnumValue("VoxelRotation", "VOXEL_FACE_SOUTH", VOXEL_FACE_SOUTH);
+    engine->RegisterEnumValue("VoxelRotation", "VOXEL_FACE_UP", VOXEL_FACE_UP);
+    engine->RegisterEnumValue("VoxelRotation", "VOXEL_FACE_DOWN", VOXEL_FACE_DOWN);
+
+    engine->RegisterEnum("VoxelHeight");
+    engine->RegisterEnumValue("VoxelHeight", "VOXEL_HEIGHT_0", VOXEL_HEIGHT_0);
+    engine->RegisterEnumValue("VoxelHeight", "VOXEL_HEIGHT_HALF", VOXEL_HEIGHT_HALF);
+    engine->RegisterEnumValue("VoxelHeight", "VOXEL_HEIGHT_1", VOXEL_HEIGHT_1);
+    engine->RegisterEnumValue("VoxelHeight", "VOXEL_HEIGHT_ONE_AND_HALF", VOXEL_HEIGHT_ONE_AND_HALF);
+
+    engine->RegisterEnum("VoxelFaceRotation");
+    engine->RegisterEnumValue("VoxelFaceRotation", "VOXEL_FACEROT_0", VOXEL_FACEROT_0);
+    engine->RegisterEnumValue("VoxelFaceRotation", "VOXEL_FACEROT_90", VOXEL_FACEROT_90);
+    engine->RegisterEnumValue("VoxelFaceRotation", "VOXEL_FACEROT_180", VOXEL_FACEROT_180);
+    engine->RegisterEnumValue("VoxelFaceRotation", "VOXEL_FACEROT_270", VOXEL_FACEROT_270);
+
+    static const unsigned VOXEL_BLOCK_BLOCKTYPE = 0x00000001;
+    static const unsigned VOXEL_BLOCK_COLOR2 = 0x00000002;
+    static const unsigned VOXEL_BLOCK_COLOR2FACEMASK = 0x00000004;
+    static const unsigned VOXEL_BLOCK_COLOR3 = 0x00000008;
+    static const unsigned VOXEL_BLOCK_COLOR3FACEMASK = 0x00000010;
+    static const unsigned VOXEL_BLOCK_COLOR = 0x00000020;
+    static const unsigned VOXEL_BLOCK_ECOLOR = 0x00000040;
+    static const unsigned VOXEL_BLOCK_ECOLORFACEMASK = 0x00000080;
+    static const unsigned VOXEL_BLOCK_EXTENDEDCOLOR = 0x00000100;
+    static const unsigned VOXEL_BLOCK_GEOMETRY = 0x00000200;
+    static const unsigned VOXEL_BLOCK_LIGHTING = 0x00000400;
+    static const unsigned VOXEL_BLOCK_OVERLAY = 0x00000800;
+    static const unsigned VOXEL_BLOCK_ROTATE = 0x00001000;
+    static const unsigned VOXEL_BLOCK_TEX2 = 0x00002000;
+    static const unsigned VOXEL_BLOCK_TEX2FACEMASK = 0x00004000;
+    static const unsigned VOXEL_BLOCK_TEX2REPLACE = 0x00008000;
+    static const unsigned VOXEL_BLOCK_VHEIGHT = 0x00010000;
+
+    engine->RegisterGlobalFunction("unsigned char voxelEncodeColor(Color, bool, bool)", asFUNCTION(VoxelEncodeColor), asCALL_CDECL);
+    engine->RegisterGlobalFunction("unsigned char voxelEncodeVHeight(VoxelHeight, VoxelHeight, VoxelHeight, VoxelHeight)", asFUNCTION(VoxelEncodeVHeight), asCALL_CDECL);
+    engine->RegisterGlobalFunction("unsigned char voxelEncodeGeometry(VoxelGeometry, VoxelRotation, VoxelHeight)", asFUNCTION(VoxelEncodeGeometry), asCALL_CDECL);
+    //engine->RegisterGlobalFunction("unsigned char voxelEncodeFaceMask(bool, bool, bool, bool, bool, bool)", asFUNCTION(VoxelEncodeFaceMask), asCALL_CDECL);
+    //engine->RegisterGlobalFunction("unsigned char voxelEncodeSideTextureSwap(unsigned char, unsigned char, unsigned char)", asFUNCTION(VoxelEncodeSideTextureSwap), asCALL_CDECL);
+
+    RegisterResource<VoxelMap>(engine, "Graphics");
+    //engine->RegisterObjectMethod("VoxelMap", "SetSource(Generator generator)", asCALL_THISCALL);
+    //engine->RegisterObjectMethod("VoxelMap", "SetSource(ResourceRef resourceRef)", asCALL_THISCALL);
+    //engine->RegisterObjectMethod("VoxelMap", "SetDataMask(unsigned dataMask)", asCALL_THISCALL);
+    //engine->RegisterObjectMethod("VoxelMap", "SetProcessorDataMask(unsigned processorDataMask)", asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "uint get_height() const", asMETHOD(VoxelMap, GetHeight), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "uint get_width() const", asMETHOD(VoxelMap, GetWidth), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "uint get_depth() const", asMETHOD(VoxelMap, GetDepth), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "uint get_size() const", asMETHOD(VoxelMap, GetSize), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "uint get_dataMask() const", asMETHOD(VoxelMap, GetDataMask), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "uint get_processorDataMask() const", asMETHOD(VoxelMap, GetProcessorDataMask), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "uint GetIndex(int, int, int) const", asMETHOD(VoxelMap, GetIndex), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void SetSize(unsigned, unsigned, unsigned)", asMETHOD(VoxelMap, SetSize), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void InitializeBlocktype(unsigned char)", asMETHOD(VoxelMap, InitializeBlocktype), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void InitializeVHeight(unsigned char)", asMETHOD(VoxelMap, InitializeVHeight), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void InitializeLighting(unsigned char)", asMETHOD(VoxelMap, InitializeLighting), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void InitializeColor(unsigned char)", asMETHOD(VoxelMap, InitializeColor), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void InitializeTex2(unsigned char)", asMETHOD(VoxelMap, InitializeTex2), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void InitializeGeometry(unsigned char)", asMETHOD(VoxelMap, InitializeGeometry), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetBlockType(int , int , int) const", asMETHOD(VoxelMap, GetBlocktype), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetOverlay(int, int, int) const", asMETHOD(VoxelMap, GetOverlay), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetColor(int, int, int) const", asMETHOD(VoxelMap, GetColor), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetColor2(int, int, int) const", asMETHOD(VoxelMap, GetColor2), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetColor2Facemask(int , int, int) const", asMETHOD(VoxelMap, GetColor2Facemask), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetColor3(int , int, int) const", asMETHOD(VoxelMap, GetColor3), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetColor3Facemask(int, int, int) const", asMETHOD(VoxelMap, GetColor3Facemask), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetExtendedColor(int, int, int) const", asMETHOD(VoxelMap, GetExtendedColor), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetEColor(int, int, int) const", asMETHOD(VoxelMap, GetEColor), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetEcolorFaceMask(int, int, int) const", asMETHOD(VoxelMap, GetEColorFaceMask), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetGeometry(int, int, int) const", asMETHOD(VoxelMap, GetGeometry), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetVHeight(int, int, int) const", asMETHOD(VoxelMap, GetVHeight), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetLighting(int, int, int) const", asMETHOD(VoxelMap, GetLighting), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetRotate(int, int, int) const", asMETHOD(VoxelMap, GetRotate), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetTex2(int, int, int) const", asMETHOD(VoxelMap, GetTex2), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetTex2Replace(int, int, int) const", asMETHOD(VoxelMap, GetTex2Replace), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "unsigned char GetTex2Facemask(int, int, int) const", asMETHOD(VoxelMap, GetTex2Facemask), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void SetColor(int, int, int, unsigned char)", asMETHOD(VoxelMap, SetColor), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void SetBlocktype(int, int, int, unsigned char)", asMETHOD(VoxelMap, SetBlocktype), asCALL_THISCALL);
+//    engine->RegisterObjectMethod("VoxelMap", "void SetVHeight(int, int, int, VoxelHeight, VoxelHeight, VoxelHeight, VoxelHeight)", asMETHOD(VoxelMap, SetVHeight), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void SetLighting(int, int, int, unsigned char)", asMETHOD(VoxelMap, SetLighting), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void SetTex2(int, int, int, unsigned char)", asMETHOD(VoxelMap, SetTex2), asCALL_THISCALL);
+    engine->RegisterObjectMethod("VoxelMap", "void SetGeometry(int, int, int, VoxelGeometry)", asMETHOD(VoxelMap, SetGeometry), asCALL_THISCALL);
+
+    
+
+}
 
 static CScriptArray* GraphicsGetResolutions(Graphics* ptr)
 {
@@ -1491,6 +1617,11 @@ static void GraphicsPrecacheShadersVectorBuffer(VectorBuffer& buffer, Graphics* 
 static Graphics* GetGraphics()
 {
     return GetScriptContext()->GetSubsystem<Graphics>();
+}
+
+static VoxelBuilder* GetVoxelBuilder()
+{
+	return GetScriptContext()->GetSubsystem<VoxelBuilder>();
 }
 
 static void RegisterGraphics(asIScriptEngine* engine)
@@ -1800,6 +1931,7 @@ void RegisterGraphicsAPI(asIScriptEngine* engine)
     RegisterCustomGeometry(engine);
     RegisterDecalSet(engine);
     RegisterTerrain(engine);
+	RegisterVoxel(engine);
     RegisterOctree(engine);
     RegisterGraphics(engine);
     RegisterRenderer(engine);

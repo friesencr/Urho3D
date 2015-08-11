@@ -35,16 +35,25 @@ public:
     virtual void SetChunkSpacing(Vector3 spacing);
     /// Sets number of chunks in the set
     virtual void SetNumberOfChunks(unsigned x, unsigned y, unsigned z);
-    /// Sets voxel map for chunk
-    virtual bool SetVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap);
     /// Gets Voxel Chunk at world position.
     virtual VoxelChunk* GetVoxelChunkAtPosition(Vector3 position);
     /// Gets Voxel Chunk by index.
     virtual VoxelChunk* GetVoxelChunk(unsigned x, unsigned y, unsigned z);
+
     virtual VoxelMap* GetVoxelMap(unsigned x, unsigned y, unsigned z);
+
+    virtual void SetVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap);
+
     inline unsigned GetIndex(unsigned x, unsigned y, unsigned z);
+
+    virtual void RemoveChunk(unsigned x, unsigned y, unsigned z);
+
     bool GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, int &z);
-	unsigned GetNumberOfLoadedChunks() { return loadedMeshes_.Size(); }
+
+    /// Set Voxel Maps
+    void SetVoxelMapResourceRefList(const ResourceRefList& value);
+
+    void SetVoxelMapResource(unsigned x, unsigned y, unsigned z, const String& name);
 
 
     ///// Set material.
@@ -71,26 +80,17 @@ public:
     //void SetOccluder(bool enable);
     ///// Set occludee flag for patches.
     //void SetOccludee(bool enable);
-    void HandleSceneUpdate(StringHash eventType, VariantMap& eventData);
     void Build();
-    void BuildAsync();
 
 private:
-    void BuildInternal(bool async);
-    void CreateChunks(int x, int y,  int z, unsigned size, Vector3 cameraPosition, Frustum frustrum, float viewDistance);
-    void AllocateAndSortVisibleChunks();
-    void SortLoadedChunks();
-	VoxelMap* GetLoadedVoxelMapFromCache(unsigned x, unsigned y, unsigned z);
+    void BuildInternal();
     VoxelChunk* FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z, VoxelMap* map);
     // Material.
     SharedPtr<Material> material_;
     // Voxel chunks.
-    PODVector<VoxelChunk*> loadedMeshes_;
-    PODVector<VoxelChunk*> buildQueue_;
     Vector<WeakPtr<VoxelChunk> > chunks_;
-    Vector<SharedPtr<VoxelMap> > voxelMaps_;
-    Vector3 lastBuildPosition;
-    Quaternion lastBuildRotation;
+    Vector<WeakPtr<VoxelMap> > voxelMaps_;
+    ResourceRefList voxelMapResourceRefList_;
     BoundingBox setBox;
     unsigned numChunksX;
     unsigned numChunksY;
@@ -98,8 +98,6 @@ private:
     unsigned chunkXStride;
     unsigned chunkZStride;
     unsigned numChunks;
-    unsigned maxInMemoryMeshPeak_;
-    unsigned maxInMemoryMesh_;
     Vector3 chunkSpacing_;
 };
 

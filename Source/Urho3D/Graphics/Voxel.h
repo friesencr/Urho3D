@@ -20,27 +20,6 @@ struct VoxelRGB {
     unsigned char b;
 };
 
-class VoxelMapData : public RefCounted {
-public:
-	PODVector<unsigned char> blocktype;
-	PODVector<unsigned char> overlay;
-	PODVector<unsigned char> color;
-	PODVector<unsigned char> color2;
-	PODVector<unsigned char> color2Facemask;
-	PODVector<unsigned char> color3;
-	PODVector<unsigned char> color3Facemask;
-	PODVector<unsigned char> extendedColor;
-	PODVector<unsigned char> eColor;
-	PODVector<unsigned char> eColorFaceMask;
-	PODVector<unsigned char> geometry;
-	PODVector<unsigned char> vHeight;
-	PODVector<unsigned char> lighting;
-	PODVector<unsigned char> rotate;
-	PODVector<unsigned char> tex2;
-	PODVector<unsigned char> tex2Replace;
-	PODVector<unsigned char> tex2Facemask;
-};
-
 struct VoxelProcessorWriters;
 typedef void(*VoxelProcessorFunc)(VoxelChunk* chunk, VoxelMap* source, VoxelProcessorWriters writers);
 
@@ -123,13 +102,13 @@ unsigned char VoxelEncodeVHeight(VoxelHeight southWest, VoxelHeight southEast, V
 
 unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot, VoxelHeight height);
 
-unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot);
+//unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot);
+//
+//unsigned char VoxelEncodeGeometry(VoxelGeometry geometry);
 
-unsigned char VoxelEncodeGeometry(VoxelGeometry geometry);
-
-unsigned char VoxelEncodeFaceMask(bool east, bool north, bool west, bool south, bool up, bool down);
-
-unsigned char VoxelEncodeSideTextureSwap(unsigned char block, unsigned char overlay, unsigned char ecolor);
+//unsigned char VoxelEncodeFaceMask(bool east, bool north, bool west, bool south, bool up, bool down);
+//
+//unsigned char VoxelEncodeSideTextureSwap(unsigned char block, unsigned char overlay, unsigned char ecolor);
 
 class URHO3D_API VoxelColorPalette : public Resource {
     OBJECT(VoxelColorPalette);
@@ -246,24 +225,24 @@ class URHO3D_API VoxelWriter
 {
 public:
     unsigned size;
-    unsigned xStride;
-    unsigned zStride;
+    unsigned strideX;
+    unsigned strideZ;
     unsigned char* buffer;
 
     VoxelWriter() :
         size(0),
-        xStride(0),
-        zStride(0)
+        strideX(0),
+        strideZ(0)
     {
 
     }
     
-    inline unsigned GetIndex(int x, int y, int z) { return (y + 2) + ((z + 2) * zStride) + ((x + 2) * xStride); }
+    inline unsigned GetIndex(int x, int y, int z) { return (y + 2) + ((z + 2) * strideZ) + ((x + 2) * strideX); }
 
     void SetSize(unsigned width, unsigned height, unsigned depth)
     {
-        zStride = height + 4;
-        xStride = (height + 4) * (depth + 4);
+        strideZ = height + 4;
+        strideX = (height + 4) * (depth + 4);
         size = (width + 4)*(height + 4)*(depth + 4);
     }
 
@@ -307,19 +286,44 @@ public:
         buffer[GetIndex(x, y, z)] = val;
     }
 
-    inline void SetGeometry(int x, int y, int z, VoxelGeometry geometry)
+    inline void SetGeometry(int x, int y, int z, VoxelGeometry geometry, VoxelRotation rotation, VoxelHeight height)
     {
-        buffer[GetIndex(x, y, z)] = VoxelEncodeGeometry(geometry);
+        buffer[GetIndex(x, y, z)] = VoxelEncodeGeometry(geometry, rotation, height);
     }
 };
 
-class URHO3D_API VoxelMap : public Serializable {
+class URHO3D_API VoxelMap : public Resource {
     OBJECT(VoxelMap);
     friend class VoxelBuilder;
-    static const unsigned MAX_LOADED_MAPS = 200;
     static const unsigned NUM_BASIC_STREAMS = 17;
 private:
-	WeakPtr<VoxelMapData> voxelMapData_;
+    unsigned dataMask_;
+    unsigned processorDataMask_;
+    unsigned height_;
+    unsigned width_;
+    unsigned depth_;
+    unsigned size_;
+    unsigned strideX;
+    unsigned strideZ;
+    String loadVoxelBlocktypeMap_;
+    Vector<VoxelProcessorFunc> voxelProcessors_;
+    PODVector<unsigned char> blocktype;
+    PODVector<unsigned char> overlay;
+    PODVector<unsigned char> color;
+    PODVector<unsigned char> color2;
+    PODVector<unsigned char> color2Facemask;
+    PODVector<unsigned char> color3;
+    PODVector<unsigned char> color3Facemask;
+    PODVector<unsigned char> extendedColor;
+    PODVector<unsigned char> eColor;
+    PODVector<unsigned char> eColorFaceMask;
+    PODVector<unsigned char> geometry;
+    PODVector<unsigned char> vHeight;
+    PODVector<unsigned char> lighting;
+    PODVector<unsigned char> rotate;
+    PODVector<unsigned char> tex2;
+    PODVector<unsigned char> tex2Replace;
+    PODVector<unsigned char> tex2Facemask;
 
 public:
     SharedPtr<VoxelBlocktypeMap> blocktypeMap;
@@ -327,18 +331,7 @@ public:
     SharedPtr<VoxelOverlayMap> overlayMap;
     SharedPtr<VoxelColorPalette> colorPalette;
 
-    unsigned dataMask_;
-    unsigned processorDataMask_;
-    unsigned height_;
-    unsigned width_;
-    unsigned depth_;
-    unsigned size_;
-    unsigned xStride;
-    unsigned zStride;
-	unsigned char dataSourceType;
-    Vector<VoxelProcessorFunc> voxelProcessors_;
-    ResourceRef resourceRef_;
-    Generator generator_;
+    unsigned char dataSourceType;
 
     /// Construct empty.
     VoxelMap(Context* context);
@@ -349,36 +342,39 @@ public:
     /// Register object factory.
     static void RegisterObject(Context* context);
 
-    virtual bool Load(Deserializer& source);
-
     /// Load resource from stream. May be called from a worker thread. Return true if successful.
     virtual bool BeginLoad(Deserializer& source);
+
+    virtual bool EndLoad();
 
     /// Saves voxel map information.
     virtual bool Save(Serializer& dest);
 
-    /// Unloads block information from memory.
-    virtual void Unload();
-
-    /// Reloads the voxel map if source is available.
-    virtual bool Reload(bool force=false);
-
-    /// See if voxel map is loaded into memory.
-    virtual bool IsLoaded();
-
-    /// Sets the data source to a generator
-    virtual void SetSource(Generator generator);
-
-    /// Sets the data source to a resource reference
-    virtual void SetSource(ResourceRef resourceRef);
+    /// Sets the block type data mask.
+    void SetDataMask(unsigned dataMask) { dataMask_ = dataMask; }
 
     /// Sets the block type data mask.
-    virtual void SetDataMask(unsigned dataMask) { dataMask_ = dataMask; }
+    void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
 
-    /// Sets the block type data mask.
-    virtual void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
+    /// Sets the blocktype map attribute
+    void SetBlocktypeMap(VoxelBlocktypeMap*);
+    
+    /// Sets the blocktype map attribute
+    void SetBlocktypeMapAttr(const ResourceRef&);
 
-    inline unsigned GetIndex(int x, int y, int z) { return (y + 2) + ((z + 2) * zStride) + ((x + 2) * xStride); }
+    /// Gets the blocktype map attribute
+    ResourceRef GetBlocktypeMapAttr() const;
+
+    unsigned GetHeight() const { return height_; }
+    unsigned GetWidth() const { return width_; }
+    unsigned GetDepth() const { return depth_; }
+    unsigned GetSize() const { return size_; }
+    unsigned GetDataMask() const { return dataMask_; }
+    unsigned GetProcessorDataMask() const { return processorDataMask_; }
+    unsigned GetStrideX() const { return strideX; }
+    unsigned GetStrideZ() const { return strideZ; }
+
+    inline unsigned GetIndex(int x, int y, int z) const { return (y + 2) + ((z + 2) * strideZ) + ((x + 2) * strideX); }
     void SetSize(unsigned width, unsigned height, unsigned depth);
     void InitializeBlocktype(unsigned char initialValue = 0);
     void InitializeVHeight(unsigned char initialValue = 0);
@@ -393,94 +389,93 @@ public:
 
     void RemoveVoxelProcessor(unsigned index) { voxelProcessors_.Erase(index); }
 
-	PODVector<unsigned char>* GetBlocktype() const { return &voxelMapData_->blocktype; }
-	PODVector<unsigned char>* GetOverlay() const { return &voxelMapData_->overlay; }
-	PODVector<unsigned char>* GetColor() const { return &voxelMapData_->color; }
-	PODVector<unsigned char>* GetColor2() const { return &voxelMapData_->color2; }
-	PODVector<unsigned char>* GetColor2Facemask() const { return &voxelMapData_->color2Facemask; }
-	PODVector<unsigned char>* GetColor3() const { return &voxelMapData_->color3; }
-	PODVector<unsigned char>* GetColor3Facemask() const { return &voxelMapData_->color3Facemask; }
-	PODVector<unsigned char>* GetExtendedColor() const { return &voxelMapData_->extendedColor; }
-	PODVector<unsigned char>* GetEColor() const { return &voxelMapData_->eColor; }
-	PODVector<unsigned char>* GetEColorFaceMask() const { return &voxelMapData_->eColorFaceMask; }
-	PODVector<unsigned char>* GetGeometry() const { return &voxelMapData_->geometry; }
-	PODVector<unsigned char>* GetVHeight() const { return &voxelMapData_->vHeight; }
-	PODVector<unsigned char>* GetLighting() const { return &voxelMapData_->lighting; }
-	PODVector<unsigned char>* GetRotate() const { return &voxelMapData_->rotate; }
-	PODVector<unsigned char>* GetTex2() const { return &voxelMapData_->tex2; }
-	PODVector<unsigned char>* GetTex2Replace() const { return &voxelMapData_->tex2Facemask; }
-	PODVector<unsigned char>* GetTex2Facemask() const { return &voxelMapData_->tex2Replace; }
+    unsigned char GetBlocktype(int x, int y, int z) const { return blocktype[GetIndex(x,y,z)]; }
+    unsigned char GetOverlay(int x, int y, int z) const { return overlay[GetIndex(x,y,z)]; }
+    unsigned char GetColor(int x, int y, int z) const { return color[GetIndex(x,y,z)]; }
+    unsigned char GetColor2(int x, int y, int z) const { return color2[GetIndex(x,y,z)]; }
+    unsigned char GetColor2Facemask(int x, int y, int z) const { return color2Facemask[GetIndex(x,y,z)]; }
+    unsigned char GetColor3(int x, int y, int z) const { return color3[GetIndex(x,y,z)]; }
+    unsigned char GetColor3Facemask(int x, int y, int z)  const { return color3Facemask[GetIndex(x,y,z)]; }
+    unsigned char GetExtendedColor(int x, int y, int z)  const { return extendedColor[GetIndex(x,y,z)]; }
+    unsigned char GetEColor(int x, int y, int z)  const { return eColor[GetIndex(x,y,z)]; }
+    unsigned char GetEColorFaceMask(int x, int y, int z)  const { return eColorFaceMask[GetIndex(x,y,z)]; }
+    unsigned char GetGeometry(int x, int y, int z)  const { return geometry[GetIndex(x,y,z)]; }
+    unsigned char GetVHeight(int x, int y, int z)  const { return vHeight[GetIndex(x,y,z)]; }
+    unsigned char GetLighting(int x, int y, int z)  const { return lighting[GetIndex(x,y,z)]; }
+    unsigned char GetRotate(int x, int y, int z)  const { return rotate[GetIndex(x,y,z)]; }
+    unsigned char GetTex2(int x, int y, int z)  const { return tex2[GetIndex(x,y,z)]; }
+    unsigned char GetTex2Replace(int x, int y, int z)  const { return tex2Facemask[GetIndex(x,y,z)]; }
+    unsigned char GetTex2Facemask(int x, int y, int z)  const { return tex2Replace[GetIndex(x,y,z)]; }
 
-	unsigned char* GetBlocktypeRaw() const { return &voxelMapData_->blocktype.Front(); }
-	unsigned char* GetOverlayRaw() const { return &voxelMapData_->overlay.Front(); }
-	unsigned char* GetColorRaw() const { return &voxelMapData_->color.Front(); }
-	unsigned char* GetColor2Raw() const { return &voxelMapData_->color2.Front(); }
-	unsigned char* GetColor2FacemaskRaw() const { return &voxelMapData_->color2Facemask.Front(); }
-	unsigned char* GetColor3Raw() const { return &voxelMapData_->color3.Front(); }
-	unsigned char* GetColor3FacemaskRaw() const { return &voxelMapData_->color3Facemask.Front(); }
-	unsigned char* GetExtendedColorRaw() const { return &voxelMapData_->extendedColor.Front(); }
-	unsigned char* GetEColorRaw() const { return &voxelMapData_->eColor.Front(); }
-	unsigned char* GetEColorFaceMaskRaw() const { return &voxelMapData_->eColorFaceMask.Front(); }
-	unsigned char* GetGeometryRaw() const { return &voxelMapData_->geometry.Front(); }
-	unsigned char* GetVHeightRaw() const { return &voxelMapData_->vHeight.Front(); }
-	unsigned char* GetLightingRaw() const { return &voxelMapData_->lighting.Front(); }
-	unsigned char* GetRotateRaw() const { return &voxelMapData_->rotate.Front(); }
-	unsigned char* GetTex2Raw() const { return &voxelMapData_->tex2.Front(); }
-	unsigned char* GetTex2ReplaceRaw() const { return &voxelMapData_->tex2Facemask.Front(); }
-	unsigned char* GetTex2FacemaskRaw() const { return &voxelMapData_->tex2Replace.Front(); }
-
+    const PODVector<unsigned char>& GetBlocktypeData() const { return blocktype; }
+    const PODVector<unsigned char>& GetOverlayData() const { return overlay; }
+    const PODVector<unsigned char>& GetColorData() const { return color; }
+    const PODVector<unsigned char>& GetColor2Data() const { return color2; }
+    const PODVector<unsigned char>& GetColor2FacemaskData() const { return color2Facemask; }
+    const PODVector<unsigned char>& GetColor3Data() const { return color3; }
+    const PODVector<unsigned char>& GetColor3FacemaskData() const { return color3Facemask; }
+    const PODVector<unsigned char>& GetExtendedColorData() const { return extendedColor; }
+    const PODVector<unsigned char>& GetEColorData() const { return eColor; }
+    const PODVector<unsigned char>& GetEColorFaceMaskData() const { return eColorFaceMask; }
+    const PODVector<unsigned char>& GetGeometryData() const { return geometry; }
+    const PODVector<unsigned char>& GetVHeightData() const { return vHeight; }
+    const PODVector<unsigned char>& GetLightingData() const { return lighting; }
+    const PODVector<unsigned char>& GetRotateData() const { return rotate; }
+    const PODVector<unsigned char>& GetTex2Data() const { return tex2; }
+    const PODVector<unsigned char>& GetTex2ReplaceData() const { return tex2Facemask; }
+    const PODVector<unsigned char>& GetTex2FacemaskData() const { return tex2Replace; }
 
     inline void SetColor(int x, int y, int z, unsigned char val)
     {
-        voxelMapData_->color[GetIndex(x, y, z)] = val;
+        color[GetIndex(x, y, z)] = val;
     }
 
     inline void SetBlocktype(int x, int y, int z, unsigned char val)
     {
-        voxelMapData_->blocktype[GetIndex(x, y, z)] = val;
+        blocktype[GetIndex(x, y, z)] = val;
     }
 
     inline void SetVheight(int x, int y, int z, VoxelHeight sw, VoxelHeight se, VoxelHeight nw, VoxelHeight ne)
     {
-        voxelMapData_->vHeight[GetIndex(x, y, z)] = VoxelEncodeVHeight(sw, se, nw, ne);
+        vHeight[GetIndex(x, y, z)] = VoxelEncodeVHeight(sw, se, nw, ne);
     }
 
     inline void SetLighting(int x, int y, int z, unsigned char val)
     {
-        voxelMapData_->lighting[GetIndex(x, y, z)] = val;
+        lighting[GetIndex(x, y, z)] = val;
     }
 
     inline void SetTex2(int x, int y, int z, unsigned char val)
     {
-        voxelMapData_->tex2[GetIndex(x, y, z)] = val;
+        tex2[GetIndex(x, y, z)] = val;
     }
 
-    inline void SetGeometry(int x, int y, int z, VoxelGeometry voxelGeometry)
+    inline void SetGeometry(int x, int y, int z, VoxelGeometry voxelGeometry, VoxelRotation rotation, VoxelHeight height)
     {
-        voxelMapData_->geometry[GetIndex(x, y, z)] = VoxelEncodeGeometry(voxelGeometry);
+        geometry[GetIndex(x, y, z)] = VoxelEncodeGeometry(voxelGeometry, rotation, height);
     }
 
 private:
 
     void GetBasicDataArrays(PODVector<unsigned char>** datas)
     {
-            datas[0] = &voxelMapData_->blocktype;
-            datas[1] = &voxelMapData_->color2;
-            datas[2] = &voxelMapData_->color2Facemask;
-            datas[3] = &voxelMapData_->color3;
-            datas[4] = &voxelMapData_->color3Facemask;
-            datas[5] = &voxelMapData_->color;
-            datas[6] = &voxelMapData_->eColor;
-            datas[7] = &voxelMapData_->eColorFaceMask;
-            datas[8] = &voxelMapData_->extendedColor;
-            datas[9] = &voxelMapData_->geometry;
-            datas[10] = &voxelMapData_->lighting;
-            datas[11] = &voxelMapData_->overlay;
-            datas[12] = &voxelMapData_->rotate;
-            datas[13] = &voxelMapData_->tex2;
-            datas[14] = &voxelMapData_->tex2Facemask;
-            datas[15] = &voxelMapData_->tex2Replace;
-            datas[16] = &voxelMapData_->vHeight;
+	datas[0] = &blocktype;
+	datas[1] = &color2;
+	datas[2] = &color2Facemask;
+	datas[3] = &color3;
+	datas[4] = &color3Facemask;
+	datas[5] = &color;
+	datas[6] = &eColor;
+	datas[7] = &eColorFaceMask;
+	datas[8] = &extendedColor;
+	datas[9] = &geometry;
+	datas[10] = &lighting;
+	datas[11] = &overlay;
+	datas[12] = &rotate;
+	datas[13] = &tex2;
+	datas[14] = &tex2Facemask;
+	datas[15] = &tex2Replace;
+	datas[16] = &vHeight;
     }
 };
 

@@ -366,13 +366,18 @@ void BuildWorkloadHandler(const WorkItem* workItem, unsigned threadIndex)
     workload->builder->BuildWorkload(workload);
 }
 
-VoxelJob* VoxelBuilder::BuildVoxelChunk(SharedPtr<VoxelChunk> chunk, bool async)
+VoxelJob* VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, bool async)
 {
-    if (chunk.Null())
+    return BuildVoxelChunk(chunk, voxelMap, 0, 0, 0, 0, async);
+}
+
+VoxelJob* VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, VoxelMap* northMap, 
+    VoxelMap* southMap, VoxelMap* eastMap, VoxelMap* westMap, bool async)
+{
+    if (!chunk)
         return 0;
 
-    SharedPtr<VoxelMap> voxelMap(chunk->GetVoxelMap());
-    if (voxelMap.Null())
+    if (!voxelMap)
         return 0;
 
     unsigned char width = voxelMap->width_;
@@ -383,6 +388,11 @@ VoxelJob* VoxelBuilder::BuildVoxelChunk(SharedPtr<VoxelChunk> chunk, bool async)
         return 0;
 
     VoxelJob* job = CreateJob(chunk);
+    job->voxelMap = voxelMap;
+    job->northMap = northMap;
+    job->southMap = southMap;
+    job->eastMap = eastMap;
+    job->westMap = westMap;
 	RunJobs(async);
 	if (!async)
 		CompleteWork();
@@ -438,6 +448,7 @@ VoxelJob* VoxelBuilder::CreateJob(VoxelChunk* chunk)
 {
     VoxelJob* job = new VoxelJob();
     job->chunk = chunk;
+    chunk->voxelJob_ = job;
     job->slot = 0;
     jobs_.Push(job);
     return job;
@@ -447,40 +458,22 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
 {
     WorkQueue* workQueue = GetSubsystem<WorkQueue>();
     VoxelWorkSlot* slot = &slots_[job->slot];
-    VoxelMap* voxelMap = job->chunk->GetVoxelMap();
+    VoxelMap* voxelMap = job->voxelMap;
     VoxelChunk* chunk = job->chunk;
 
     // Copy adjacent data
     {
-        VoxelMap* northMap = chunk->GetNeighborNorth();
-        VoxelMap* southMap = chunk->GetNeighborSouth();
-        VoxelMap* eastMap = chunk->GetNeighborEast();
-        VoxelMap* westMap = chunk->GetNeighborWest();
-
         const int MAP_NORTH = 0;
         const int MAP_SOUTH = 1;
         const int MAP_EAST = 2;
         const int MAP_WEST = 3;
-        VoxelMap* maps[4] = { northMap, southMap, eastMap, westMap };
+        VoxelMap* maps[4] = { job->northMap, job->southMap, job->eastMap, job->westMap };
 		for (unsigned m = 0; m < 4; ++m)
 		{
 			VoxelMap* srcMap = maps[m];
 
 			if (!srcMap)
 				continue;
-
-			if (!srcMap->Reload())
-			{
-				LOGERROR("Couldn't load neighbor voxel map information");
-				continue;
-			}
-
-			if (!voxelMap->Reload())
-			{
-				LOGERROR("Couldn't load voxel map information");
-				slot->failed = true;
-				return;
-			}
 
 			PODVector<unsigned char>* srcDatas[VoxelMap::NUM_BASIC_STREAMS];
 			PODVector<unsigned char>* destDatas[VoxelMap::NUM_BASIC_STREAMS];
@@ -669,11 +662,11 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
     VoxelWorkSlot* slot = &slots_[workload->slot];
     VoxelJob* job = slot->job;
     VoxelChunk* chunk = job->chunk;
-    VoxelMap* voxelMap = chunk->GetVoxelMap();
+    VoxelMap* voxelMap = job->voxelMap;
     VoxelBlocktypeMap* voxelBlocktypeMap = voxelMap->blocktypeMap;
 
     stbvox_mesh_maker* mm = &slot->meshMakers[workload->workloadIndex];
-    stbvox_set_input_stride(mm, voxelMap->xStride, voxelMap->zStride);
+    stbvox_set_input_stride(mm, voxelMap->GetStrideX(), voxelMap->GetStrideZ());
 
     stbvox_input_description *stbvox_map;
     stbvox_map = stbvox_get_input_description(mm);
@@ -691,7 +684,7 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
 
     // Set voxel maps for stb voxel
     int zero = voxelMap->GetIndex(0, 0, 0);
-	stbvox_map->blocktype = &voxelMap->GetBlocktypeRaw()[zero];
+	stbvox_map->blocktype = &voxelMap->blocktype[zero];
 	//stbvox_map->vheight = voxelMap->GetVHeight()->Empty() ? 0 : &voxelMap->GetVHeight()->Front();
 	//stbvox_map->color = voxelMap->GetColor()->Empty() ? 0 : &voxelMap->GetColor()->Front();
 	//stbvox_map->geometry = voxelMap->GetGeometry()->Empty() ? 0 : &voxelMap->GetGeometry()->Front();

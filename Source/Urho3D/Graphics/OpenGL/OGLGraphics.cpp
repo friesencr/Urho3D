@@ -60,8 +60,10 @@
 #include "../../Graphics/TextureCube.h"
 #include "../../Graphics/VertexBuffer.h"
 #include "../../Graphics/Zone.h"
+#include "../../Graphics/Voxel.h"
 #include "../../Graphics/VoxelSet.h"
 #include "../../Graphics/VoxelChunk.h"
+#include "../../Graphics/VoxelStreamer.h"
 #include "../../IO/File.h"
 #include "../../IO/Log.h"
 #include "../../Resource/ResourceCache.h"
@@ -3380,8 +3382,9 @@ void RegisterGraphicsLibrary(Context* context)
     DebugRenderer::RegisterObject(context);
     Octree::RegisterObject(context);
     Zone::RegisterObject(context);
-	VoxelSet::RegisterObject(context);
-	VoxelChunk::RegisterObject(context);
+    VoxelSet::RegisterObject(context);
+    VoxelChunk::RegisterObject(context);
+    VoxelStreamer::RegisterObject(context);
     VoxelBlocktypeMap::RegisterObject(context);
     VoxelOverlayMap::RegisterObject(context);
     VoxelTextureMap::RegisterObject(context);

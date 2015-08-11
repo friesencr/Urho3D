@@ -52,9 +52,6 @@
 
 #include "VoxelWorld.h"
 
-#define STB_PERLIN_IMPLEMENTATION
-#include "stb_perlin.h"
-
 #include <Urho3D/DebugNew.h>
 
 //#define SMOOTH_TERRAIN
@@ -63,291 +60,15 @@
 
 DEFINE_APPLICATION_MAIN(VoxelWorld)
 
-static Context* global_context_;
-
-static const int h = 128;
-static const int w = 64;
-static const int d = 64;
-static const int WORKLOAD_SIZE_X = 16;
-static const int WORKLOAD_SIZE_Z = 16;
-static const int WORKLOAD_NUM_X = 4;
-static const int WORKLOAD_NUM_Z = 4;
-static const int CHUNKS_X = 256;
-static const int CHUNKS_Z = 256;
-
-// spoofing a VoxelMap load
-// uint height, uint width, uint depth, unit datamask
-static const unsigned chunkHeader[4] = { w, h, d, VOXEL_BLOCK_BLOCKTYPE };
-static const unsigned headerSize = sizeof(chunkHeader);
-static const unsigned dataSize = (h + 4) * (w + 4) * (d + 4);
-//static const unsigned podsize = dataSize + 4;
-static const unsigned generatorSize = headerSize + dataSize;
-
-float noiseFactors[10] = {
-    1.0, 1.0, 1.0, 0.3,
-    0.3, 0.4, 0.7, 1.0,
-    1.0, 1.0
-};
-
-static void AOVoxelLighting(VoxelChunk* chunk, VoxelMap* src, VoxelProcessorWriters writers)
-{
-    unsigned char* bt = 0;
-    const int xStride = src->xStride;
-    const int zStride = src->zStride;
-
-    for (int x = -1; x < (int)src->width_+1; x++)
-    {
-        for (int z = -1; z < (int)src->depth_+1; z++)
-        {
-            for (int y = -1; y < (int)src->height_+1; y++)
-            {
-                int index = src->GetIndex(x, y, z);
-                bt = &src->GetBlocktype()->At(index);
-
-#ifdef SMOOTH_TERRAIN
-                if (bt[0] > 0)
-                {
-                    if (bt[1] == 0)
-                    {
-                        VoxelHeight scores[4] = { VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0, VOXEL_HEIGHT_0 };
-                        int corners[4] = { -xStride - zStride, xStride - zStride, -xStride + zStride, xStride + zStride };
-                        unsigned checks[4][6] = {
-                            { zStride, zStride+1, 0, 1, xStride, xStride+1 },
-                            { zStride, zStride+1, 0, 1, -xStride, -xStride+1 },
-                            { -zStride, -zStride+1, 0, 1, xStride, xStride+1 },
-                            { -zStride, -zStride+1, 0, 1, -xStride, -xStride+1 }
-                        };
-                        //int checks[4][3] = {
-                        //    { zStride+1, 1, xStride+1 },
-                        //    { zStride+1, 1, -xStride+1 },
-                        //    { -zStride+1, 1, xStride+1 },
-                        //    { -zStride+1, 1, -xStride+1 }
-                        //};
-
-                        unsigned score = 0;
-                        for (unsigned i = 0; i < 4; ++i)
-                        {
-                            for (unsigned j = 0; j < 6; ++j)
-                            {
-                                score += bt[corners[i] + checks[i][j]] > 0;
-                            }
-                            scores[i] = (VoxelHeight)(unsigned)(score/6);
-                        }
-                        writers.geometry.buffer[index] = VoxelEncodeGeometry(VOXEL_TYPE_FLOOR_VHEIGHT_03);
-                        writers.vHeight.buffer[index] = VoxelEncodeVHeight(scores[0], scores[1], scores[2], scores[3]);
-                    }
-                    //else if (bt[-1] == 0)
-                    //{
-                    //    //writers.geometry.buffer[index] = VoxelEncodeGeometry(x*z % 2 == 0 ? VOXEL_TYPE_CEIL_VHEIGHT_03 : VOXEL_TYPE_CEIL_VHEIGHT_12);
-                    //    writers.geometry.buffer[index] = VoxelEncodeGeometry(VOXEL_TYPE_CEIL_VHEIGHT_03);
-                    //    writers.vHeight.buffer[index] = VoxelEncodeVHeight(
-                    //        (bt[-xStride - zStride - 1] > 0) ? VOXEL_HEIGHT_1 : VOXEL_HEIGHT_0,   // sw
-                    //        (bt[xStride - zStride - 1] > 0) ? VOXEL_HEIGHT_1 : VOXEL_HEIGHT_0,    // se
-                    //        (bt[-xStride + zStride - 1] > 0) ? VOXEL_HEIGHT_1 : VOXEL_HEIGHT_0,   // nw
-                    //        (bt[xStride + zStride - 1] > 0) ? VOXEL_HEIGHT_1 : VOXEL_HEIGHT_0    // ne
-                    //    );
-                    //}
-                    else
-                        writers.geometry.buffer[index] = VoxelEncodeGeometry(VOXEL_TYPE_SOLID);
-                }
-#endif
-                int light = 
-                    (bt[-xStride - zStride] == 0) +  // nw
-                    (bt[-zStride] == 0) +            // n
-                    (bt[xStride - zStride] == 0) +   // ne
-                    (bt[-xStride] == 0) +            // w
-                    (bt[0] == 0) +                   // origin
-                    (bt[xStride] == 0) +             // e
-                    (bt[-xStride + zStride] == 0) +  // sw
-                    (bt[zStride] == 0) +             // s
-                    (bt[xStride + zStride] == 0);    // se
-
-                writers.lighting.buffer[index - 1] += light * 255 / 27;
-                writers.lighting.buffer[index] += light * 255 / 27;
-                writers.lighting.buffer[index + 1] += light * 255 / 27;
-            }
-        }
-    }
-}
-
-struct TerrainWorkload
-{
-	unsigned chunkX;
-	unsigned chunkZ;
-	unsigned x;
-	unsigned z;
-	unsigned char* data;
-};
-
-void FillTerrainPerlinWorker(const WorkItem* workItem, unsigned threadIndex)
-{
-	TerrainWorkload* workload = (TerrainWorkload*)workItem->aux_;
-
-    VoxelWriter writer;
-    writer.SetSize(w, h, d);
-    writer.InitializeBuffer(workload->data);
-
-    int heightMap[WORKLOAD_SIZE_X][WORKLOAD_SIZE_Z];
-    float detailMap[WORKLOAD_SIZE_X][WORKLOAD_SIZE_Z];
-
-    // build the heightmap
-    for (unsigned x = 0; x < WORKLOAD_SIZE_X; ++x)
-    {
-        for (unsigned z = 0; z < WORKLOAD_SIZE_Z; ++z)
-        {
-            // detail noise
-            float dt = 0.0;
-            for (int o = 3; o < 5; ++o)
-            {
-                float scale = (float)(1 << o);
-                float ns = stb_perlin_noise3((x + workload->x + workload->chunkX) / scale, (z + workload->z + workload->chunkZ) / scale, (float)-o, 256, 256, 256);
-                dt += Abs(ns);
-            }
-
-            // low frequency
-            float ht = 0.0;
-            for (int o = 3; o < 9; ++o)
-            {
-                float scale = (float)(1 << o);
-                float ns = stb_perlin_noise3((x + workload->x + workload->chunkX) / scale, (z + workload->z + workload->chunkZ) / scale, (float)o, 256, 256, 256);
-                ht += ns * noiseFactors[o];
-            }
-
-            // biome
-            //float biome = stb_perlin_noise3((x + chunkX) / 2048, (z + chunkZ) / 2048, 32.0, 256, 256, 256);
-
-            int height = (int)((ht + 0.2) * 45.0) + 32;
-            heightMap[x][z] = Clamp(height, 1, 128); 
-            detailMap[x][z] = dt;
-        }
-    }
-
-    const int DEEP_WATER_BLOCK = 27;
-    const int WATER_BLOCK = 28;
-    const int DESERT_BLOCK = 44;
-    const int DIRT_BLOCK = 44;
-    const int GRASS_BLOCK = 36;
-    const int SLATE_BLOCK = 29;
-    const int FLOOR_BLOCK = 12;
-    const int SNOW_BLOCK = 5;
-    const int LIGHT_SNOW_BLOCK = 2;
-    const int WHITE_SNOW_BLOCK = 0;
-
-    const int FLOOR_HEIGHT = 10;
-    const int SLATE_HEIGHT = 20;
-    const int DIRT_HEIGHT = 30;
-    const int DESERT_HEIGHT = 45;
-    const int GRASS_HEIGHT = 70;
-    const int SNOW_HEIGHT = 90;
-    const int LIGHT_SNOW_HEIGHT = 105;
-    const int WHITE_SNOW_HEIGHT = 128;
-    const int WATER_HEIGHT = 30;
-
-    int blocks[8] = {FLOOR_BLOCK, SLATE_BLOCK, DIRT_BLOCK, DESERT_BLOCK, GRASS_BLOCK, SNOW_BLOCK, LIGHT_SNOW_BLOCK, WHITE_SNOW_BLOCK };
-    int heights[8] = {FLOOR_HEIGHT, SLATE_HEIGHT, DIRT_HEIGHT, DESERT_HEIGHT, GRASS_HEIGHT, SNOW_HEIGHT, LIGHT_SNOW_HEIGHT, WHITE_SNOW_HEIGHT };
-    int numBlocks = 8;
-
-    // fill block type data based on heightmap
-    for (unsigned x = 0; x < WORKLOAD_SIZE_X; ++x)
-    {
-        for (unsigned z = 0; z < WORKLOAD_SIZE_Z; ++z)
-        {
-            int height = heightMap[x][z];
-            float dt = detailMap[x][z];
-
-            for (unsigned i = 0; i < height; ++i)
-            {
-                int h = ((float)i * (dt/2.0 + 1.0));
-                int b = 0;
-                for (int bh = 0; bh < numBlocks - 1; ++bh)
-                {
-                    if (h < heights[bh])
-                    {
-                        b = bh;
-                        break;
-                    }
-                }
-                writer.SetBlocktype(x + workload->x, i, z + workload->z, blocks[b] + (dt > 0.5 ? 1 : 0));
-            }
-
-            if (height < WATER_HEIGHT)
-            {
-                for (unsigned i = 0; i < WATER_HEIGHT; ++i)
-                {
-                    if (height > WATER_HEIGHT - 5 && i > WATER_HEIGHT - 5)
-                        writer.SetBlocktype(x + workload->x, i, z + workload->z, WATER_BLOCK);
-                    else
-                        writer.SetBlocktype(x + workload->x, i, z + workload->z, DEEP_WATER_BLOCK +(dt > 0.7 ? 1 : 0));
-                }
-            }
-        }
-    }
-	delete workload;
-}
-
-static void FillTerrainPerlin(unsigned char* dataPtr, VariantMap& parameters, unsigned podIndex)
-{
-    unsigned tileX = parameters["TileX"].GetUInt();
-    unsigned tileZ = parameters["TileZ"].GetUInt();
-    unsigned chunkX = tileX * w;
-    unsigned chunkZ = tileZ * d;
-
-    VoxelWriter writer;
-    writer.SetSize(w, h, d);
-    writer.InitializeBuffer(dataPtr);
-    writer.Clear(0);
-
-	WorkQueue* queue = global_context_->GetSubsystem<WorkQueue>();
-	for (unsigned x = 0; x < WORKLOAD_NUM_X; ++x)
-	{
-		for (unsigned z = 0; z < WORKLOAD_NUM_Z; ++z)
-		{
-			SharedPtr<WorkItem> workItem(new WorkItem());
-			TerrainWorkload* workload = new TerrainWorkload();
-			workload->chunkX = chunkX;
-			workload->chunkZ = chunkZ;
-			workload->x = x * WORKLOAD_SIZE_X;
-			workload->z = z * WORKLOAD_SIZE_Z;
-			workload->data = dataPtr;
-			workItem->aux_ = workload;
-			workItem->priority_ = M_MAX_UNSIGNED;
-			workItem->workFunction_ = FillTerrainPerlinWorker;
-			queue->AddWorkItem(workItem);
-		}
-	}
-	queue->Complete(M_MAX_UNSIGNED);
-}
-
-static unsigned RandomTerrain(void* dest, unsigned size, unsigned position, VariantMap& parameters)
-{
-    if (position < headerSize)
-    {
-        unsigned* dataPtr = (unsigned*)dest;
-        *dataPtr++ = chunkHeader[position/4];
-        return 4;
-    }
-    else
-    {
-        unsigned podIndex = (position - headerSize) / dataSize;
-        unsigned char* dataPtr = (unsigned char*)dest;
-        FillTerrainPerlin(dataPtr, parameters, podIndex);
-        return size;
-    }
-    return 0;
-}
-
 VoxelWorld::VoxelWorld(Context* context) :
     Sample(context)
 {
     ProcSky::RegisterObject(context);
     counter_ = 0;
-	global_context_ = context;
 }
 
 void VoxelWorld::Start()
 {
-    Generator::RegisterGeneratorFunction("RandomTerrain", RandomTerrain);
-
     //Graphics* graphics = GetSubsystem<Graphics>();
     //IntVector2 resolution = graphics->GetResolutions()[0];
     //graphics->SetMode(1920, 1080, true, false, false, false, false, 2);
@@ -400,7 +121,7 @@ void VoxelWorld::CreateScene()
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
     cameraNode_ = scene_->CreateChild("Camera");
     Camera* camera = cameraNode_->CreateComponent<Camera>();
-    camera->SetFarClip(1400.0);
+    camera->SetFarClip(900.0);
 
     // Set an initial position for the camera scene node above the plane
     //cameraNode_->SetPosition(Vector3(1024.0, 128.0, 1024.0));
@@ -436,14 +157,14 @@ void VoxelWorld::CreateScene()
 
 
     voxelNode_ = scene_->CreateChild("VoxelNode");
-    voxelBlocktypeMap_ = new VoxelBlocktypeMap(context_);
-    voxelBlocktypeMap_->blockColor.Push(0);
-    for (unsigned i = 1; i < 64; ++i)
-        voxelBlocktypeMap_->blockColor.Push(i);
 
-    File file(context_);
-    if (file.Open("BlocktypeMap.bin", FILE_WRITE))
-        voxelBlocktypeMap_->Save(file);
+    VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
+    worldBuilder_ = new WorldBuilder(context_);
+    worldBuilder_->SetSize(64, 64);
+    worldBuilder_->SetVoxelSet(voxelSet);
+    worldBuilder_->ConfigureParameters();
+    //worldBuilder_->BuildWorld();
+    worldBuilder_->LoadWorld();
 
     //SharedPtr<Texture2DArray> texture(new Texture2DArray(context_));
     //Vector<SharedPtr<Image> > images;
@@ -456,64 +177,6 @@ void VoxelWorld::CreateScene()
 
     //voxelBlocktypeMap_->diffuse1Textures = texture;
 
-    unsigned numX = CHUNKS_X;
-    unsigned numZ = CHUNKS_Z;
-    VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
-    voxelSet->SetNumberOfChunks(numX, 1, numZ);
-    for (unsigned x = 0; x < numX; ++x)
-    {
-        for (unsigned z = 0; z < numZ; ++z)
-        {
-            VoxelMap* map = new VoxelMap(context_);
-            map->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
-            map->SetSize(w, h, d);
-            map->blocktypeMap = voxelBlocktypeMap_;
-#ifdef LOAD_FILE_MAPS
-			String name = "VoxelMap" + String(x) + "_" + String(z) + ".bin";
-			ResourceRef ref = ResourceRef(File::GetTypeStatic(), name);
-			map->SetSource(ref);
-#else
-			Generator terrainGenerator;
-            terrainGenerator.SetSize(generatorSize);
-            terrainGenerator.SetName("RandomTerrain");
-            VariantMap params;
-            params["TileX"] = x;
-            params["TileZ"] = z;
-            terrainGenerator.SetParameters(params);
-            map->SetSource(terrainGenerator);
-#endif
-
-            //map->AddVoxelProcessor(AOVoxelLighting);
-#ifdef SMOOTH_TERRAIN
-            map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING | VOXEL_BLOCK_GEOMETRY | VOXEL_BLOCK_VHEIGHT);
-#else
-            //map->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
-#endif
-            voxelSet->SetVoxelMap(x, 0, z, map);
-        }
-    }
-    voxelSet->BuildAsync();
-
-#ifdef SAVE_FILE_MAPS
-	for (unsigned x = 0; x < numX; ++x)
-	{
-		for (unsigned z = 0; z < numZ; ++z)
-		{
-			VoxelMap* map = voxelSet->GetVoxelMap(x, 0, z);
-			File file(context_);
-			if (file.Open("VoxelMap" + String(x) + "_" + String(z) + ".bin", FILE_WRITE))
-				map->Save(file);
-		}
-	}
-#endif
-
-    //   Node* spotNode = cameraNode_->CreateChild("PointLight");
-    //   spotNode->SetPosition(Vector3(0.0, -15.0, 0.0));
-    //   Light* spotLight = spotNode->CreateComponent<Light>();
-    //   spotLight->SetLightType(LIGHT_POINT);
-    //   spotLight->SetCastShadows(true);
-    //   spotLight->SetRange(100.0);
-    //spotLight->SetBrightness(0.7);
 }
 
 void VoxelWorld::CreateInstructions()
@@ -589,8 +252,8 @@ void VoxelWorld::MoveCamera(float timeStep)
         cameraNode_->Translate(Vector3::RIGHT * MOVE_SPEED * timeStep);
 
     VoxelSet* voxelSet = voxelNode_->GetComponent<VoxelSet>();
-    if (voxelSet)
-        cameraPositionText_->SetText(String(voxelSet->GetNumberOfLoadedChunks()));
+    //if (voxelSet)
+    //    cameraPositionText_->SetText(String(voxelSet->GetNumberOfLoadedChunks()));
 
     // Toggle physics debug geometry with space
     if (input->GetKeyPress(KEY_SPACE))

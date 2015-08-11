@@ -38,6 +38,11 @@ struct VoxelWorkload;
 
 struct VoxelJob {
     SharedPtr<VoxelChunk> chunk;
+    SharedPtr<VoxelMap> voxelMap;
+    SharedPtr<VoxelMap> northMap;
+    SharedPtr<VoxelMap> southMap;
+    SharedPtr<VoxelMap> eastMap;
+    SharedPtr<VoxelMap> westMap;
 	unsigned slot;
 };
 
@@ -84,7 +89,8 @@ class URHO3D_API VoxelBuilder : public Object {
 public:
     VoxelBuilder(Context* context);
     ~VoxelBuilder();
-    VoxelJob* BuildVoxelChunk(SharedPtr<VoxelChunk> chunk, bool async = false);
+    VoxelJob* BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, bool async = false);
+    VoxelJob* BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, VoxelMap* northMap, VoxelMap* southMap, VoxelMap* eastMap, VoxelMap* westMap, bool async = false);
     // needs to be public for work item work method
     void BuildWorkload(VoxelWorkload* workload);
     void CompleteWork(unsigned = M_MAX_UNSIGNED);

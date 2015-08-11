@@ -52,18 +52,6 @@ class URHO3D_API VoxelChunk : public Drawable
     /// Set mesh selector material.
     Material* GetMaterial(unsigned selector) const;
 
-    /// Gets the voxel definition
-    VoxelMap* GetVoxelMap() const;
-
-    /// Sets the voxel definition
-    void SetVoxelMap(VoxelMap* voxelMap);
-
-	/// Get chunk voxel set
-	VoxelSet* GetVoxelSet() const { return voxelSet_;  }
-
-    /// Set chunk voxel set.
-    void SetVoxelSet(VoxelSet* voxelSet);
-
     /// Set material by mesh selector.
     void SetMaterial(unsigned selector, Material* material);
 
@@ -72,14 +60,6 @@ class URHO3D_API VoxelChunk : public Drawable
 
     void SetNumberOfMeshes(unsigned count);
 
-    bool Build();
-    bool BuildAsync();
-    void Unload();
-    void UnloadMesh();
-    void UnloadMap();
-    bool Reload(bool async = false);
-	bool GetKeepVoxelData() const { return keepVoxelData_; }
-	void SetKeepVoxelData(bool keepVoxelData) { keepVoxelData_ = keepVoxelData; }
 	unsigned GetNumMeshes() const { return numMeshes_; }
 	unsigned GetTotalQuads() const;
 	unsigned GetNumQuads(unsigned index) const { return numQuads_[index]; }
@@ -92,20 +72,16 @@ class URHO3D_API VoxelChunk : public Drawable
     unsigned char GetSizeZ();
     void SetIndex(unsigned char x, unsigned char y, unsigned char z);
     void SetSize(unsigned char x, unsigned char y, unsigned char z);
-    void SetNeighbors(VoxelMap* north, VoxelMap* south, VoxelMap* east, VoxelMap* west);
-    VoxelMap* GetNeighborNorth() const;
-    VoxelMap* GetNeighborSouth() const;
-    VoxelMap* GetNeighborEast() const;
-    VoxelMap* GetNeighborWest() const;
     float GetBuildPriority() const { return buildPrioirty_; }
     float GetBuildVisible() const { return buildVisible_; }
+    bool Build(VoxelMap* voxelMap, VoxelMap* northMap, VoxelMap* southMap, VoxelMap* eastMap, VoxelMap* westMap);
 
 protected:
     /// Recalculate the world-space bounding box.
     virtual void OnWorldBoundingBoxUpdate();
 
 private:
-    void UpdateMaterialParameters(unsigned slot);
+    void UpdateMaterialParameters(unsigned slot, VoxelMap* voxelMap);
     bool BuildInternal(bool async);
     void OnVoxelChunkCreated();
     // Voxel chunk geometry
@@ -113,16 +89,11 @@ private:
     unsigned char size_[3];
     float buildPrioirty_;
     bool buildVisible_;
-	bool keepVoxelData_;
     unsigned numMeshes_;
-    VoxelJob* buildJob_;
-    WeakPtr<VoxelSet> voxelSet_;
-    WeakPtr<VoxelMap> neighborNorth_;
-    WeakPtr<VoxelMap> neighborWest_;
-    WeakPtr<VoxelMap> neighborEast_;
-    WeakPtr<VoxelMap> neighborSouth_;
+    VoxelJob* voxelJob_;
+    WeakPtr<VoxelMap> voxelMap_;
+    ResourceRef resourceRef_;
 
-    SharedPtr<VoxelMap> voxelMap_;
     Vector<SharedPtr<Geometry> > geometries_;
     Vector<SharedPtr<Material> > materials_;
     Vector<SharedPtr<VertexBuffer> > vertexData_;

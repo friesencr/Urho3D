@@ -26,6 +26,7 @@
 
 #include "Sample.h"
 #include "ProcSky.h"
+#include "WorldBuilder.h"
 
 namespace Urho3D
 {
@@ -70,6 +71,7 @@ private:
 	SharedPtr<VoxelBlocktypeMap> voxelBlocktypeMap_;
     SharedPtr<Node> voxelNode_;
     SharedPtr<ProcSky> procSky_;
+    SharedPtr<WorldBuilder> worldBuilder_;
     int counter_;
 	bool drawDebug_;
     SharedPtr<Text> cameraPositionText_;

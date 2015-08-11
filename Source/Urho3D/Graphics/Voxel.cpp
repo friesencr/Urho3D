@@ -5,48 +5,12 @@
 #include "../IO/Generator.h"
 #include "../Resource/ResourceCache.h"
 #include "../IO/Log.h"
+#include "../IO/Compression.h"
+#include "../Scene/Component.h"
 
 #include "../DebugNew.h"
 
 namespace Urho3D {
-
-	static Vector<Pair<WeakPtr<VoxelMap>, SharedPtr<VoxelMapData> > > voxelMapCache_;
-	static VoxelMapData* GetVoxelMapDataFromCache(VoxelMap* voxelMap)
-    {
-		if (!voxelMap)
-			return 0;
-
-		SharedPtr<VoxelMapData> match;
-        for (unsigned i = 0; i < voxelMapCache_.Size(); ++i)
-        {
-			if (voxelMapCache_[i].first_ == voxelMap)
-            {
-				match = voxelMapCache_[i].second_;
-				voxelMapCache_.Erase(i);
-				break;
-            }
-        }
-
-		if (!match)
-		{
-			if (voxelMapCache_.Size() == VoxelMap::MAX_LOADED_MAPS)
-			{
-				Pair<WeakPtr<VoxelMap>, SharedPtr<VoxelMapData> > record = voxelMapCache_[VoxelMap::MAX_LOADED_MAPS - 1];
-				if (record.first_)
-					record.first_->Unload();
-				match = record.second_;
-				voxelMapCache_.Erase(VoxelMap::MAX_LOADED_MAPS - 1);
-			}
-			else
-				match = new VoxelMapData();
-		}
-
-		Pair<WeakPtr<VoxelMap>, SharedPtr<VoxelMapData> > record;
-		record.first_ = voxelMap;
-		record.second_ = match;
-		voxelMapCache_.Insert(0, record);
-		return match;
-    }
 
     unsigned char VoxelEncodeColor(Color c, bool tex1Enabled, bool tex2Enabled)
     {
@@ -58,25 +22,25 @@ namespace Urho3D {
 	    return STBVOX_MAKE_VHEIGHT(southWest, southEast, northWest, northEast);
     }
 
-    unsigned char VoxelEncodeVHeight(VoxelHeight voxelHeight)
-    {
-	    return STBVOX_MAKE_VHEIGHT(voxelHeight, voxelHeight, voxelHeight, voxelHeight);
-    }
+    //unsigned char VoxelEncodeVHeight(VoxelHeight voxelHeight)
+    //{
+	   // return STBVOX_MAKE_VHEIGHT(voxelHeight, voxelHeight, voxelHeight, voxelHeight);
+    //}
 
     unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot, VoxelHeight height)
     {
 	    return STBVOX_MAKE_GEOMETRY(geometry, rot, height);
     }
 
-    unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot)
-    {
-	    return STBVOX_MAKE_GEOMETRY(geometry, rot, 0);
-    }
+    //unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot)
+    //{
+	   // return STBVOX_MAKE_GEOMETRY(geometry, rot, 0);
+    //}
 
-    unsigned char VoxelEncodeGeometry(VoxelGeometry geometry)
-    {
-	    return STBVOX_MAKE_GEOMETRY(geometry, VOXEL_FACE_EAST,0);
-    }
+    //unsigned char VoxelEncodeGeometry(VoxelGeometry geometry)
+    //{
+	   // return STBVOX_MAKE_GEOMETRY(geometry, VOXEL_FACE_EAST,0);
+    //}
 
     /// Register object factory.
     void VoxelTextureMap::RegisterObject(Context* context)
@@ -155,6 +119,7 @@ namespace Urho3D {
         return true;
     }
 
+
     /// Saves voxel map information.
     bool VoxelBlocktypeMap::Save(Serializer& dest) 
     {
@@ -209,12 +174,12 @@ namespace Urho3D {
     }
 
     VoxelMap::VoxelMap(Context* context) 
-        : Serializable(context),
+        : Resource(context),
         width_(0),
         height_(0),
         depth_(0),
         dataMask_(0),
-		dataSourceType(0)
+        blocktypeMap(0)
 	{
 	}
 
@@ -226,126 +191,96 @@ namespace Urho3D {
     void VoxelMap::RegisterObject(Context* context)
     {
         context->RegisterFactory<VoxelMap>();
-        ATTRIBUTE("Data Mask", unsigned, dataMask_, 0, AM_EDIT);
-    }
-
-    bool VoxelMap::Load(Deserializer& source)
-    {
-		this->voxelMapData_ = GetVoxelMapDataFromCache(this);
-		if (!this->voxelMapData_)
-			return false;
-
-        if (!Serializable::Load(source))
-            return false;
-
-        if (!BeginLoad(source))
-            return false;
-
-		//LOGINFO(String(id_) + " Loaded");
-        return true;
     }
 
     bool VoxelMap::BeginLoad(Deserializer& source)
     {
+        if (source.ReadFileID() != "VOXM")
+            return false;
+
         width_ = source.ReadUInt();
         height_ = source.ReadUInt();
         depth_ = source.ReadUInt();
         dataMask_ = source.ReadUInt();
-		zStride = height_ + 4;
-		xStride = (height_ + 4) * (depth_ + 4);
+		strideZ = height_ + 4;
+		strideX = (height_ + 4) * (depth_ + 4);
 		size_ = (width_ + 4)*(height_ + 4)*(depth_ + 4);
 
+        ResourceRef ref = source.ReadResourceRef();
+        loadVoxelBlocktypeMap_ = ref.name_;
+
+        unsigned numDatas = 0;
 		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
 		GetBasicDataArrays(datas);
 		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
 		{
 			if (dataMask_ & (1 << i))
 			{
+                numDatas++;
 				datas[i]->Resize(size_);
-				source.Read(&datas[i]->Front(), size_);
+                unsigned char* dataPtr = &datas[i]->Front();
+                unsigned position = 0;
+                while (position < size_)
+                {
+                    unsigned count = source.ReadVLE();
+                    unsigned char val = source.ReadUByte();
+                    memset(dataPtr, val, count);
+                    dataPtr += count;
+                    position += count;
+                }
 			}
 		}
-
+        SetMemoryUse(sizeof(VoxelMap) + numDatas * size_);
         return true;
     }
 
-    bool VoxelMap::IsLoaded()
+    bool VoxelMap::EndLoad()
     {
-        if (width_ == 0 || height_ == 0 || depth_ == 0 || dataMask_ == 0)
-            return false;
-
-		if (!voxelMapData_)
-			return false;
-
-		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
-		GetBasicDataArrays(datas);
-		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
-		{
-			if ((dataMask_ & (1 << i)) && datas[i]->Size() != size_)
-				return false;
-		}
-
+        if (!loadVoxelBlocktypeMap_.Empty())
+        {
+            SetBlocktypeMapAttr(ResourceRef(VoxelBlocktypeMap::GetTypeStatic(), loadVoxelBlocktypeMap_));
+            loadVoxelBlocktypeMap_ = String::EMPTY;
+        }
         return true;
     }
 
     bool VoxelMap::Save(Serializer& dest)
     {
-		if (!Reload())
-		{
-			LOGERROR("Could not load voxel map.");
-			return false;
-		}
-
+        if (!dest.WriteFileID("VOXM"))
+        {
+            LOGERROR("Failed to save voxel map");
+            return false;
+        }
 		dest.WriteUInt(width_);
 		dest.WriteUInt(height_);
 		dest.WriteUInt(depth_);
 		dest.WriteUInt(dataMask_);
+        dest.WriteResourceRef(GetBlocktypeMapAttr());
 
 		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
 		GetBasicDataArrays(datas);
 		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
 		{
-			if (dataMask_ & (1 << i))
-				dest.Write(&datas[i]->Front(), size_);
+            if (dataMask_ & (1 << i))
+            {
+                unsigned char* data = &datas[i]->Front();
+                unsigned char val = data[0];
+                unsigned count = 1;
+                unsigned position = 1;
+                do
+                {
+                    if (position == size_ || val != data[position])
+                    {
+                        dest.WriteVLE(count);
+                        dest.WriteUByte(val);
+                        count = 0;
+                        val = data[position];
+                    }
+                    count++;
+                } while (position++ < size_);
+            }
 		}
         return true;
-    }
-
-    void VoxelMap::Unload()
-    {
-		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
-		GetBasicDataArrays(datas);
-		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
-			datas[i]->Clear();
-
-		voxelMapData_ = 0;
-		//LOGINFO(String(id_) + " Unloaded");
-    }
-
-    bool VoxelMap::Reload(bool force)
-    {
-		if (!force && IsLoaded())
-		{
-			voxelMapData_ = GetVoxelMapDataFromCache(this);
-			return true;
-		}
-
-		if (dataSourceType == 1)
-		{
-			Generator copy = generator_;
-			return Load(copy);
-		}
-		else if (dataSourceType == 2)
-		{
-			ResourceCache* cache = GetSubsystem<ResourceCache>();
-			SharedPtr<File> file = cache->GetFile(resourceRef_.name_);
-			if (file && file->IsOpen())
-				return Load(*file);
-			else
-				return false;
-		}
-        else
-            return false;
     }
 
 	void VoxelMap::SetSize(unsigned width, unsigned height, unsigned depth)
@@ -353,56 +288,61 @@ namespace Urho3D {
 		height_ = height;
 		width_ = width;
 		depth_ = depth;
-		zStride = height + 4;
-		xStride = (height + 4) * (depth + 4);
+		strideZ = height + 4;
+		strideX = (height + 4) * (depth + 4);
 		size_ = (width_ + 4)*(height_ + 4)*(depth_ + 4);
 	}
 
+    void VoxelMap::SetBlocktypeMap(VoxelBlocktypeMap* voxelBlocktypeMap)
+    {
+        blocktypeMap = voxelBlocktypeMap;
+    }
+
+    void VoxelMap::SetBlocktypeMapAttr(const ResourceRef& value)
+    {
+        ResourceCache* cache = GetSubsystem<ResourceCache>();
+        VoxelBlocktypeMap* blocktypeMap = cache->GetResource<VoxelBlocktypeMap>(value.name_);
+        SetBlocktypeMap(blocktypeMap);
+    }
+
+    ResourceRef VoxelMap::GetBlocktypeMapAttr() const
+    {
+        return GetResourceRef(blocktypeMap, VoxelBlocktypeMap::GetTypeStatic());
+    }
+
 	void VoxelMap::InitializeBlocktype(unsigned char initialValue)
 	{
-		voxelMapData_->blocktype.Resize(size_);
-		memset(&voxelMapData_->blocktype.Front(), initialValue, sizeof(char) * size_);
+		blocktype.Resize(size_);
+		memset(&blocktype.Front(), initialValue, sizeof(char) * size_);
 	}
 
 	void VoxelMap::InitializeVHeight(unsigned char initialValue)
 	{
-		voxelMapData_->vHeight.Resize(size_);
-		memset(&voxelMapData_->vHeight.Front(), initialValue, sizeof(char) * size_);
+		vHeight.Resize(size_);
+		memset(&vHeight.Front(), initialValue, sizeof(char) * size_);
 	}
 
 	void VoxelMap::InitializeLighting(unsigned char initialValue)
 	{
-		voxelMapData_->lighting.Resize(size_);
-		memset(&voxelMapData_->lighting.Front(), initialValue, sizeof(char) * size_);
+		lighting.Resize(size_);
+		memset(&lighting.Front(), initialValue, sizeof(char) * size_);
 	}
 
 	void VoxelMap::InitializeColor(unsigned char initialValue)
 	{
-		voxelMapData_->color.Resize(size_);
-		memset(&voxelMapData_->color.Front(), initialValue, sizeof(char) * size_);
+		color.Resize(size_);
+		memset(&color.Front(), initialValue, sizeof(char) * size_);
 	}
 
 	void VoxelMap::InitializeTex2(unsigned char initialValue)
 	{
-		voxelMapData_->tex2.Resize(size_);
-		memset(&voxelMapData_->tex2.Front(), initialValue, sizeof(char) * size_);
+		tex2.Resize(size_);
+		memset(&tex2.Front(), initialValue, sizeof(char) * size_);
 	}
 
 	void VoxelMap::InitializeGeometry(unsigned char initialValue)
 	{
-		voxelMapData_->geometry.Resize(size_);
-		memset(&voxelMapData_->geometry.Front(), initialValue, sizeof(char) * size_);
-	}
-
-    void VoxelMap::SetSource(Generator generator) 
-    {
-		dataSourceType = 1;
-		generator_ = generator;
-    }
-
-	void VoxelMap::SetSource(ResourceRef resourceRef)
-	{
-		dataSourceType = 2;
-		resourceRef_ = resourceRef;
+		geometry.Resize(size_);
+		memset(&geometry.Front(), initialValue, sizeof(char) * size_);
 	}
 }
