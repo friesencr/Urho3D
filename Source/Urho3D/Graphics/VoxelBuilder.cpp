@@ -137,12 +137,6 @@ static unsigned char URHO3D_default_palette_compact[64][3] =
 namespace Urho3D
 {
 
-inline bool CompareJobs(VoxelJob* lhs, VoxelJob* rhs)
-{
-    return lhs->chunk->GetBuildVisible() > rhs->chunk->GetBuildVisible() || lhs->chunk->GetBuildPriority() < rhs->chunk->GetBuildPriority();
-}
-
-
 VoxelBuilder::VoxelBuilder(Context* context)
     : Object(context),
     compatibilityMode(false),
@@ -188,10 +182,7 @@ VoxelBuilder::VoxelBuilder(Context* context)
     for (unsigned i = 0; i < 64; ++i)
         colorTable_[i] = Vector4(URHO3D_default_palette[i]);
 
-	frameTimer_.Reset();
-
     AllocateWorkerBuffers();
-    SubscribeToEvent(E_BEGINFRAME, HANDLER(VoxelBuilder, HandleBeginFrame));
 }
 
 VoxelBuilder::~VoxelBuilder()
@@ -206,7 +197,7 @@ void VoxelBuilder::AllocateWorkerBuffers()
 
     // the workers will build a chunk and then convert it to urho vertex buffers, while the vertex buffer is being built it will start more chunks
     // but stall if the mesh building gets too far ahead of the vertex converter this is based on chunk size and number of cpu threads
-    unsigned numSlots = 4; // (unsigned)Min((float)numChunks, Max(1.0f, ceil((float)queue->GetNumThreads() / (float)VOXEL_MAX_NUM_WORKERS_PER_CHUNK)) * 2.0f);
+    unsigned numSlots = 1; // (unsigned)Min((float)numChunks, Max(1.0f, ceil((float)queue->GetNumThreads() / (float)VOXEL_MAX_NUM_WORKERS_PER_CHUNK)) * 2.0f);
 
     if (numSlots == slots_.Size())
         return;
@@ -877,14 +868,6 @@ void VoxelBuilder::ProcessSlot(VoxelWorkSlot* slot)
             slot->job->chunk->OnVoxelChunkCreated();
     }
     FreeWorkSlot(slot);
-}
-
-void VoxelBuilder::HandleBeginFrame(StringHash eventType, VariantMap& eventData)
-{
-    PROFILE(VoxelWork);
-	frameTimer_.Reset();
-    //Sort(jobs_.Begin(), jobs_.End(), CompareJobs);
-	while (RunJobs() && frameTimer_.GetMSec(false) < 2);
 }
 
 unsigned VoxelBuilder::DecrementWorkSlot(VoxelWorkSlot* slot)

@@ -31,22 +31,38 @@ public:
     virtual void ApplyAttributes();
     /// Handle enabled/disabled state change.
     virtual void OnSetEnabled();
-    /// Sets chunk size
-    virtual void SetChunkSpacing(Vector3 spacing);
+
+    /// Gets chunk spacing
+    Vector3 GetChunkSpacing() const { return chunkSpacing_; }
+
+    /// Sets chunk spacing
+    void SetChunkSpacing(Vector3 spacing);
     /// Sets number of chunks in the set
-    virtual void SetNumberOfChunks(unsigned x, unsigned y, unsigned z);
+    void SetNumberOfChunks(unsigned x, unsigned y, unsigned z);
+    /// Gets number of chunks in the set
+    unsigned GetNumberOfChunks() const { return numChunks_; }
+    /// Gets number of chunks in the set
+    unsigned GetNumberOfChunksX() const { return numChunksX_; }
+    /// Gets number of chunks in the set
+    unsigned GetNumberOfChunksY() const { return numChunksY_; }
+    /// Gets number of chunks in the set
+    unsigned GetNumberOfChunksZ() const { return numChunksZ_; }
     /// Gets Voxel Chunk at world position.
-    virtual VoxelChunk* GetVoxelChunkAtPosition(Vector3 position);
+    VoxelChunk* GetVoxelChunkAtPosition(Vector3 position);
     /// Gets Voxel Chunk by index.
-    virtual VoxelChunk* GetVoxelChunk(unsigned x, unsigned y, unsigned z);
+    VoxelChunk* GetVoxelChunk(unsigned x, unsigned y, unsigned z);
 
-    virtual VoxelMap* GetVoxelMap(unsigned x, unsigned y, unsigned z);
+    VoxelMap* GetVoxelMap(unsigned x, unsigned y, unsigned z);
 
-    virtual void SetVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap);
+    void SetVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap);
 
-    inline unsigned GetIndex(unsigned x, unsigned y, unsigned z);
+    unsigned GetIndex(unsigned x, unsigned y, unsigned z) const;
 
-    virtual void RemoveChunk(unsigned x, unsigned y, unsigned z);
+    void GetCoordinatesFromIndex(unsigned index, unsigned &x, unsigned &y, unsigned &z);
+
+    void LoadChunk(unsigned x, unsigned y, unsigned z);
+
+    void UnloadChunk(unsigned x, unsigned y, unsigned z);
 
     bool GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, int &z);
 
@@ -84,7 +100,7 @@ public:
 
 private:
     void BuildInternal();
-    VoxelChunk* FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z, VoxelMap* map);
+    VoxelChunk* FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z);
     // Material.
     SharedPtr<Material> material_;
     // Voxel chunks.
@@ -92,12 +108,12 @@ private:
     Vector<WeakPtr<VoxelMap> > voxelMaps_;
     ResourceRefList voxelMapResourceRefList_;
     BoundingBox setBox;
-    unsigned numChunksX;
-    unsigned numChunksY;
-    unsigned numChunksZ;
-    unsigned chunkXStride;
-    unsigned chunkZStride;
-    unsigned numChunks;
+    unsigned numChunksX_;
+    unsigned numChunksY_;
+    unsigned numChunksZ_;
+    unsigned chunkXStride_;
+    unsigned chunkZStride_;
+    unsigned numChunks_;
     Vector3 chunkSpacing_;
 };
 

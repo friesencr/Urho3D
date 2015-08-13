@@ -72,8 +72,6 @@ class URHO3D_API VoxelChunk : public Drawable
     unsigned char GetSizeZ();
     void SetIndex(unsigned char x, unsigned char y, unsigned char z);
     void SetSize(unsigned char x, unsigned char y, unsigned char z);
-    float GetBuildPriority() const { return buildPrioirty_; }
-    float GetBuildVisible() const { return buildVisible_; }
     bool Build(VoxelMap* voxelMap, VoxelMap* northMap, VoxelMap* southMap, VoxelMap* eastMap, VoxelMap* westMap);
 
 protected:
@@ -87,8 +85,6 @@ private:
     // Voxel chunk geometry
     unsigned char index_[3];
     unsigned char size_[3];
-    float buildPrioirty_;
-    bool buildVisible_;
     unsigned numMeshes_;
     VoxelJob* voxelJob_;
     WeakPtr<VoxelMap> voxelMap_;

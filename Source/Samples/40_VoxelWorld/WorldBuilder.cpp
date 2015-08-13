@@ -263,7 +263,7 @@ void WorldBuilder::ConfigureParameters()
     voxelBlocktypeMap_->SetName("ColorVoxelBlocktypeMap");
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     cache->AddManualResource(voxelBlocktypeMap_);
-    cache->SetMemoryBudget(VoxelMap::GetTypeStatic(), 512 * 1024 * 1024);
+    cache->SetMemoryBudget(VoxelMap::GetTypeStatic(), 128 * 1024 * 1024);
 
     voxelSet_->SetNumberOfChunks(width_, 1, depth_);
 
@@ -306,5 +306,5 @@ void WorldBuilder::LoadWorld()
             voxelSet_->SetVoxelMapResource(x, 0, z, filename);
         }
     }
-    voxelSet_->Build();
+    //voxelSet_->Build();
 }

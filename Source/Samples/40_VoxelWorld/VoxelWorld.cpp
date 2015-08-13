@@ -49,6 +49,7 @@
 #include <Urho3D/IO/Generator.h>
 #include <Urho3D/IO/Log.h>
 #include <Urho3D/IO/File.h>
+#include <Urho3D/Graphics/VoxelStreamer.h>
 
 #include "VoxelWorld.h"
 
@@ -157,8 +158,9 @@ void VoxelWorld::CreateScene()
 
 
     voxelNode_ = scene_->CreateChild("VoxelNode");
-
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
+    VoxelStreamer* streamer = voxelNode_->CreateComponent<VoxelStreamer>();
+    streamer->SetEnabled(true);
     worldBuilder_ = new WorldBuilder(context_);
     worldBuilder_->SetSize(64, 64);
     worldBuilder_->SetVoxelSet(voxelSet);
@@ -217,7 +219,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 200.0f;
+    const float MOVE_SPEED = 600.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 

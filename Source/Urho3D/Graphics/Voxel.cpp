@@ -7,6 +7,7 @@
 #include "../IO/Log.h"
 #include "../IO/Compression.h"
 #include "../Scene/Component.h"
+#include "../Core/Profiler.h"
 
 #include "../DebugNew.h"
 
@@ -195,6 +196,7 @@ namespace Urho3D {
 
     bool VoxelMap::BeginLoad(Deserializer& source)
     {
+        PROFILE(VoxelMapLoad);
         if (source.ReadFileID() != "VOXM")
             return false;
 

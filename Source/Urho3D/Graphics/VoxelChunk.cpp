@@ -19,8 +19,6 @@ extern const char* GEOMETRY_CATEGORY;
 VoxelChunk::VoxelChunk(Context* context) :
     Drawable(context, DRAWABLE_GEOMETRY),
     numMeshes_(0),
-    buildPrioirty_(0.0),
-    buildVisible_(false),
     voxelJob_(0),
     voxelMap_(0)
 {
