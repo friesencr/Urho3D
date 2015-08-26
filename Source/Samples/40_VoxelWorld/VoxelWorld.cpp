@@ -55,10 +55,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-//#define SMOOTH_TERRAIN
-//#define LOAD_FILE_MAPS
-//#define SAVE_FILE_MAPS
-
 DEFINE_APPLICATION_MAIN(VoxelWorld)
 
 VoxelWorld::VoxelWorld(Context* context) :
@@ -153,7 +149,7 @@ void VoxelWorld::CreateScene()
     //zone->SetHeightFog(true);
     //zone->SetAmbientGradient(true);
     zone->SetFogColor(Color(0.3, 0.3, 0.3));
-    zone->SetFogStart(700.0f);
+    zone->SetFogStart(400.0f);
     zone->SetFogEnd(900.0f);
 
 

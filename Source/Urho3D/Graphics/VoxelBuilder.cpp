@@ -447,10 +447,7 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
 
             unsigned char* source = &datas[i]->Front();
             unsigned char* dest = slot->workProcessorBuffers[i];
-            if (voxelMap->dataMask_ & (1 << i))
-                memcpy(dest, source, voxelMap->size_);
-            else
-                memset(dest, 0, voxelMap->size_);
+            memset(dest, 0, voxelMap->size_);
             
             writers[i]->InitializeBuffer(slot->workProcessorBuffers[i]);
             writers[i]->SetSize(voxelMap->width_, voxelMap->height_, voxelMap->depth_);
@@ -659,7 +656,10 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
             &slot->processorWriters.vHeight
         };
         for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
-            *stb_data[i] = ((1 << i) & voxelMap->processorDataMask_) ? &writers[i]->buffer[zero] : 0;
+        {
+            if (((1 << i) & voxelMap->processorDataMask_))
+                *stb_data[i] =  &writers[i]->buffer[zero];
+        }
     }
 #endif
 

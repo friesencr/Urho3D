@@ -222,21 +222,4 @@ VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z)
     return chunk;
 }
 
-//void VoxelSet::SetVoxelMapResourceRefList(const ResourceRefList& resourceRefList)
-//{
-//    voxelMapResourceRefList_ = resourceRefList;
-//    voxelMapResourceRefList_.names_.Resize(numChunks_);
-//}
-//
-//void VoxelSet::SetVoxelMapResource(unsigned x, unsigned y, unsigned z, const String& name)
-//{
-//    if (x >= numChunksX_ || y >= numChunksY_ || z >= numChunksZ_)
-//        return;
-//
-//    unsigned index = GetIndex(x, y, z);
-//    voxelMapResourceRefList_.names_[index] = name;
-//}
-
-
-
 }

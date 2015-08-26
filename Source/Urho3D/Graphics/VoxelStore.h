@@ -130,7 +130,31 @@ class URHO3D_API VoxelStore : public Resource
     OBJECT(VoxelStore);
 
 public:
-    VoxelStore(Context* context) : Resource(context) {}
+    VoxelStore(Context* context) : Resource(context)
+        , dataMask_(0)
+        , processorDataMask_(0)
+        , chunkSizeX_(0)
+        , chunkSizeY_(0)
+        , chunkSizeZ_(0)
+        , numChunks_(0)
+        , numChunksX_(0)
+        , numChunksY_(0)
+        , numChunksZ_(0)
+        , chunkXStride_(0)
+        , chunkZStride_(0)
+        , numPagesX_(0)
+        , numPagesY_(0)
+        , numPagesZ_(0)
+        , numPages_(0)
+        , pageSizeX_(0)
+        , pageSizeY_(0)
+        , pageSizeZ_(0)
+        , pageStrideX_(0)
+        , pageStrideY_(0)
+        , pageStrideZ_(0)
+        , voxelBlocktypeMap_(0)
+    {
+    }
     virtual ~VoxelStore() {};
     void UpdateVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap, bool updateNeighbors = true);
     SharedPtr<VoxelMap> GetVoxelMap(unsigned x, unsigned y, unsigned z);
