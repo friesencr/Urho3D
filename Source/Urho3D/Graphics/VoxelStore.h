@@ -148,13 +148,22 @@ public:
     void SetVoxelBlocktypeMap(VoxelBlocktypeMap* voxelBlocktypeMap) { voxelBlocktypeMap_ = voxelBlocktypeMap; }
     VoxelBlocktypeMap* GetVoxelBlocktypeMap() { return voxelBlocktypeMap_; }
 
+    unsigned GetProcessorDataMask() const { return processorDataMask_; }
+    void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
+    Vector<VoxelProcessorFunc>& GetVoxelProcessors() { return voxelProcessors_; }
+    void SetVoxelProcessors(Vector<VoxelProcessorFunc>& voxelProcessors) { voxelProcessors_ = voxelProcessors; }
+    void AddVoxelProcessor(VoxelProcessorFunc voxelProcessor) { voxelProcessors_.Push(voxelProcessor); }
+    void RemoveVoxelProcessor(unsigned index) { voxelProcessors_.Erase(index); }
+
 private:
     void SetSizeInternal();
     SharedPtr<VoxelBlocktypeMap> voxelBlocktypeMap_;
     VoxelMapPage* GetVoxelMapPageByChunkIndex(unsigned x, unsigned y, unsigned z);
     unsigned GetVoxelMapIndexInPage(unsigned x, unsigned y, unsigned z);
+    Vector<VoxelProcessorFunc> voxelProcessors_;
 
     unsigned dataMask_;
+    unsigned processorDataMask_;
     unsigned chunkSizeX_;
     unsigned chunkSizeY_;
     unsigned chunkSizeZ_;

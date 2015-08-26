@@ -389,6 +389,7 @@ public:
     void SetSize(unsigned width, unsigned height, unsigned depth);
 
     Vector<VoxelProcessorFunc> GetVoxelProcessors() { return voxelProcessors_; }
+    void SetVoxelProcessors(Vector<VoxelProcessorFunc>& voxelProcessors) { voxelProcessors_ = voxelProcessors; }
 
     void AddVoxelProcessor(VoxelProcessorFunc voxelProcessor) { voxelProcessors_.Push(voxelProcessor); }
 
@@ -486,13 +487,23 @@ private:
 
 struct VoxelProcessorWriters
 {
-    VoxelWriter blocktype;
-    VoxelWriter color;
-    VoxelWriter geometry;
-    VoxelWriter vHeight;
-    VoxelWriter lighting;
-    VoxelWriter rotate;
-    VoxelWriter tex2;
+	VoxelWriter blocktype;
+	VoxelWriter color2;
+	VoxelWriter color2Facemask;
+	VoxelWriter color3;
+	VoxelWriter color3Facemask;
+	VoxelWriter color;
+	VoxelWriter eColor;
+	VoxelWriter eColorFaceMask;
+	VoxelWriter extendedColor;
+	VoxelWriter geometry;
+	VoxelWriter lighting;
+	VoxelWriter overlay;
+	VoxelWriter rotate;
+	VoxelWriter tex2;
+	VoxelWriter tex2Facemask;
+	VoxelWriter tex2Replace;
+	VoxelWriter vHeight;
 };
 
 //class Voxel

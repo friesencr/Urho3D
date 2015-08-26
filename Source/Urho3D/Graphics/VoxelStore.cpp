@@ -120,6 +120,8 @@ SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
 
     SharedPtr<VoxelMap> voxelMap(page->GetVoxelMap(GetVoxelMapIndexInPage(x, y, z)));
     voxelMap->SetBlocktypeMap(GetVoxelBlocktypeMap());
+    voxelMap->SetProcessorDataMask(GetProcessorDataMask());
+    voxelMap->SetVoxelProcessors(voxelProcessors_);
     return voxelMap;
 #if VOXEL_MAP_CACHE
     if (voxelMap)

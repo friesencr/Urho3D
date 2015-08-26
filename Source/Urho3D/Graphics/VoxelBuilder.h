@@ -29,7 +29,7 @@ static const unsigned char VOXEL_CHUNK_SIZE_X = 64;
 static const unsigned char VOXEL_CHUNK_SIZE_Y = 128;
 static const unsigned char VOXEL_CHUNK_SIZE_Z = 64;
 static const unsigned VOXEL_CHUNK_SIZE = VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Y * VOXEL_CHUNK_SIZE_Z;
-static const unsigned VOXEL_PROCESSOR_SIZE = 1; // (VOXEL_CHUNK_SIZE_X + 4) * (VOXEL_CHUNK_SIZE_Y + 4) * (VOXEL_CHUNK_SIZE_Z + 4);
+static const unsigned VOXEL_PROCESSOR_SIZE = (VOXEL_CHUNK_SIZE_X + 4) * (VOXEL_CHUNK_SIZE_Y + 4) * (VOXEL_CHUNK_SIZE_Z + 4);
 
 class VoxelBuilder;
 class VoxelChunk;
@@ -60,7 +60,7 @@ struct VoxelWorkSlot
     stbvox_mesh_maker meshMakers[VOXEL_MAX_WORKERS];
     unsigned char workVertexBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
     unsigned char workFaceBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_FACE_BUFFER_SIZE];
-    //unsigned char workProcessorBuffers[7][VOXEL_PROCESSOR_SIZE];
+    unsigned char workProcessorBuffers[VoxelMap::NUM_BASIC_STREAMS][VOXEL_PROCESSOR_SIZE];
     int numQuads;
     bool failed;
     bool free;

@@ -414,33 +414,38 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
     VoxelMap* voxelMap = job->voxelMap;
     VoxelChunk* chunk = job->chunk;
 
-#if 0
-    if (voxelMap->GetVoxelProcessors().Size() > 0)
+#if 1
+    if (voxelMap->GetVoxelProcessors().Size() > 0 && voxelMap->processorDataMask_)
     {
+		PODVector<unsigned char>* datas[VoxelMap::NUM_BASIC_STREAMS];
+		voxelMap->GetBasicDataArrays(datas);
 
-        unsigned char* data[7] = {
-            &voxelMap->blocktype.Front(), &voxelMap->color.Front(), &voxelMap->geometry.Front(),
-            &voxelMap->vHeight.Front(), &voxelMap->lighting.Front(), &voxelMap->rotate.Front(),
-            &voxelMap->tex2.Front()
-        };
-
-        VoxelWriter* writers[7] = {
+        VoxelWriter* writers[VoxelMap::NUM_BASIC_STREAMS] = {
             &slot->processorWriters.blocktype,
+            &slot->processorWriters.color2,
+            &slot->processorWriters.color2Facemask,
+            &slot->processorWriters.color3,
+            &slot->processorWriters.color3Facemask,
             &slot->processorWriters.color,
+            &slot->processorWriters.eColor,
+            &slot->processorWriters.eColorFaceMask,
+            &slot->processorWriters.extendedColor,
             &slot->processorWriters.geometry,
-            &slot->processorWriters.vHeight,
             &slot->processorWriters.lighting,
+            &slot->processorWriters.overlay,
             &slot->processorWriters.rotate,
-            &slot->processorWriters.tex2
+            &slot->processorWriters.tex2,
+            &slot->processorWriters.tex2Facemask,
+            &slot->processorWriters.tex2Replace,
+            &slot->processorWriters.vHeight
         };
 
-        for (unsigned i = 0; i < 7; ++i)
+        for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
         {
-            unsigned test = (1 << i);
             if (!((1 << i) & voxelMap->processorDataMask_))
                 continue;
 
-            unsigned char* source = data[i];
+            unsigned char* source = &datas[i]->Front();
             unsigned char* dest = slot->workProcessorBuffers[i];
             if (voxelMap->dataMask_ & (1 << i))
                 memcpy(dest, source, voxelMap->size_);
@@ -453,9 +458,7 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
 
         Vector<VoxelProcessorFunc> processors = voxelMap->GetVoxelProcessors();
         for (unsigned p = 0; p < processors.Size(); ++p)
-        {
             processors[p](chunk, voxelMap, slot->processorWriters);
-        }
     }
 #endif
 
@@ -605,33 +608,58 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
         stbvox_map->block_color = voxelBlocktypeMap->blockColor.Empty() ? 0 : &voxelBlocktypeMap->blockColor.Front();
     }
 
+    PODVector<unsigned char>* datas[VoxelMap::NUM_BASIC_STREAMS];
+    voxelMap->GetBasicDataArrays(datas);
+
+    unsigned char** stb_data[VoxelMap::NUM_BASIC_STREAMS] = {
+        &stbvox_map->blocktype,
+        &stbvox_map->color2,
+        &stbvox_map->color2_facemask,
+        &stbvox_map->color3,
+        &stbvox_map->color3_facemask,
+        &stbvox_map->color,
+        &stbvox_map->ecolor_color,
+        &stbvox_map->ecolor_facemask,
+        &stbvox_map->extended_color,
+        &stbvox_map->geometry,
+        &stbvox_map->lighting,
+        &stbvox_map->overlay,
+        &stbvox_map->rotate,
+        &stbvox_map->tex2,
+        &stbvox_map->tex2_facemask,
+        &stbvox_map->tex2_replace,
+        &stbvox_map->vheight
+    };
+
     // Set voxel maps for stb voxel
     int zero = voxelMap->GetIndex(0, 0, 0);
-	stbvox_map->blocktype = &voxelMap->blocktype[zero];
-	//stbvox_map->vheight = voxelMap->GetVHeight()->Empty() ? 0 : &voxelMap->GetVHeight()->Front();
-	//stbvox_map->color = voxelMap->GetColor()->Empty() ? 0 : &voxelMap->GetColor()->Front();
-	//stbvox_map->geometry = voxelMap->GetGeometry()->Empty() ? 0 : &voxelMap->GetGeometry()->Front();
-	//stbvox_map->rotate = voxelMap->GetRotate()->Empty() ? 0 : &voxelMap->GetRotate()->Front();
-	//stbvox_map->lighting = voxelMap->GetLighting()->Empty() ? 0 : &voxelMap->GetLighting()->Front();
- //   stbvox_map->tex2 = voxelMap->GetTex2()->Empty() ? 0 : &voxelMap->GetTex2()->Front();
+    for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
+        *stb_data[i] = ((1 << i) & VOXEL_BLOCK_BLOCKTYPE & voxelMap->dataMask_) ? &datas[i]->At(zero) : 0;
 
-#if 0
-    if (voxelMap->GetVoxelProcessors().Size() > 0)
+#if 1
+    if (voxelMap->GetVoxelProcessors().Size() > 0 && voxelMap->processorDataMask_)
     {
-        if (voxelMap->processorDataMask_ & VOXEL_BLOCK_BLOCKTYPE)
-            stbvox_map->blocktype = &slot->workProcessorBuffers[0][zero];
-        if (voxelMap->processorDataMask_ & VOXEL_BLOCK_COLOR)
-            stbvox_map->color = &slot->workProcessorBuffers[1][zero];
-        if (voxelMap->processorDataMask_ & VOXEL_BLOCK_GEOMETRY)
-            stbvox_map->geometry = &slot->workProcessorBuffers[2][zero];
-        if (voxelMap->processorDataMask_ & VOXEL_BLOCK_VHEIGHT)
-            stbvox_map->vheight = &slot->workProcessorBuffers[3][zero];
-        if (voxelMap->processorDataMask_ & VOXEL_BLOCK_LIGHTING)
-            stbvox_map->lighting = &slot->workProcessorBuffers[4][zero];
-        if (voxelMap->processorDataMask_ & VOXEL_BLOCK_ROTATE)
-            stbvox_map->rotate = &slot->workProcessorBuffers[5][zero];
-        if (voxelMap->processorDataMask_ & VOXEL_BLOCK_TEX2)
-            stbvox_map->tex2 = &slot->workProcessorBuffers[6][zero];
+        VoxelWriter* writers[VoxelMap::NUM_BASIC_STREAMS] = {
+            &slot->processorWriters.blocktype,
+            &slot->processorWriters.color2,
+            &slot->processorWriters.color2Facemask,
+            &slot->processorWriters.color3,
+            &slot->processorWriters.color3Facemask,
+            &slot->processorWriters.color,
+            &slot->processorWriters.eColor,
+            &slot->processorWriters.eColorFaceMask,
+            &slot->processorWriters.extendedColor,
+            &slot->processorWriters.geometry,
+            &slot->processorWriters.lighting,
+            &slot->processorWriters.overlay,
+            &slot->processorWriters.rotate,
+            &slot->processorWriters.tex2,
+            &slot->processorWriters.tex2Facemask,
+            &slot->processorWriters.tex2Replace,
+            &slot->processorWriters.vHeight
+        };
+        for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
+            *stb_data[i] = ((1 << i) & voxelMap->processorDataMask_) ? &writers[i]->buffer[zero] : 0;
     }
 #endif
 

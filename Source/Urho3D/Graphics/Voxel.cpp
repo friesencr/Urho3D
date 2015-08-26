@@ -180,6 +180,7 @@ namespace Urho3D {
         height_(0),
         depth_(0),
         dataMask_(0),
+        processorDataMask_(0),
         blocktypeMap(0)
 	{
 	}

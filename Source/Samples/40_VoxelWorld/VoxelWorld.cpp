@@ -160,7 +160,7 @@ void VoxelWorld::CreateScene()
     voxelNode_ = scene_->CreateChild("VoxelNode");
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     worldBuilder_ = new WorldBuilder(context_);
-    worldBuilder_->SetSize(16, 16);
+    worldBuilder_->SetSize(64, 64);
     worldBuilder_->SetVoxelSet(voxelSet);
     worldBuilder_->ConfigureParameters();
     worldBuilder_->BuildWorld();

@@ -261,6 +261,8 @@ void WorldBuilder::ConfigureParameters()
     voxelStore_->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
     voxelStore_->SetSize(width_, 1, depth_, 64, 128, 64);
     voxelStore_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
+    voxelStore_->AddVoxelProcessor(AOVoxelLighting);
+    voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_BLOCKTYPE | VOXEL_BLOCK_LIGHTING);
     voxelSet_->SetVoxelStore(voxelStore_);
 
     //File file(context_);
