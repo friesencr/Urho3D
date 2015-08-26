@@ -316,7 +316,10 @@ namespace Urho3D {
 		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
 		{
             if (dataMask_ & (1 << i))
+            {
                 datas[i]->Resize(size_);
+                memset(&datas[i]->Front(), 0, size_);
+            }
         }
 	}
 

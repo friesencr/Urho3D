@@ -113,10 +113,10 @@ void VoxelWorld::CreateScene()
     // Create skybox. The Skybox component is used like StaticModel, but it will be always located at the camera, giving the
     // illusion of the box planes being far away. Use just the ordinary Box model and a suitable material, whose shader will
     // generate the necessary 3D texture coordinates for cube mapping
-    //Node* skyNode = scene_->CreateChild("Sky");
-    //Skybox* skybox = skyNode->CreateComponent<Skybox>();
-    //skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
-    //skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
+    Node* skyNode = scene_->CreateChild("Sky");
+    Skybox* skybox = skyNode->CreateComponent<Skybox>();
+    skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
+    skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
 
     // Create a scene node for the camera, which we will move around
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
@@ -128,7 +128,7 @@ void VoxelWorld::CreateScene()
     //cameraNode_->SetPosition(Vector3(1024.0, 128.0, 1024.0));
     cameraNode_->SetPosition(Vector3(0.0, 50.0, 0.0));
 
-    Node* skyNode = scene_->CreateChild("SkyNode");
+    //Node* skyNode = scene_->CreateChild("SkyNode");
     //procSky_ = skyNode->CreateComponent<ProcSky>();
 
     //Create a directional light to the world so that we can see something. The light scene node's orientation controls the
