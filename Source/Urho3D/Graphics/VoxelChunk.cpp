@@ -14,8 +14,6 @@
 
 namespace Urho3D {
 
-extern const char* GEOMETRY_CATEGORY;
-
 VoxelChunk::VoxelChunk(Context* context) :
     Drawable(context, DRAWABLE_GEOMETRY),
     numMeshes_(0),
@@ -29,6 +27,7 @@ VoxelChunk::VoxelChunk(Context* context) :
 
 VoxelChunk::~VoxelChunk()
 {
+    SetNumberOfMeshes(0);
     if (voxelJob_)
     {
         GetSubsystem<VoxelBuilder>()->CancelJob(voxelJob_);
@@ -38,7 +37,7 @@ VoxelChunk::~VoxelChunk()
 
 void VoxelChunk::RegisterObject(Context* context)
 {
-    context->RegisterFactory<VoxelChunk>(GEOMETRY_CATEGORY);
+    context->RegisterFactory<VoxelChunk>("Voxel");
 }
 
 Geometry* VoxelChunk::GetGeometry(unsigned index) const
@@ -76,7 +75,8 @@ bool VoxelChunk::Build(VoxelMap* voxelMap, VoxelMap* northMap, VoxelMap* southMa
     {
         voxelBuilder->CancelJob(voxelJob_);
     }
-    voxelJob_ = voxelBuilder->BuildVoxelChunk(this, voxelMap, northMap, southMap, eastMap, westMap, false);
+    voxelMap->TransferAdjacentData(northMap, southMap, eastMap, westMap);
+    voxelJob_ = voxelBuilder->BuildVoxelChunk(this, voxelMap, false);
     return true;
 }
 
@@ -215,9 +215,9 @@ void VoxelChunk::SetNumberOfMeshes(unsigned count)
     {
         updateMaterialParameters_[i] = false;
         vertexData_[i] = new VertexBuffer(context_);
-        vertexData_[i]->SetShadowed(false);
+        //vertexData_[i]->SetShadowed(false);
         faceData_[i] = new IndexBuffer(context_);
-        faceData_[i]->SetShadowed(true);
+        //faceData_[i]->SetShadowed(false);
         faceBuffer_[i] = new TextureBuffer(context_);
         materials_[i] = new Material(context_);
         geometries_[i] = new Geometry(context_);

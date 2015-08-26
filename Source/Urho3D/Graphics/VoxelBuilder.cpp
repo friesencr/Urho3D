@@ -140,7 +140,8 @@ namespace Urho3D
 VoxelBuilder::VoxelBuilder(Context* context)
     : Object(context),
     compatibilityMode(false),
-    sharedIndexBuffer_(0)
+    sharedIndexBuffer_(0),
+    completedJobCount_(0)
 {
     transform_.Resize(3);
     normals_.Resize(32);
@@ -181,8 +182,6 @@ VoxelBuilder::VoxelBuilder(Context* context)
 
     for (unsigned i = 0; i < 64; ++i)
         colorTable_[i] = Vector4(URHO3D_default_palette[i]);
-
-    AllocateWorkerBuffers();
 }
 
 VoxelBuilder::~VoxelBuilder()
@@ -193,12 +192,7 @@ VoxelBuilder::~VoxelBuilder()
 
 void VoxelBuilder::AllocateWorkerBuffers()
 {
-    //WorkQueue* queue = GetSubsystem<WorkQueue>();
-
-    // the workers will build a chunk and then convert it to urho vertex buffers, while the vertex buffer is being built it will start more chunks
-    // but stall if the mesh building gets too far ahead of the vertex converter this is based on chunk size and number of cpu threads
-    unsigned numSlots = 1; // (unsigned)Min((float)numChunks, Max(1.0f, ceil((float)queue->GetNumThreads() / (float)VOXEL_MAX_NUM_WORKERS_PER_CHUNK)) * 2.0f);
-
+    unsigned numSlots = 2;
     if (numSlots == slots_.Size())
         return;
 
@@ -228,7 +222,7 @@ bool VoxelBuilder::ResizeIndexBuffer(unsigned numQuads)
     unsigned numVertices = numQuads * 4;
 
     unsigned indexSize = sizeof(int); // numVertices > M_MAX_UNSIGNED_SHORT ? sizeof(int) : sizeof(short);
-    SharedArrayPtr<unsigned char> data(new unsigned char[indexSize * numIndices]);
+    SharedArrayPtr<unsigned char> data(new unsigned char[indexSize * (numIndices + 1000)]); // add padding to reduce number of resizes
     unsigned char* dataPtr = data.Get();
 
     // triangulates the quads
@@ -270,8 +264,9 @@ bool VoxelBuilder::ResizeIndexBuffer(unsigned numQuads)
 
 void VoxelBuilder::CompleteWork(unsigned priority)
 {
-    PROFILE(VoxelWork);
-    while (RunJobs());
+    //PROFILE(VoxelWork);
+    while (RunJobs() || UploadCompletedWork())
+        Time::Sleep(0);
 }
 
 // Decode to vertex buffer
@@ -283,65 +278,14 @@ void VoxelBuilder::DecodeWorkBuffer(VoxelWorkload* workload)
 
     VoxelWorkSlot* slot = &slots_[workload->slot];
     int workloadIndex = workload->workloadIndex;
-    //int gpuVertexSize = sizeof(float) * 8; // position(3) / normal(3) / uv1(2)
-    //int cpuVertexSize = sizeof(float) * 3; // position(3)
     int numVertices = numQuads * 4; // 4 verts in a quad
-
-    //workload->gpuData.Resize(numVertices * gpuVertexSize);
-    //workload->cpuData.Resize(numVertices * cpuVertexSize);
-    //float* gpu = (float*)&workload->gpuData.Front();
-    //float* cpu = (float*)&workload->cpuData.Front();
     unsigned int* workData = (unsigned int*)slot->workVertexBuffers[workloadIndex];
 
     for (int i = 0; i < numVertices; ++i)
     {
         unsigned int v1 = *workData++;
-        // unsigned int v2 = *workData++;
-
         Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0f, (float)((v1 >> 7u) & 127u));
-        //float amb_occ = (float)((v1 >> 23u) & 63u) / 63.0;
-        //unsigned char tex1 = v2 & 0xFF;
-        //unsigned char tex2 = (v2 >> 8) & 0xFF;
-        //unsigned char color = (v2 >> 16) & 0xFF;
-        // unsigned char face_info = (v2 >> 24) & 0xFF;
-        // unsigned char normal = face_info >> 2u;
-        //unsigned char face_rot = face_info & 2u;
-        // Vector3 normalf(URHO3D_default_normals[normal]);
-        // normalf = Vector3(normalf.x_, normalf.z_, normalf.y_);
-
         workload->box.Merge(position);
-
-        //*gpu++ = position.x_;
-        //*gpu++ = position.y_;
-        //*gpu++ = position.z_;
-        //*cpu++ = position.x_;
-        //*cpu++ = position.y_;
-        //*cpu++ = position.z_;
-
-        //*gpu++ = normalf.x_;
-        //*gpu++ = normalf.y_;
-        //*gpu++ = normalf.z_;
-
-        //if (i % 4 == 0)
-        //{
-        //    *gpu++ = 0.0;
-        //    *gpu++ = 0.0;
-        //}
-        //else if (i % 4 == 1)
-        //{
-        //    *gpu++ = 1.0;
-        //    *gpu++ = 0.0;
-        //}
-        //else if (i % 4 == 2)
-        //{
-        //    *gpu++ = 1.0;
-        //    *gpu++ = 1.0;
-        //}
-        //else if (i % 4 == 3)
-        //{
-        //    *gpu++ = 0.0;
-        //    *gpu++ = 1.0;
-        //}
     }
 
     {
@@ -359,12 +303,6 @@ void BuildWorkloadHandler(const WorkItem* workItem, unsigned threadIndex)
 
 VoxelJob* VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, bool async)
 {
-    return BuildVoxelChunk(chunk, voxelMap, 0, 0, 0, 0, async);
-}
-
-VoxelJob* VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, VoxelMap* northMap, 
-    VoxelMap* southMap, VoxelMap* eastMap, VoxelMap* westMap, bool async)
-{
     if (!chunk)
         return 0;
 
@@ -378,27 +316,26 @@ VoxelJob* VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, V
     if (!(width > 0 && depth > 0 && height > 0))
         return 0;
 
+    if (!slots_.Size())
+        AllocateWorkerBuffers();
+
     VoxelJob* job = CreateJob(chunk);
     job->voxelMap = voxelMap;
-    job->northMap = northMap;
-    job->southMap = southMap;
-    job->eastMap = eastMap;
-    job->westMap = westMap;
-	RunJobs(async);
+	RunJobs();
 	if (!async)
 		CompleteWork();
 
     return job;
 }
 
-bool VoxelBuilder::RunJobs(bool async)
+bool VoxelBuilder::RunJobs()
 {
 	for (unsigned i = 0; i < slots_.Size(); ++i)
 	{
 		if (jobs_.Size() > 0)
 		{
 			int slotId = GetFreeWorkSlot();
-			if (slotId != -1 && ReserveWorkSlot(slotId))
+			if (slotId != -1)
 			{
 				unsigned count = jobs_.Size();
 				VoxelJob* job = jobs_[0];
@@ -411,29 +348,53 @@ bool VoxelBuilder::RunJobs(bool async)
 			}
 		}
 	}
-
-	if (!async)
-	{
-		GetSubsystem<WorkQueue>()->Complete(0);
-
-		for (unsigned i = 0; i < slots_.Size(); ++i)
-		{
-			VoxelWorkSlot* slot = &slots_[i];
-			bool process = false;
-			{
-				MutexLock lock(slot->workMutex);
-				process = !slot->free && slot->upload;
-				if (process)
-					slot->upload = false;
-			}
-			if (process)
-				ProcessSlot(slot);
-		}
-	}
-
     return jobs_.Size() > 0;
 }
 
+bool VoxelBuilder::UploadCompletedWork()
+{
+    MutexLock lock(completedWorkMutex_);
+    for (;;)
+    {
+        VoxelCompletedWorkload* completedWork = 0;
+        {
+            //MutexLock lock(completedWorkMutex_);
+            if (completedJobCount_ == 0)
+                break;
+
+            for (unsigned i = 0; i < completedChunks_.Size(); ++i)
+            {
+                VoxelCompletedWorkload* workload = &completedChunks_[i];
+                if (workload->completed && workload->job)
+                {
+                    completedWork = workload;
+                    break;
+                }
+            }
+        }
+
+        if (!completedWork)
+            break;
+        else
+        {
+            //MutexLock lock(completedWorkMutex_);
+            VoxelJob* job = (VoxelJob*)completedWork->job;
+            VoxelChunk* chunk = job->chunk;
+            bool success = UploadGpuData(completedWork);
+            if (!success)
+                LOGERROR("Could not upload voxel data to graphics card.");
+            else
+                chunk->OnVoxelChunkCreated();
+            {
+                delete job;
+                completedWork->job = 0;
+                completedWork->completed = false;
+                completedJobCount_--;
+            }
+        }
+    }
+    return completedJobCount_ > 0;
+}
 
 VoxelJob* VoxelBuilder::CreateJob(VoxelChunk* chunk)
 {
@@ -447,95 +408,11 @@ VoxelJob* VoxelBuilder::CreateJob(VoxelChunk* chunk)
 
 void VoxelBuilder::ProcessJob(VoxelJob* job)
 {
+    PROFILE(BuildChunk);
     WorkQueue* workQueue = GetSubsystem<WorkQueue>();
     VoxelWorkSlot* slot = &slots_[job->slot];
     VoxelMap* voxelMap = job->voxelMap;
     VoxelChunk* chunk = job->chunk;
-
-    // Copy adjacent data
-    {
-        const int MAP_NORTH = 0;
-        const int MAP_SOUTH = 1;
-        const int MAP_EAST = 2;
-        const int MAP_WEST = 3;
-        VoxelMap* maps[4] = { job->northMap, job->southMap, job->eastMap, job->westMap };
-		for (unsigned m = 0; m < 4; ++m)
-		{
-			VoxelMap* srcMap = maps[m];
-
-			if (!srcMap)
-				continue;
-
-			PODVector<unsigned char>* srcDatas[VoxelMap::NUM_BASIC_STREAMS];
-			PODVector<unsigned char>* destDatas[VoxelMap::NUM_BASIC_STREAMS];
-			srcMap->GetBasicDataArrays(srcDatas);
-			voxelMap->GetBasicDataArrays(destDatas);
-
-			for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
-			{
-				if (!voxelMap->dataMask_ & (1 << i))
-					continue;
-
-				if (!srcMap->dataMask_ & (1 << i))
-					continue;
-
-				unsigned char* src = 0;
-				unsigned char* dst = 0;
-
-				if (srcDatas[i]->Size() == voxelMap->size_)
-				{
-					if (destDatas[i]->Size() == voxelMap->size_)
-					{
-						src = &srcDatas[i]->Front();
-						dst = &destDatas[i]->Front();
-					}
-				}
-
-				if (!(src && dst))
-					continue;
-
-				unsigned char* srcPtr = src;
-				unsigned char* dstPtr = dst;
-
-				if (m == MAP_NORTH)
-				{
-					for (unsigned x = 0; x < voxelMap->width_; ++x)
-						for (unsigned y = 0; y < voxelMap->height_; ++y)
-						{
-							dstPtr[voxelMap->GetIndex(x, y, voxelMap->depth_)] = srcPtr[srcMap->GetIndex(x, y, 0)];
-							dstPtr[voxelMap->GetIndex(x, y, voxelMap->depth_ + 1)] = srcPtr[srcMap->GetIndex(x, y, 1)];
-						}
-				}
-				else if (m == MAP_SOUTH)
-				{
-					for (unsigned x = 0; x < voxelMap->width_; ++x)
-						for (unsigned y = 0; y < voxelMap->height_; ++y)
-						{
-							dstPtr[voxelMap->GetIndex(x, y, -1)] = srcPtr[srcMap->GetIndex(x, y, srcMap->depth_ - 1)];
-							dstPtr[voxelMap->GetIndex(x, y, -2)] = srcPtr[srcMap->GetIndex(x, y, srcMap->depth_ - 2)];
-						}
-				}
-				else if (m == MAP_EAST)
-				{
-					for (unsigned z = 0; z < voxelMap->depth_; ++z)
-						for (unsigned y = 0; y < voxelMap->height_; ++y)
-						{
-							dstPtr[voxelMap->GetIndex(voxelMap->width_, y, z)] = srcPtr[srcMap->GetIndex(0, y, z)];
-							dstPtr[voxelMap->GetIndex(voxelMap->width_ + 1, y, z)] = srcPtr[srcMap->GetIndex(1, y, z)];
-						}
-				}
-				else if (m == MAP_WEST)
-				{
-					for (unsigned z = 0; z < voxelMap->depth_; ++z)
-						for (unsigned y = 0; y < voxelMap->height_; ++y)
-						{
-							dstPtr[voxelMap->GetIndex(-1, y, z)] = srcPtr[srcMap->GetIndex(srcMap->width_ - 1, y, z)];
-							dstPtr[voxelMap->GetIndex(-2, y, z)] = srcPtr[srcMap->GetIndex(srcMap->width_ - 2, y, z)];
-						}
-				}
-			}
-		}
-    }
 
 #if 0
     if (voxelMap->GetVoxelProcessors().Size() > 0)
@@ -634,12 +511,67 @@ void VoxelBuilder::BuildWorkload(VoxelWorkload* workload)
         MutexLock lock(slot->workMutex);
         slot->failed = true;
     }
-    DecrementWorkSlot(slot);
+
+    if (DecrementWorkSlot(slot) == 0)
+        TransferCompletedWork(slot);
 }
 
-void VoxelBuilder::AbortSlot(VoxelWorkSlot* slot)
+void VoxelBuilder::TransferCompletedWork(VoxelWorkSlot* slot)
 {
+    MutexLock lock(completedWorkMutex_);
+    if (slot->failed)
+    {
+        LOGERROR("Voxel build failed.");
+    }
+    else
+    {
+        VoxelChunk* chunk = slot->job->chunk;
+        VoxelCompletedWorkload* transfer = 0;
 
+        {
+            //MutexLock lock(completedWorkMutex_);
+            for (unsigned i = 0; i < completedChunks_.Size(); ++i)
+            {
+                VoxelCompletedWorkload* workload = &completedChunks_[i];
+                if (!workload->completed && !workload->job)
+                {
+                    transfer = workload;
+                    break;
+                }
+            }
+            if (!transfer)
+            {
+                completedChunks_.Resize(completedChunks_.Size() + 1);
+                transfer = &completedChunks_[completedChunks_.Size() - 1];
+            }
+            transfer->job = slot->job;
+            transfer->completed = false;
+        }
+
+        transfer->vertexData.Resize(slot->numQuads * 4);
+        transfer->faceData.Resize(slot->numQuads);
+        transfer->box = slot->box;
+        transfer->numQuads = slot->numQuads;
+        unsigned* vertex = &transfer->vertexData.Front();
+        unsigned* face = &transfer->faceData.Front();
+
+        unsigned start = 0;
+        for (int i = 0; i < slot->numWorkloads; ++i)
+        {
+            VoxelWorkload* workload = &slot->workloads[i];
+            memcpy(&vertex[start * 4], slot->workVertexBuffers[workload->workloadIndex], workload->numQuads * sizeof(unsigned) * 4);
+            memcpy(&face[start], slot->workFaceBuffers[workload->workloadIndex], workload->numQuads * sizeof(unsigned));
+            start += workload->numQuads;
+        }
+
+        {
+            //MutexLock lock(completedWorkMutex_);
+            transfer->completed = true;
+            completedJobCount_++;
+        }
+    }
+
+    FreeWorkSlot(slot);
 }
 
 void VoxelBuilder::CancelJob(VoxelJob* job)
@@ -756,79 +688,41 @@ bool VoxelBuilder::UploadGpuDataCompatibilityMode(VoxelWorkSlot* slot, bool appe
     return false;
 }
 
-bool VoxelBuilder::UploadGpuData(VoxelWorkSlot* slot, bool append)
+bool VoxelBuilder::UploadGpuData(VoxelCompletedWorkload* workload)
 {
     PROFILE(UploadGpuData);
 
-    VoxelJob* job = slot->job;
+    VoxelJob* job = (VoxelJob*)workload->job;
     VoxelChunk* chunk = job->chunk;
     chunk->SetNumberOfMeshes(1);
-    VertexBuffer* vb = chunk->GetVertexBuffer(0);
-    IndexBuffer* faceData = chunk->GetFaceData(0);
-    chunk->numQuads_[0] = slot->numQuads;
-    int totalVertices = slot->numQuads * 4;
+    chunk->numQuads_[0] = workload->numQuads;
+    chunk->SetBoundingBox(workload->box);
+
+    const PODVector<unsigned>& vertexData = workload->vertexData;
+    const PODVector<unsigned>& faceData = workload->faceData;
+
+    VertexBuffer* vertexBuffer = chunk->GetVertexBuffer(0);
+    IndexBuffer* textureBufferData = chunk->GetFaceData(0);
+    unsigned numQuads = vertexData.Size() / 4;
+    unsigned totalVertices = vertexData.Size();
+
     if (totalVertices == 0)
         return true;
 
-    if (!vb->SetSize(totalVertices, MASK_DATA, false))
-        return false;
-
-    if (!faceData->SetSize(slot->numQuads, true, false))
-        return false;
-
-    // raw vertices
-    //SharedArrayPtr<unsigned char> vertexData(new unsigned char[slot->numQuads * 4 * sizeof(unsigned)]);
-
-    //// normal memory
-    //SharedArrayPtr<unsigned char> normalData(new unsigned char[slot->numQuads * sizeof(unsigned)]);
-
-    unsigned start = 0;
-    for (int i = 0; i < slot->numWorkloads; ++i)
+    if (!(vertexBuffer->SetSize(totalVertices, MASK_DATA, false) && vertexBuffer->SetData(&vertexData.Front())))
     {
-        VoxelWorkload* workload = &slot->workloads[i];
-        //memcpy(&vertexData[start*4], slot->workVertexBuffers[workload->workloadIndex], workload->numQuads * sizeof(unsigned) * 4);
-        //memcpy(&normalData[copyIndex], slot->workFaceBuffers[workload->workloadIndex], workload->numQuads * sizeof(unsigned));
-        //copyIndex += workload->numQuads * sizeof(unsigned);
-
-
-        if (!vb->SetDataRange(
-            slot->workVertexBuffers[workload->workloadIndex], 
-            start*4,
-            workload->numQuads*4))
-        {
-            LOGERROR("Error uploading voxel vertex data.");
-            return false;
-        }
-
-        if (!faceData->SetDataRange( 
-                slot->workFaceBuffers[workload->workloadIndex], 
-                start,
-                workload->numQuads))
-        {
-            LOGERROR("Error uploading voxel face data.");
-            return false;
-        }
-        start += workload->numQuads;
+        LOGERROR("Error uploading voxel vertex data.");
+        return false;
     }
-    Geometry* geo = chunk->GetGeometry(0);
-#if 0
-    unsigned char* newMeshPtr = 0;
-    unsigned reducedSize = SimplifyMesh(slot, vertexData.Get(), normalData.Get(), &newMeshPtr);
-    chunk->reducedQuadCount_[0] = reducedSize;
-    geo->SetRawVertexData(SharedArrayPtr<unsigned char>(newMeshPtr), sizeof(Vector3), MASK_POSITION);
-#else
-    //chunk->reducedQuadCount_[0] = slot->numQuads;
-    //geo->SetRawVertexData(vertexData, sizeof(unsigned), MASK_DATA);
-#endif
 
-
-    //PODVector<unsigned char> compressed(EstimateCompressBound(chunk->GetVoxelMap()->blocktype.Size()));
-    //unsigned size = CompressData(&compressed.Front(), &chunk->GetVoxelMap()->blocktype.Front(), chunk->GetVoxelMap()->blocktype.Size());
-
-    chunk->SetBoundingBox(slot->box);
-    Material* material = chunk->GetMaterial(0);
+    if (!(textureBufferData->SetSize(numQuads, true, false) && textureBufferData->SetData(&faceData.Front())))
+    {
+        LOGERROR("Error uploading voxel face data.");
+        return false;
+    }
 
     // face data
+    Material* material = chunk->GetMaterial(0);
     {
         TextureBuffer* faceDataTexture = chunk->GetFaceBuffer(0);
         if (!faceDataTexture->SetSize(0))
@@ -836,7 +730,7 @@ bool VoxelBuilder::UploadGpuData(VoxelWorkSlot* slot, bool append)
             LOGERROR("Error initializing voxel texture buffer");
             return false;
         }
-        if (!faceDataTexture->SetData(faceData))
+        if (!faceDataTexture->SetData(textureBufferData))
         {
             LOGERROR("Error setting voxel texture buffer data");
             return false;
@@ -844,30 +738,21 @@ bool VoxelBuilder::UploadGpuData(VoxelWorkSlot* slot, bool append)
         material->SetTexture(TU_CUSTOM1, faceDataTexture);
     }
 
-    if (!ResizeIndexBuffer(slot->numQuads))
+    // set shared quad index buffer
+    if (!ResizeIndexBuffer(numQuads))
     {
         LOGERROR("Error resizing shared voxel index buffer");
         return false;
     }
+
+    Geometry* geo = chunk->GetGeometry(0);
     geo->SetIndexBuffer(sharedIndexBuffer_);
-    if (!geo->SetDrawRange(TRIANGLE_LIST, 0, slot->numQuads * 6, false))
+    if (!geo->SetDrawRange(TRIANGLE_LIST, 0, numQuads * 6, false))
     {
         LOGERROR("Error setting voxel draw range");
         return false;
     }
     return true;
-}
-
-void VoxelBuilder::ProcessSlot(VoxelWorkSlot* slot)
-{
-    if (!slot->failed)
-    {
-        if (!UploadGpuData(slot))
-            LOGERROR("Could not upload voxel data to graphics card.");
-        else
-            slot->job->chunk->OnVoxelChunkCreated();
-    }
-    FreeWorkSlot(slot);
 }
 
 unsigned VoxelBuilder::DecrementWorkSlot(VoxelWorkSlot* slot)
@@ -887,12 +772,7 @@ void VoxelBuilder::FreeWorkSlot(VoxelWorkSlot* slot)
     slot->box = BoundingBox();
     slot->upload = false;
     slot->free = true;
-
-    if (slot->job)
-    {
-        delete slot->job;
-        slot->job = 0;
-    }
+    slot->job = 0;
 }
 
 int VoxelBuilder::GetFreeWorkSlot()
@@ -903,271 +783,12 @@ int VoxelBuilder::GetFreeWorkSlot()
     {
         if (slots_[i].free)
         {
+            slots_[i].free = false;
             slot = &slots_[i];
             return i;
         }
     }
     return -1;
-}
-
-bool VoxelBuilder::ReserveWorkSlot(unsigned index)
-{
-    MutexLock lock(slotMutex_);
-	if (slots_[index].free)
-	{
-		slots_[index].free = false;
-		return true;
-	}
-	return false;
-}
-
-const unsigned QUAD_VERTEX_MASK = 0x007FFFFF;
-// QUAD
-// [d,c]
-// [a,b]
-struct Quad {
-    unsigned id;
-    unsigned a;
-    unsigned b;
-    unsigned c;
-    unsigned d;
-    unsigned char normal;
-    bool keep;
-
-    Vector3 AVector() {
-        return Vector3 ((float)(a & 127u), (float)((a >> 14u) & 511u) / 2.0f, (float)((a >> 7u) & 127u));
-    }
-    Vector3 BVector() {
-        return Vector3 ((float)(b & 127u), (float)((b >> 14u) & 511u) / 2.0f, (float)((b >> 7u) & 127u));
-    }
-    Vector3 CVector() {
-        return Vector3 ((float)(c & 127u), (float)((c >> 14u) & 511u) / 2.0f, (float)((c >> 7u) & 127u));
-    }
-    Vector3 DVector() {
-        return Vector3 ((float)(d & 127u), (float)((d >> 14u) & 511u) / 2.0f, (float)((d >> 7u) & 127u));
-    }
-
-    Vector3 GetNormal() {
-        return Vector3(
-            URHO3D_default_normals[normal][0],
-            URHO3D_default_normals[normal][2],
-            URHO3D_default_normals[normal][1]
-        );
-    }
-};
-
-struct MeshSimplifyContext
-{
-    Quad* quads;
-    int* byNormal;
-    int byNormalLen;
-    int merges;
-    bool complete;
-    Mutex statusMutex;
-};
-
-void SimplifyPlaneHandler(const WorkItem* workItem, unsigned threadIndex)
-{
-    MeshSimplifyContext* meshCtx = (MeshSimplifyContext*)workItem->aux_;
-    Quad* quads = meshCtx->quads;
-    int* byNormal = meshCtx->byNormal;
-    PODVector<Plane> planes;
-    Vector<PODVector<int> > byPlane;
-
-    // bucket all of the quads by plane
-    for (unsigned i = 0; i < meshCtx->byNormalLen; ++i)
-    {
-        Quad* quad = &quads[byNormal[i]];
-        Vector3 point = quad->AVector();
-        bool makePlane = true;
-        for (unsigned p = 0; p < planes.Size(); ++p)
-        {
-            Plane plane = planes[p];
-            float d = Abs(plane.Distance(point));
-            if (d < M_EPSILON)
-            {
-                byPlane[p].Push(quad->id);
-                makePlane = false;
-                break;
-            }
-        }
-
-        if (makePlane)
-        {
-            planes.Push(Plane(quad->GetNormal(), quad->AVector()));
-            byPlane.Resize(planes.Size());
-            byPlane[planes.Size() - 1].Push(quad->id);
-        }
-    }
-
-    for (unsigned p = 0; p < planes.Size(); ++p)
-    {
-        int* planeIds = &byPlane[p].Front();
-        for (;;)
-        {
-            bool aMerge = false;
-            for (unsigned q1 = 0; q1 < byPlane[p].Size(); ++q1)
-            {
-                Quad* quad1 = &quads[planeIds[q1]];
-                if (!quad1->keep)
-                    continue;
-
-                unsigned a1 = quad1->a & QUAD_VERTEX_MASK;
-                unsigned b1 = quad1->b & QUAD_VERTEX_MASK;
-                unsigned c1 = quad1->c & QUAD_VERTEX_MASK;
-                unsigned d1 = quad1->d & QUAD_VERTEX_MASK;
-                //Vector3 a1Vec = quad1->AVector();
-                //Vector3 b1Vec = quad1->BVector();
-                //Vector3 c1Vec = quad1->CVector();
-                //Vector3 d1Vec = quad1->DVector();
-
-                for (unsigned q2 = 0; q2 < byPlane[p].Size(); ++q2)
-                {
-                    Quad* quad2 = &quads[planeIds[q2]];
-                    unsigned a2 = quad2->a & QUAD_VERTEX_MASK;
-                    unsigned b2 = quad2->b & QUAD_VERTEX_MASK;
-                    unsigned c2 = quad2->c & QUAD_VERTEX_MASK;
-                    unsigned d2 = quad2->d & QUAD_VERTEX_MASK;
-                    //Vector3 a2Vec = quad2->AVector();
-                    //Vector3 b2Vec = quad2->BVector();
-                    //Vector3 c2Vec = quad2->CVector();
-                    //Vector3 d2Vec = quad2->DVector();
-
-                    if (!quad2->keep || quad1->id == quad2->id)
-                        continue;
-
-                    //Vector3 a2Vec = quad2->AVector();
-                    //float d = (a2Vec - a1Vec).Length();
-                    if ((a2 == d1) && (b2 == c1)) // up
-                    {
-                        quad1->d = quad2->d;
-                        quad1->c = quad2->c;
-                        quad2->keep = false;
-                        aMerge = true;
-                        meshCtx->merges--;
-                    }
-                    else if ((d2 == c1) && (a2 == b1)) // right
-                    {
-                        quad1->c = quad2->c;
-                        quad1->b = quad2->b;
-                        quad2->keep = false;
-                        aMerge = true;
-                        meshCtx->merges--;
-                    }
-                    else if ((c2 == b1) && (d2 == a1)) // down
-                    {
-                        quad1->b = quad2->b;
-                        quad1->a = quad2->a;
-                        quad2->keep = false;
-                        aMerge = true;
-                        meshCtx->merges--;
-                    }
-                    else if ((b2 == a1) && (c2 == d1)) // left
-                    {
-                        quad1->a = quad2->a;
-                        quad1->d = quad2->d;
-                        quad2->keep = false;
-                        aMerge = true;
-                        meshCtx->merges--;
-                    }
-                }
-            }
-            if (!aMerge)
-                break;
-        }
-    }
-    {
-        MutexLock lock(meshCtx->statusMutex);
-        meshCtx->complete = true;
-    }
-}
-
-unsigned VoxelBuilder::SimplifyMesh(VoxelWorkSlot* slot, unsigned char* vertices, unsigned char* normals, unsigned char** newMesh)
-{
-    PROFILE(SimplifyMesh);
-    int minY = (int)slot->box.min_.y_;
-    int maxY = (int)slot->box.max_.y_;
-
-    SharedArrayPtr<Quad> quads(new Quad[slot->numQuads]);
-    Vector<PODVector<int> > normalLookup(32);
-
-    unsigned* vertexPtr = (unsigned*)vertices;
-    unsigned* dataPtr = (unsigned*)normals;
-
-    for (unsigned i = 0; i < slot->numQuads; ++i)
-    {
-        quads[i].id = i;
-        quads[i].a = *vertexPtr++;
-        quads[i].b = *vertexPtr++;
-        quads[i].c = *vertexPtr++;
-        quads[i].d = *vertexPtr++;
-        quads[i].normal = (unsigned char)((*dataPtr++ >> 24) & 0xFF) >> 2u;
-        quads[i].keep = true;
-
-        // cache by normal to get away from n^3 and boundry multithreading
-        normalLookup[normals[quads[i].normal]].Push(i);
-    }
-
-    MeshSimplifyContext meshJobs[32];
-    WorkQueue* workQueue = GetSubsystem<WorkQueue>();
-    for (unsigned n = 0; n < normalLookup.Size(); ++n)
-    {
-        if (normalLookup[n].Size() == 0)
-        {
-            meshJobs[n].merges = 0;
-            meshJobs[n].complete = true;
-        }
-        else
-        {
-            meshJobs[n].complete = false;
-            meshJobs[n].quads = quads.Get();
-            meshJobs[n].byNormal = &normalLookup[n].Front();
-            meshJobs[n].byNormalLen = normalLookup[n].Size();
-            meshJobs[n].merges = normalLookup[n].Size();
-            SharedPtr<WorkItem> workItem(new WorkItem());
-            workItem->priority_ = 0;
-            workItem->aux_ = &meshJobs[n];
-            workItem->workFunction_ = SimplifyPlaneHandler;
-            workQueue->AddWorkItem(workItem);
-        }
-    }
-
-    while (true)
-    {
-        bool complete = true;
-        for (unsigned i = 0; i < 32; ++i)
-        {
-            MutexLock lock(meshJobs[i].statusMutex);
-            if (meshJobs[i].complete == false)
-            {
-                complete = false;
-                break;
-            }
-        }
-        if (complete)
-            break;
-        Time::Sleep(0);
-    }
-
-    int totalMerges = 0;
-    for (unsigned i = 0; i < 32; ++i)
-        totalMerges += meshJobs[i].merges;
-
-    unsigned char* newMeshData = new unsigned char[totalMerges * 4 * sizeof(Vector3)];
-    Vector3* facePtr = (Vector3*)newMeshData;
-    for (unsigned i = 0; i < slot->numQuads; ++i)
-    {
-        Quad* quad = &quads[i];
-        if (quad->keep)
-        {
-            *facePtr++ = quad->AVector();
-            *facePtr++ = quad->BVector();
-            *facePtr++ = quad->CVector();
-            *facePtr++ = quad->DVector();
-        }
-    }
-    *newMesh = newMeshData;
-    return totalMerges;
 }
 
 }

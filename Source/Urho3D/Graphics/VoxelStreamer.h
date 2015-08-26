@@ -13,15 +13,6 @@
 namespace Urho3D 
 { 
 
-struct VoxelStreamQueueItem {
-    unsigned index_;
-    unsigned x_;
-    unsigned y_;
-    unsigned z_;
-    float distance_;
-    bool visible_;
-};
-
 /// Heightmap terrain component.
 class URHO3D_API VoxelStreamer : public Component
 {
@@ -40,7 +31,8 @@ public:
     virtual void ApplyAttributes();
     /// Builds appropriate chunks.
     void Build();
-	//unsigned GetNumberOfLoadedChunks() { return loadedMeshes_.Size(); }
+
+	unsigned GetNumberOfLoadedChunks() { return loadedChunks_.Size(); }
 protected:
     /// Handle enabled/disabled state change.
     virtual void OnSetEnabled();
@@ -55,12 +47,18 @@ private:
     void UnloadBestChunks();
     void HandleSceneUpdate(StringHash eventType, VariantMap& eventData);
     void UpdateSubscriptions();
+    unsigned ChunkInCameraGrid(int x, int y, int z, unsigned viewport);
+    unsigned ChunkInCameraGrid(int x, int y, int z, const Frustum& frustrum);
 
     unsigned maxInMemoryMeshPeak_;
     unsigned maxInMemoryMesh_;
+    unsigned maxBuildsPerFrame_;
+    unsigned maxBuildFrameTime_;
+    unsigned maxPriorityBuildFrameTime_;
     WeakPtr<VoxelSet> voxelSet_;
-    PODVector<VoxelStreamQueueItem> buildQueue_;
-    PODVector<VoxelStreamQueueItem> loadedChunks_;
+    PODVector<unsigned> buildQueue_;
+    PODVector<unsigned> priorityBuildQueue_;
+    PODVector<Pair<unsigned, bool>> loadedChunks_;
 };
 
 }

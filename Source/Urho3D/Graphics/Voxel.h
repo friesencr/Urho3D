@@ -8,6 +8,7 @@
 #include "../Container/ArrayPtr.h"
 #include "../Scene/Serializable.h"
 #include "../IO/Generator.h"
+#include "../IO/VectorBuffer.h"
 
 namespace Urho3D {
 
@@ -325,6 +326,7 @@ private:
     PODVector<unsigned char> tex2Replace;
     PODVector<unsigned char> tex2Facemask;
 
+    void TransferAdjacentDataInternal(VoxelMap* source, int direction);
 public:
     SharedPtr<VoxelBlocktypeMap> blocktypeMap;
     SharedPtr<VoxelTextureMap> textureMap;
@@ -341,6 +343,9 @@ public:
 
     /// Register object factory.
     static void RegisterObject(Context* context);
+
+    static void EncodeData(VoxelMap* voxelMap, Serializer& dest);
+    static unsigned DecodeData(VoxelMap* voxelMap, Deserializer &source);
 
     /// Load resource from stream. May be called from a worker thread. Return true if successful.
     virtual bool BeginLoad(Deserializer& source);
@@ -374,14 +379,14 @@ public:
     unsigned GetStrideX() const { return strideX; }
     unsigned GetStrideZ() const { return strideZ; }
 
+    void TransferAdjacentData(VoxelMap* north, VoxelMap* south, VoxelMap* east, VoxelMap* west);
+    void TransferAdjacentNorthData(VoxelMap* source);
+    void TransferAdjacentSouthData(VoxelMap* source);
+    void TransferAdjacentEastData(VoxelMap* source);
+    void TransferAdjacentWestData(VoxelMap* source);
+
     inline unsigned GetIndex(int x, int y, int z) const { return (y + 2) + ((z + 2) * strideZ) + ((x + 2) * strideX); }
     void SetSize(unsigned width, unsigned height, unsigned depth);
-    void InitializeBlocktype(unsigned char initialValue = 0);
-    void InitializeVHeight(unsigned char initialValue = 0);
-    void InitializeLighting(unsigned char initialValue = 0);
-    void InitializeColor(unsigned char initialValue = 0);
-    void InitializeTex2(unsigned char initialValue = 0);
-    void InitializeGeometry(unsigned char initialValue = 0);
 
     Vector<VoxelProcessorFunc> GetVoxelProcessors() { return voxelProcessors_; }
 

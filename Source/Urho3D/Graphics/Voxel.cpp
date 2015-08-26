@@ -46,7 +46,7 @@ namespace Urho3D {
     /// Register object factory.
     void VoxelTextureMap::RegisterObject(Context* context)
     {
-        context->RegisterFactory<VoxelTextureMap>();
+        context->RegisterFactory<VoxelTextureMap>("Voxel");
     }
 
     bool VoxelTextureMap::BeginLoad(Deserializer& source)
@@ -86,7 +86,7 @@ namespace Urho3D {
     /// Register object factory.
     void VoxelBlocktypeMap::RegisterObject(Context* context)
     {
-        context->RegisterFactory<VoxelBlocktypeMap>();
+        context->RegisterFactory<VoxelBlocktypeMap>("Voxel");
     }
 
     bool VoxelBlocktypeMap::BeginLoad(Deserializer& source)
@@ -155,7 +155,7 @@ namespace Urho3D {
     /// Register object factory.
     void VoxelOverlayMap::RegisterObject(Context* context)
     {
-        context->RegisterFactory<VoxelOverlayMap>();
+        context->RegisterFactory<VoxelOverlayMap>("Voxel");
     }
 
     bool VoxelOverlayMap::BeginLoad(Deserializer& source)
@@ -166,7 +166,7 @@ namespace Urho3D {
     /// Register object factory.
     void VoxelColorPalette::RegisterObject(Context* context)
     {
-        context->RegisterFactory<VoxelColorPalette>();
+        context->RegisterFactory<VoxelColorPalette>("Voxel");
     }
 
     bool VoxelColorPalette::BeginLoad(Deserializer& source)
@@ -191,38 +191,58 @@ namespace Urho3D {
     /// Register object factory.
     void VoxelMap::RegisterObject(Context* context)
     {
-        context->RegisterFactory<VoxelMap>();
+        context->RegisterFactory<VoxelMap>("Voxel");
     }
 
-    bool VoxelMap::BeginLoad(Deserializer& source)
+    void VoxelMap::EncodeData(VoxelMap* voxelMap, Serializer& dest)
     {
-        PROFILE(VoxelMapLoad);
-        if (source.ReadFileID() != "VOXM")
-            return false;
-
-        width_ = source.ReadUInt();
-        height_ = source.ReadUInt();
-        depth_ = source.ReadUInt();
-        dataMask_ = source.ReadUInt();
-		strideZ = height_ + 4;
-		strideX = (height_ + 4) * (depth_ + 4);
-		size_ = (width_ + 4)*(height_ + 4)*(depth_ + 4);
-
-        ResourceRef ref = source.ReadResourceRef();
-        loadVoxelBlocktypeMap_ = ref.name_;
-
-        unsigned numDatas = 0;
 		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
-		GetBasicDataArrays(datas);
+		voxelMap->GetBasicDataArrays(datas);
+        unsigned dataMask = voxelMap->GetDataMask();
+        unsigned size = voxelMap->GetSize();
 		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
 		{
-			if (dataMask_ & (1 << i))
+            if (dataMask & (1 << i))
+            {
+                unsigned char* data = &datas[i]->Front();
+                if (!datas[i]->Size())
+                    continue;
+
+                unsigned char val = data[0];
+                unsigned count = 1;
+                unsigned position = 1;
+                do
+                {
+                    if (position == size || val != data[position])
+                    {
+                        dest.WriteVLE(count);
+                        dest.WriteUByte(val);
+                        count = 0;
+                        val = data[position];
+                    }
+                    count++;
+                } while (position++ < size);
+            }
+		}
+    }
+
+    unsigned VoxelMap::DecodeData(VoxelMap* voxelMap, Deserializer& source)
+    {
+        unsigned numDatas = 0;
+		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
+		voxelMap->GetBasicDataArrays(datas);
+        unsigned dataMask = voxelMap->GetDataMask();
+        unsigned size = voxelMap->GetSize();
+
+		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
+		{
+			if (dataMask & (1 << i))
 			{
                 numDatas++;
-				datas[i]->Resize(size_);
+				datas[i]->Resize(size);
                 unsigned char* dataPtr = &datas[i]->Front();
                 unsigned position = 0;
-                while (position < size_)
+                while (position < size)
                 {
                     unsigned count = source.ReadVLE();
                     unsigned char val = source.ReadUByte();
@@ -232,7 +252,27 @@ namespace Urho3D {
                 }
 			}
 		}
-        SetMemoryUse(sizeof(VoxelMap) + numDatas * size_);
+        return numDatas * size;
+    }
+
+    bool VoxelMap::BeginLoad(Deserializer& source)
+    {
+        PROFILE(VoxelMapLoad);
+        if (source.ReadFileID() != "VOXM")
+            return false;
+
+        PODVector<unsigned char> buffer(source.GetSize());
+        source.Read(&buffer.Front(), source.GetSize());
+        MemoryBuffer memBuffer(buffer);
+
+        SetSize(memBuffer.ReadUInt(), memBuffer.ReadUInt(), memBuffer.ReadUInt());
+        dataMask_ = memBuffer.ReadUInt();
+        
+        ResourceRef ref = memBuffer.ReadResourceRef();
+        loadVoxelBlocktypeMap_ = ref.name_;
+
+        unsigned dataSize = DecodeData(this, memBuffer);
+        SetMemoryUse(sizeof(VoxelMap) + dataSize);
         return true;
     }
 
@@ -259,29 +299,6 @@ namespace Urho3D {
 		dest.WriteUInt(dataMask_);
         dest.WriteResourceRef(GetBlocktypeMapAttr());
 
-		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
-		GetBasicDataArrays(datas);
-		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
-		{
-            if (dataMask_ & (1 << i))
-            {
-                unsigned char* data = &datas[i]->Front();
-                unsigned char val = data[0];
-                unsigned count = 1;
-                unsigned position = 1;
-                do
-                {
-                    if (position == size_ || val != data[position])
-                    {
-                        dest.WriteVLE(count);
-                        dest.WriteUByte(val);
-                        count = 0;
-                        val = data[position];
-                    }
-                    count++;
-                } while (position++ < size_);
-            }
-		}
         return true;
     }
 
@@ -293,6 +310,14 @@ namespace Urho3D {
 		strideZ = height + 4;
 		strideX = (height + 4) * (depth + 4);
 		size_ = (width_ + 4)*(height_ + 4)*(depth_ + 4);
+
+		PODVector<unsigned char>* datas[NUM_BASIC_STREAMS];
+		GetBasicDataArrays(datas);
+		for (unsigned i = 0; i < NUM_BASIC_STREAMS; ++i)
+		{
+            if (dataMask_ & (1 << i))
+                datas[i]->Resize(size_);
+        }
 	}
 
     void VoxelMap::SetBlocktypeMap(VoxelBlocktypeMap* voxelBlocktypeMap)
@@ -312,39 +337,112 @@ namespace Urho3D {
         return GetResourceRef(blocktypeMap, VoxelBlocktypeMap::GetTypeStatic());
     }
 
-	void VoxelMap::InitializeBlocktype(unsigned char initialValue)
-	{
-		blocktype.Resize(size_);
-		memset(&blocktype.Front(), initialValue, sizeof(char) * size_);
-	}
+    static const int MAP_NORTH = 0;
+    static const int MAP_SOUTH = 1;
+    static const int MAP_EAST = 2;
+    static const int MAP_WEST = 3;
 
-	void VoxelMap::InitializeVHeight(unsigned char initialValue)
-	{
-		vHeight.Resize(size_);
-		memset(&vHeight.Front(), initialValue, sizeof(char) * size_);
-	}
+    void VoxelMap::TransferAdjacentData(VoxelMap* north, VoxelMap* south, VoxelMap* east, VoxelMap* west)
+    {
+        TransferAdjacentDataInternal(north, MAP_NORTH);
+        TransferAdjacentDataInternal(south, MAP_SOUTH);
+        TransferAdjacentDataInternal(east, MAP_EAST);
+        TransferAdjacentDataInternal(west, MAP_WEST);
+    }
 
-	void VoxelMap::InitializeLighting(unsigned char initialValue)
-	{
-		lighting.Resize(size_);
-		memset(&lighting.Front(), initialValue, sizeof(char) * size_);
-	}
+    void VoxelMap::TransferAdjacentNorthData(VoxelMap* source)
+    {
+        TransferAdjacentDataInternal(source, MAP_NORTH);
+    }
 
-	void VoxelMap::InitializeColor(unsigned char initialValue)
-	{
-		color.Resize(size_);
-		memset(&color.Front(), initialValue, sizeof(char) * size_);
-	}
+    void VoxelMap::TransferAdjacentSouthData(VoxelMap* source)
+    {
+        TransferAdjacentDataInternal(source, MAP_SOUTH);
+    }
 
-	void VoxelMap::InitializeTex2(unsigned char initialValue)
-	{
-		tex2.Resize(size_);
-		memset(&tex2.Front(), initialValue, sizeof(char) * size_);
-	}
+    void VoxelMap::TransferAdjacentEastData(VoxelMap* source)
+    {
+        TransferAdjacentDataInternal(source, MAP_EAST);
+    }
 
-	void VoxelMap::InitializeGeometry(unsigned char initialValue)
-	{
-		geometry.Resize(size_);
-		memset(&geometry.Front(), initialValue, sizeof(char) * size_);
-	}
+    void VoxelMap::TransferAdjacentWestData(VoxelMap* source)
+    {
+        TransferAdjacentDataInternal(source, MAP_WEST);
+    }
+
+    void VoxelMap::TransferAdjacentDataInternal(VoxelMap* source, int direction)
+    {
+        if (!source)
+            return;
+
+        // Copy adjacent data
+        PODVector<unsigned char>* srcDatas[VoxelMap::NUM_BASIC_STREAMS];
+        PODVector<unsigned char>* destDatas[VoxelMap::NUM_BASIC_STREAMS];
+        source->GetBasicDataArrays(srcDatas);
+        this->GetBasicDataArrays(destDatas);
+
+        for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
+        {
+            if (!this->dataMask_ & (1 << i))
+                continue;
+
+            if (!source->dataMask_ & (1 << i))
+                continue;
+
+            unsigned char* src = 0;
+            unsigned char* dst = 0;
+
+            if (srcDatas[i]->Size() == this->size_)
+            {
+                if (destDatas[i]->Size() == this->size_)
+                {
+                    src = &srcDatas[i]->Front();
+                    dst = &destDatas[i]->Front();
+                }
+            }
+
+            if (!(src && dst))
+                continue;
+
+            unsigned char* srcPtr = src;
+            unsigned char* dstPtr = dst;
+
+            if (direction == MAP_NORTH)
+            {
+                for (unsigned x = 0; x < this->width_; ++x)
+                    for (unsigned y = 0; y < this->height_; ++y)
+                    {
+                        dstPtr[this->GetIndex(x, y, this->depth_)] = srcPtr[source->GetIndex(x, y, 0)];
+                        dstPtr[this->GetIndex(x, y, this->depth_ + 1)] = srcPtr[source->GetIndex(x, y, 1)];
+                    }
+            }
+            else if (direction == MAP_SOUTH)
+            {
+                for (unsigned x = 0; x < this->width_; ++x)
+                    for (unsigned y = 0; y < this->height_; ++y)
+                    {
+                        dstPtr[this->GetIndex(x, y, -1)] = srcPtr[source->GetIndex(x, y, source->depth_ - 1)];
+                        dstPtr[this->GetIndex(x, y, -2)] = srcPtr[source->GetIndex(x, y, source->depth_ - 2)];
+                    }
+            }
+            else if (direction == MAP_EAST)
+            {
+                for (unsigned z = 0; z < this->depth_; ++z)
+                    for (unsigned y = 0; y < this->height_; ++y)
+                    {
+                        dstPtr[this->GetIndex(this->width_, y, z)] = srcPtr[source->GetIndex(0, y, z)];
+                        dstPtr[this->GetIndex(this->width_ + 1, y, z)] = srcPtr[source->GetIndex(1, y, z)];
+                    }
+            }
+            else if (direction == MAP_WEST)
+            {
+                for (unsigned z = 0; z < this->depth_; ++z)
+                    for (unsigned y = 0; y < this->height_; ++y)
+                    {
+                        dstPtr[this->GetIndex(-1, y, z)] = srcPtr[source->GetIndex(source->width_ - 1, y, z)];
+                        dstPtr[this->GetIndex(-2, y, z)] = srcPtr[source->GetIndex(source->width_ - 2, y, z)];
+                    }
+            }
+        }
+    }
 }

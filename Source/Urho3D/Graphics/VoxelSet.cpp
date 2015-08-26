@@ -19,41 +19,40 @@
 
 namespace Urho3D {
 
-extern const char* GEOMETRY_CATEGORY;
-
 VoxelSet::VoxelSet(Context* context) :
     Component(context),
-	numChunks_(0),
-	numChunksX_(0),
-	numChunksY_(0),
-	numChunksZ_(0),
-    chunkSpacing_(Vector3(64.0, 128.0, 64.0))
+    numChunks_(0),
+    numChunksX_(0),
+    numChunksY_(0),
+    numChunksZ_(0),
+    chunkXStride_(0),
+    chunkZStride_(0)
 {
+
 }
 
 VoxelSet::~VoxelSet()
 {
-
 }
 
 void VoxelSet::RegisterObject(Context* context)
 {
-	context->RegisterFactory<VoxelSet>(GEOMETRY_CATEGORY);
+    context->RegisterFactory<VoxelSet>("Voxel");
 }
 
 void VoxelSet::OnSetAttribute(const AttributeInfo& attr, const Variant& src)
 {
-	Serializable::OnSetAttribute(attr, src);
+    Serializable::OnSetAttribute(attr, src);
 
-	// Change of any non-accessor attribute requires recreation of the terrain
-	//if (!attr.accessor_)
-	//    recreateTerrain_ = true;
+    // Change of any non-accessor attribute requires recreation of the terrain
+    //if (!attr.accessor_)
+    //    recreateTerrain_ = true;
 }
 
 void VoxelSet::ApplyAttributes()
 {
-	//if (recreateTerrain_)
-	//    CreateGeometry();
+    //if (recreateTerrain_)
+    //    CreateGeometry();
 }
 
 void VoxelSet::OnSetEnabled()
@@ -67,7 +66,7 @@ void VoxelSet::OnSetEnabled()
     }
 }
 
-unsigned VoxelSet::GetIndex(unsigned x, unsigned y, unsigned z) const
+unsigned VoxelSet::GetChunkIndex(unsigned x, unsigned y, unsigned z) const
 {
     return x * chunkXStride_ + y + z * chunkZStride_;
 }
@@ -79,51 +78,37 @@ void VoxelSet::GetCoordinatesFromIndex(unsigned index, unsigned &x, unsigned &y,
     y = index - (x * chunkXStride_) - (z * chunkZStride_);
 }
 
-VoxelMap* VoxelSet::GetVoxelMap(unsigned x, unsigned y, unsigned z)
-{
-    if (x >= numChunksX_ || y >= numChunksY_ || z >= numChunksZ_)
-        return 0;
-
-    unsigned index = GetIndex(x, y, z);
-
-    VoxelMap* voxelMap = voxelMaps_[index];
-    if (voxelMap)
-        return voxelMap;
-
-    ResourceCache* cache = GetSubsystem<ResourceCache>();
-    const String& voxelMapReference = voxelMapResourceRefList_.names_[index];
-    return cache->GetResource<VoxelMap>(voxelMapReference);
-}
-
 VoxelChunk* VoxelSet::GetVoxelChunk(unsigned x, unsigned y, unsigned z)
 {
     if (x >= numChunksX_ || y >= numChunksY_ || z >= numChunksZ_)
         return 0;
-    return chunks_[GetIndex(x, y, z)];
+    return chunks_[GetChunkIndex(x, y, z)];
 }
 
-void VoxelSet::SetNumberOfChunks(unsigned x, unsigned y, unsigned z)
+void VoxelSet::SetVoxelStore(VoxelStore* voxelStore)
 {
-    numChunks_ = x * y * z;
-    numChunksX_ = x;
-    numChunksY_ = y;
-    numChunksZ_ = z;
-    chunkZStride_ = y;
-    chunkXStride_ = y * z;
-    setBox = BoundingBox(Vector3(0.0, 0.0, 0.0), Vector3((float)x, (float)y, (float)z) * chunkSpacing_);
+    voxelStore_ = voxelStore;
+    SetVoxelStoreInternal();
+}
+
+void VoxelSet::SetVoxelStoreInternal()
+{
+    // chunk settings
+    numChunks_ = voxelStore_->GetNumChunks();
+    numChunksX_ = voxelStore_->GetNumChunksX();
+    numChunksY_ = voxelStore_->GetNumChunksY();
+    numChunksZ_ =  voxelStore_->GetNumChunksZ();
+    chunkZStride_ = numChunksY_;
+    chunkXStride_ = numChunksY_ * numChunksZ_;
+
+    chunkSpacing_ = Vector3(
+        (float)voxelStore_->GetChunkSizeX(),
+        (float)voxelStore_->GetChunkSizeY(),
+        (float)voxelStore_->GetChunkSizeZ()
+    );
+
+    setBox = BoundingBox(Vector3(0.0, 0.0, 0.0), Vector3((float)numChunksX_, (float)numChunksY_, (float)numChunksZ_) * chunkSpacing_);
     chunks_.Resize(numChunks_);
-    voxelMaps_.Resize(numChunks_);
-    voxelMapResourceRefList_.names_.Resize(numChunks_);
-    for (unsigned i = 0; i < numChunks_; ++i)
-    {
-        chunks_[i] = 0;
-        voxelMaps_[i] = 0;
-    }
-}
-
-void VoxelSet::SetChunkSpacing(Vector3 chunkSpacing)
-{
-    chunkSpacing_ = chunkSpacing;
 }
 
 VoxelChunk* VoxelSet::GetVoxelChunkAtPosition(Vector3 position)
@@ -132,11 +117,10 @@ VoxelChunk* VoxelSet::GetVoxelChunkAtPosition(Vector3 position)
     int y = 0;
     int z = 0;
     if (GetIndexFromWorldPosition(position, x, y, z))
-        return chunks_[GetIndex(x, y, z)];
+        return chunks_[GetChunkIndex(x, y, z)];
     else
         return 0;
 }
-
 
 void VoxelSet::Build()
 {
@@ -145,55 +129,37 @@ void VoxelSet::Build()
 
 void VoxelSet::LoadChunk(unsigned x, unsigned y, unsigned z)
 {
-    PROFILE(LoadChunk);
-	VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
-    Vector<SharedPtr<VoxelMap> > maps(5);
-    unsigned indexes[5] = {
-        GetIndex(x    ,y,z    ),
-        GetIndex(x    ,y,z + 1),
-        GetIndex(x    ,y,z - 1),
-        GetIndex(x + 1,y,z    ),
-        GetIndex(x - 1,y,z    ),
-    };
-    bool resourceRefLoads[5];
-    ResourceCache* cache = GetSubsystem<ResourceCache>();
-    for (unsigned i = 0; i < 5; ++i)
+    SharedPtr<VoxelMap> map;
     {
-        resourceRefLoads[i] = false;
-        unsigned index = indexes[i];
-        if (index >= numChunks_)
+        PROFILE(LoadChunk);
+        map = voxelStore_->GetVoxelMap(x, y, z);
+        if (!map)
         {
-            maps[i] = 0;
-            continue;
+            LOGERROR("Could not load chunk.  Missing voxel map");
+            return;
         }
-
-        VoxelMap* voxelMap = voxelMaps_[index];
-        if (voxelMap)
-        {
-            maps[i] = voxelMap;
-            continue;
-        }
-
-        const String voxelMapReference = voxelMapResourceRefList_.names_[index];
-        if (!voxelMapReference.Empty())
-            maps[i] = cache->GetResource<VoxelMap>(voxelMapResourceRefList_.names_[indexes[i]]);
     }
 
-    if (maps[0])
     {
+        PROFILE(BuildChunk);
         VoxelChunk* chunk = FindOrCreateVoxelChunk(x, y, z);
-        builder->BuildVoxelChunk(chunk, maps[0], maps[1], maps[2], maps[3], maps[4], false);
+        VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
+        builder->BuildVoxelChunk(chunk, map, true);
     }
 }
 
 void VoxelSet::UnloadChunk(unsigned x, unsigned y, unsigned z)
 {
-    VoxelChunk* voxelChunk = GetVoxelChunk(x, y, z);
+    unsigned index = GetChunkIndex(x, y, z);
+    if (index >= numChunks_)
+        return;
+
+    VoxelChunk* voxelChunk = chunks_[index];
     if (voxelChunk)
     {
         Node* node = voxelChunk->GetNode();
         node->Remove();
-        chunks_[GetIndex(x, y, z)] = 0;
+        chunks_[index] = 0;
     }
 }
 
@@ -236,7 +202,11 @@ bool VoxelSet::GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, 
 
 VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z)
 {
-    VoxelChunk* chunk = GetVoxelChunk(x, y, z);
+    if (x >= numChunksX_ || y >= numChunksY_ || z >= numChunksZ_)
+        return 0;
+
+    unsigned index = GetChunkIndex(x, y, z);
+    VoxelChunk* chunk = chunks_[index];
     if (chunk)
         return chunk;
 
@@ -248,33 +218,24 @@ VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z)
     //chunk->SetCastShadows(false);
 	//CollisionShape* cs = chunkNode->CreateComponent<CollisionShape>();
 	//cs->SetVoxelTriangleMesh(true);
-    chunks_[GetIndex(x, y, z)] = chunk;
+    chunks_[index] = chunk;
     return chunk;
 }
 
-void VoxelSet::SetVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap)
-{
-    if (x >= numChunksX_ || y >= numChunksY_ || z >= numChunksZ_)
-        return;
-
-    unsigned index = GetIndex(x, y, z);
-    voxelMaps_[index] = voxelMap;
-}
-
-void VoxelSet::SetVoxelMapResourceRefList(const ResourceRefList& resourceRefList)
-{
-    voxelMapResourceRefList_ = resourceRefList;
-    voxelMapResourceRefList_.names_.Resize(numChunks_);
-}
-
-void VoxelSet::SetVoxelMapResource(unsigned x, unsigned y, unsigned z, const String& name)
-{
-    if (x >= numChunksX_ || y >= numChunksY_ || z >= numChunksZ_)
-        return;
-
-    unsigned index = GetIndex(x, y, z);
-    voxelMapResourceRefList_.names_[index] = name;
-}
+//void VoxelSet::SetVoxelMapResourceRefList(const ResourceRefList& resourceRefList)
+//{
+//    voxelMapResourceRefList_ = resourceRefList;
+//    voxelMapResourceRefList_.names_.Resize(numChunks_);
+//}
+//
+//void VoxelSet::SetVoxelMapResource(unsigned x, unsigned y, unsigned z, const String& name)
+//{
+//    if (x >= numChunksX_ || y >= numChunksY_ || z >= numChunksZ_)
+//        return;
+//
+//    unsigned index = GetIndex(x, y, z);
+//    voxelMapResourceRefList_.names_[index] = name;
+//}
 
 
 

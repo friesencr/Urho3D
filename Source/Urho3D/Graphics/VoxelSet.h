@@ -2,22 +2,21 @@
 
 #include "../Core/Context.h"
 #include "../Core/Variant.h"
-#include "../Core/WorkQueue.h"
 #include "../Container/Ptr.h"
 #include "../Scene/Component.h"
-#include "../IO/VectorBuffer.h"
 #include "../Math/StringHash.h"
 #include "Material.h"
-#include "../IO/MemoryBuffer.h"
 
 #include "VoxelChunk.h"
 #include "Voxel.h"
+#include "VoxelStore.h"
 
 namespace Urho3D {
 
 class URHO3D_API VoxelChunk;
 class URHO3D_API VoxelSet : public Component
 {
+    OBJECT(VoxelSet);
 public:
     // Construct.
     VoxelSet(Context* context);
@@ -35,30 +34,14 @@ public:
     /// Gets chunk spacing
     Vector3 GetChunkSpacing() const { return chunkSpacing_; }
 
-    /// Sets chunk spacing
-    void SetChunkSpacing(Vector3 spacing);
-    /// Sets number of chunks in the set
-    void SetNumberOfChunks(unsigned x, unsigned y, unsigned z);
-    /// Gets number of chunks in the set
-    unsigned GetNumberOfChunks() const { return numChunks_; }
-    /// Gets number of chunks in the set
-    unsigned GetNumberOfChunksX() const { return numChunksX_; }
-    /// Gets number of chunks in the set
-    unsigned GetNumberOfChunksY() const { return numChunksY_; }
-    /// Gets number of chunks in the set
-    unsigned GetNumberOfChunksZ() const { return numChunksZ_; }
     /// Gets Voxel Chunk at world position.
     VoxelChunk* GetVoxelChunkAtPosition(Vector3 position);
+
     /// Gets Voxel Chunk by index.
     VoxelChunk* GetVoxelChunk(unsigned x, unsigned y, unsigned z);
 
-    VoxelMap* GetVoxelMap(unsigned x, unsigned y, unsigned z);
-
-    void SetVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap);
-
-    unsigned GetIndex(unsigned x, unsigned y, unsigned z) const;
-
     void GetCoordinatesFromIndex(unsigned index, unsigned &x, unsigned &y, unsigned &z);
+    unsigned GetChunkIndex(unsigned x, unsigned y, unsigned z) const;
 
     void LoadChunk(unsigned x, unsigned y, unsigned z);
 
@@ -66,10 +49,19 @@ public:
 
     bool GetIndexFromWorldPosition(Vector3 worldPosition, int &x, int &y, int &z);
 
-    /// Set Voxel Maps
-    void SetVoxelMapResourceRefList(const ResourceRefList& value);
+    VoxelStore* GetVoxelStore() const { return voxelStore_; }
+    void SetVoxelStore(VoxelStore* voxelStore);
 
-    void SetVoxelMapResource(unsigned x, unsigned y, unsigned z, const String& name);
+    unsigned GetNumChunks() const { return numChunks_; }
+    unsigned GetNumChunksX() const { return numChunksX_; }
+    unsigned GetNumChunksY() const { return numChunksY_; }
+    unsigned GetNumChunksZ() const { return numChunksZ_; }
+
+    ///// Get Voxel Maps Attribute
+    //const ResourceRefList& GetVoxelMapAttr() const { return voxelMapResourceRefList_; }
+
+    ///// Set Voxel Maps Attribute
+    //void SetVoxelMapsAttr(const ResourceRefList& value);
 
 
     ///// Set material.
@@ -100,13 +92,12 @@ public:
 
 private:
     void BuildInternal();
+    void SetVoxelStoreInternal();
     VoxelChunk* FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z);
     // Material.
     SharedPtr<Material> material_;
     // Voxel chunks.
     Vector<WeakPtr<VoxelChunk> > chunks_;
-    Vector<WeakPtr<VoxelMap> > voxelMaps_;
-    ResourceRefList voxelMapResourceRefList_;
     BoundingBox setBox;
     unsigned numChunksX_;
     unsigned numChunksY_;
@@ -115,6 +106,7 @@ private:
     unsigned chunkZStride_;
     unsigned numChunks_;
     Vector3 chunkSpacing_;
+    SharedPtr<VoxelStore> voxelStore_;
 };
 
 }

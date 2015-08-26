@@ -159,14 +159,14 @@ void VoxelWorld::CreateScene()
 
     voxelNode_ = scene_->CreateChild("VoxelNode");
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
-    VoxelStreamer* streamer = voxelNode_->CreateComponent<VoxelStreamer>();
-    streamer->SetEnabled(true);
     worldBuilder_ = new WorldBuilder(context_);
-    worldBuilder_->SetSize(64, 64);
+    worldBuilder_->SetSize(128, 128);
     worldBuilder_->SetVoxelSet(voxelSet);
     worldBuilder_->ConfigureParameters();
-    //worldBuilder_->BuildWorld();
+    worldBuilder_->BuildWorld();
     worldBuilder_->LoadWorld();
+    VoxelStreamer* streamer = voxelNode_->CreateComponent<VoxelStreamer>();
+    streamer->SetEnabled(true);
 
     //SharedPtr<Texture2DArray> texture(new Texture2DArray(context_));
     //Vector<SharedPtr<Image> > images;
@@ -219,7 +219,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 600.0f;
+    const float MOVE_SPEED = 1200.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
@@ -314,15 +314,15 @@ void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventD
 {
     //DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
 
-    //// If draw debug mode is enabled, draw navigation mesh debug geometry
+    // If draw debug mode is enabled, draw navigation mesh debug geometry
     //PODVector<VoxelChunk*> voxelChunks;
     //scene_->GetComponents<VoxelChunk>(voxelChunks, true);
     //for (unsigned i = 0; i < voxelChunks.Size(); ++i)
     //  voxelChunks[i]->DrawDebugGeometry(debug, true);
     //scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
 
-    if (drawDebug_)
-        scene_->GetComponent<PhysicsWorld>()->DrawDebugGeometry(true);
+    //if (drawDebug_)
+    //    scene_->GetComponent<PhysicsWorld>()->DrawDebugGeometry(true);
 }
 
 

@@ -32,7 +32,7 @@
 #include "stb_perlin.h"
 
 
-#if 0
+#if 1
     static void AOVoxelLighting(VoxelChunk* chunk, VoxelMap* src, VoxelProcessorWriters writers)
 {
     const unsigned char* bt = 0;
@@ -117,23 +117,22 @@
 
 struct WorldBuildWorkload
 {
-    Context* context;
-    SharedPtr<VoxelMap> voxelMap;
+    VoxelMap* voxelMap;
     unsigned chunkX;
     unsigned chunkY;
     unsigned chunkZ;
+    int startX;
+    int endX;
+    int startZ;
+    int endZ;
 };
 
 void FillTerrainPerlinWorker(const WorkItem* workItem, unsigned threadIndex)
 {
 	WorldBuildWorkload* workload = (WorldBuildWorkload*)workItem->aux_;
     VoxelMap* voxelMap = workload->voxelMap;
-    voxelMap->SetSize(64, 128, 64);
-    voxelMap->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
-    voxelMap->InitializeBlocktype(0);
-
-    int heightMap[64][64];
-    float detailMap[64][64];
+    int heightMap[68][68];
+    float detailMap[68][68];
 
     const float noiseFactors[10] = {
         1.0, 1.0, 1.0, 0.3,
@@ -142,9 +141,9 @@ void FillTerrainPerlinWorker(const WorkItem* workItem, unsigned threadIndex)
     };
 
     // build the heightmap
-    for (unsigned x = 0; x < 64; ++x)
+    for (int x = workload->startX; x < workload->endX; ++x)
     {
-        for (unsigned z = 0; z < 64; ++z)
+        for (int z = workload->startZ; z < workload->endZ; ++z)
         {
             // detail noise
             float dt = 0.0;
@@ -168,8 +167,8 @@ void FillTerrainPerlinWorker(const WorkItem* workItem, unsigned threadIndex)
             //float biome = stb_perlin_noise3((x + chunkX) / 2048, (z + chunkZ) / 2048, 32.0, 256, 256, 256);
 
             int height = (int)((ht + 0.2) * 45.0) + 32;
-            heightMap[x][z] = Clamp(height, 1, 128); 
-            detailMap[x][z] = dt;
+            heightMap[x + 2][z + 2] = Clamp(height, 1, 128); 
+            detailMap[x + 2][z + 2] = dt;
         }
     }
 
@@ -199,12 +198,12 @@ void FillTerrainPerlinWorker(const WorkItem* workItem, unsigned threadIndex)
     int numBlocks = 8;
 
     // fill block type data based on heightmap
-    for (unsigned x = 0; x < 64; ++x)
+    for (int x = workload->startX; x < workload->endX; ++x)
     {
-        for (unsigned z = 0; z < 64; ++z)
+        for (int z = workload->startZ; z < workload->endZ; ++z)
         {
-            int height = heightMap[x][z];
-            float dt = detailMap[x][z];
+            int height = heightMap[x + 2][z + 2];
+            float dt = detailMap[x + 2][z + 2];
 
             for (unsigned i = 0; i < height; ++i)
             {
@@ -233,12 +232,6 @@ void FillTerrainPerlinWorker(const WorkItem* workItem, unsigned threadIndex)
             }
         }
     }
-    String filename = "Data/VoxelWorldMap/VoxelWorldMap_" + String(workload->chunkX) + "_" + String(workload->chunkZ) + ".bin";
-    File file(workload->context, filename, FILE_WRITE);
-    if (file.IsOpen() && voxelMap->Save(file))
-    {
-        unsigned abc = 1234;
-    }
     delete workload;
 }
 
@@ -263,9 +256,12 @@ void WorldBuilder::ConfigureParameters()
     voxelBlocktypeMap_->SetName("ColorVoxelBlocktypeMap");
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     cache->AddManualResource(voxelBlocktypeMap_);
-    cache->SetMemoryBudget(VoxelMap::GetTypeStatic(), 128 * 1024 * 1024);
 
-    voxelSet_->SetNumberOfChunks(width_, 1, depth_);
+    voxelStore_ = new VoxelStore(context_);
+    voxelStore_->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
+    voxelStore_->SetSize(width_, 1, depth_, 64, 128, 64);
+    voxelStore_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
+    voxelSet_->SetVoxelStore(voxelStore_);
 
     //File file(context_);
     //if (file.Open("BlocktypeMap.bin", FILE_WRITE))
@@ -274,37 +270,53 @@ void WorldBuilder::ConfigureParameters()
 
 void WorldBuilder::BuildWorld()
 {
-
 	WorkQueue* queue = GetSubsystem<WorkQueue>();
 	for (unsigned x = 0; x < width_; ++x)
 	{
 		for (unsigned z = 0; z < depth_; ++z)
 		{
-			SharedPtr<WorkItem> workItem(new WorkItem());
-			WorldBuildWorkload* workload = new WorldBuildWorkload();
-            workload->context = context_;
-			workload->chunkX = x;
-			workload->chunkZ = z;
-            workload->voxelMap = new VoxelMap(context_);
-            workload->voxelMap->SetBlocktypeMap(voxelBlocktypeMap_);
-			workItem->aux_ = workload;
-			workItem->priority_ = M_MAX_UNSIGNED;
-			workItem->workFunction_ = FillTerrainPerlinWorker;
-			queue->AddWorkItem(workItem);
+            const unsigned chunkSize = 16;
+            SharedPtr<VoxelMap> voxelMap = voxelStore_->GetVoxelMap(x, 0, z);
+            if (!voxelMap)
+                voxelMap = new VoxelMap(context_);
+
+            // split up into pieces for performance
+            for (unsigned blockX = 0; blockX < 4; ++blockX)
+            {
+                for (unsigned blockZ = 0; blockZ < 4; ++blockZ)
+                {
+                    SharedPtr<WorkItem> workItem(new WorkItem());
+                    WorldBuildWorkload* workload = new WorldBuildWorkload();
+                    workload->voxelMap = voxelMap;
+                    workload->chunkX = x;
+                    workload->chunkZ = z;
+                    // starts and ends need to generate padding around the chunks
+                    workload->startX = blockX ? blockX * chunkSize : -2;
+                    workload->startZ = blockZ ? blockZ * chunkSize : -2;
+                    workload->endX = blockX == 3 ? 66 : (blockX + 1) * chunkSize;
+                    workload->endZ = blockZ == 3 ? 66 : (blockZ + 1) * chunkSize;
+                    workItem->aux_ = workload;
+                    workItem->priority_ = M_MAX_UNSIGNED;
+                    workItem->workFunction_ = FillTerrainPerlinWorker;
+                    queue->AddWorkItem(workItem);
+                }
+            }
+
+            queue->Complete(M_MAX_UNSIGNED);
+            voxelStore_->UpdateVoxelMap(x, 0, z, voxelMap, false);
 		}
 	}
-	queue->Complete(M_MAX_UNSIGNED);
 }
 
 void WorldBuilder::LoadWorld()
 {
-    for (unsigned x = 0; x < width_; ++x)
-    {
-        for (unsigned z = 0; z < depth_; ++z)
-        {
-            String filename = "VoxelWorldMap/VoxelWorldMap_" + String(x) + "_" + String(z) + ".bin";
-            voxelSet_->SetVoxelMapResource(x, 0, z, filename);
-        }
-    }
+    //for (unsigned x = 0; x < width_ * 16; ++x)
+    //{
+    //    for (unsigned z = 0; z < depth_ * 16; ++z)
+    //    {
+    //        String filename = "VoxelWorldMap/VoxelWorldMap_" + String(x % 64) + "_" + String(z % 64) + ".bin";
+    //        voxelSet_->SetVoxelMapResource(x, 0, z, filename);
+    //    }
+    //}
     //voxelSet_->Build();
 }
