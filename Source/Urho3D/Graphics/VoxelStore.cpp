@@ -1,5 +1,5 @@
 #include "VoxelStore.h"
-#include "Voxel.H"
+#include "Voxel.h"
 #include "../Core/Profiler.h"
 #include "../IO/Log.h"
 

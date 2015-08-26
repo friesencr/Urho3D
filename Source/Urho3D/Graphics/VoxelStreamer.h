@@ -58,7 +58,7 @@ private:
     WeakPtr<VoxelSet> voxelSet_;
     PODVector<unsigned> buildQueue_;
     PODVector<unsigned> priorityBuildQueue_;
-    PODVector<Pair<unsigned, bool>> loadedChunks_;
+    PODVector<Pair<unsigned, bool> > loadedChunks_;
 };
 
 }

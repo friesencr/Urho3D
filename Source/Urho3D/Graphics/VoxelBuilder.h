@@ -87,7 +87,7 @@ struct VoxelWorkload
 
 class URHO3D_API VoxelBuilder : public Object {
     OBJECT(VoxelBuilder);
-    friend VoxelChunk;
+    friend class VoxelChunk;
 
 public:
     VoxelBuilder(Context* context);

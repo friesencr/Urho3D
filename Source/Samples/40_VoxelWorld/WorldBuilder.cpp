@@ -277,8 +277,6 @@ void WorldBuilder::BuildWorld()
 		{
             const unsigned chunkSize = 16;
             SharedPtr<VoxelMap> voxelMap = voxelStore_->GetVoxelMap(x, 0, z);
-            if (!voxelMap)
-                voxelMap = new VoxelMap(context_);
 
             // split up into pieces for performance
             for (unsigned blockX = 0; blockX < 4; ++blockX)

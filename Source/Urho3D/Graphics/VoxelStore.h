@@ -71,17 +71,21 @@ public:
         // resource ref
         for (unsigned i = 0; i < numberOfBuffers; ++i)
             buffers_[i] = source.ReadBuffer();
+
+        return true;
     }
 
     bool Save(Serializer& dest)
     {
-		dest.WriteUInt(width_);
-		dest.WriteUInt(height_);
-		dest.WriteUInt(depth_);
-		dest.WriteUInt(dataMask_);
+        dest.WriteUInt(width_);
+        dest.WriteUInt(height_);
+        dest.WriteUInt(depth_);
+        dest.WriteUInt(dataMask_);
         dest.WriteUInt(buffers_.Size());
         for (unsigned i = 0; i < buffers_.Size(); ++i)
             dest.WriteBuffer(buffers_[i]);
+
+        return true;
     }
 
     void SetVoxelMap(unsigned index, VoxelMap* voxelMap)
