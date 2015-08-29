@@ -1,18 +1,8 @@
-#include "VoxelBuilder.h"
-#include "../Resource/ResourceCache.h"
-#include "Texture2DArray.h"
-#include "../Resource/Image.h"
-#include "Technique.h"
-#include "Texture2D.h"
-#include "TextureBuffer.h"
-#include "Material.h"
 #include "../IO/Log.h"
-#include "Core/CoreEvents.h"
-#include "../Container/ArrayPtr.h"
-#include "../IO/Compression.h"
-#include "../Math/Plane.h"
 #include "../Core/Profiler.h"
-#include "../Container/Sort.h"
+#include "../Resource/ResourceCache.h"
+
+#include "VoxelBuilder.h"
 
 #include "../DebugNew.h"
 
@@ -137,9 +127,28 @@ static unsigned char URHO3D_default_palette_compact[64][3] =
 namespace Urho3D
 {
 
+struct VoxelWorkSlot
+{
+    Vector<VoxelWorkload> workloads;
+    VoxelProcessorWriters processorWriters;
+    VoxelJob* job;
+    stbvox_mesh_maker meshMakers[VOXEL_MAX_WORKERS];
+    unsigned char workVertexBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
+    unsigned char workFaceBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_FACE_BUFFER_SIZE];
+    unsigned char workProcessorBuffers[VOXEL_MAP_NUM_BASIC_STREAMS][VOXEL_PROCESSOR_SIZE];
+    int numQuads;
+    bool failed;
+    bool free;
+    bool upload;
+    int workCounter;
+    int numWorkloads;
+    BoundingBox box;
+    Mutex workMutex;
+    Mutex dataMutex;
+};
+
 VoxelBuilder::VoxelBuilder(Context* context)
     : Object(context),
-    compatibilityMode(false),
     sharedIndexBuffer_(0),
     completedJobCount_(0)
 {
@@ -148,7 +157,7 @@ VoxelBuilder::VoxelBuilder(Context* context)
     ambientTable_.Resize(3);
     texscaleTable_.Resize(64);
     texgenTable_.Resize(64);
-    colorTable_.Resize(64);
+    default_colorTable_.Resize(64);
 
 
     // copy transforms
@@ -181,7 +190,7 @@ VoxelBuilder::VoxelBuilder(Context* context)
     }
 
     for (unsigned i = 0; i < 64; ++i)
-        colorTable_[i] = Vector4(URHO3D_default_palette[i]);
+        default_colorTable_[i] = Vector4(URHO3D_default_palette[i]);
 }
 
 VoxelBuilder::~VoxelBuilder()
@@ -417,10 +426,10 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
 #if 1
     if (voxelMap->GetVoxelProcessors().Size() > 0 && voxelMap->processorDataMask_)
     {
-		PODVector<unsigned char>* datas[VoxelMap::NUM_BASIC_STREAMS];
+		PODVector<unsigned char>* datas[VOXEL_MAP_NUM_BASIC_STREAMS];
 		voxelMap->GetBasicDataArrays(datas);
 
-        VoxelWriter* writers[VoxelMap::NUM_BASIC_STREAMS] = {
+        VoxelWriter* writers[VOXEL_MAP_NUM_BASIC_STREAMS] = {
             &slot->processorWriters.blocktype,
             &slot->processorWriters.color2,
             &slot->processorWriters.color2Facemask,
@@ -440,7 +449,7 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
             &slot->processorWriters.vHeight
         };
 
-        for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
+        for (unsigned i = 0; i < VOXEL_MAP_NUM_BASIC_STREAMS; ++i)
         {
             if (!((1 << i) & voxelMap->processorDataMask_))
                 continue;
@@ -449,7 +458,7 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
             unsigned char* dest = slot->workProcessorBuffers[i];
             memset(dest, 0, voxelMap->size_);
             
-            writers[i]->InitializeBuffer(slot->workProcessorBuffers[i]);
+            writers[i]->SetBuffer(slot->workProcessorBuffers[i]);
             writers[i]->SetSize(voxelMap->width_, voxelMap->height_, voxelMap->depth_);
         }
 
@@ -608,10 +617,10 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
         stbvox_map->block_color = voxelBlocktypeMap->blockColor.Empty() ? 0 : &voxelBlocktypeMap->blockColor.Front();
     }
 
-    PODVector<unsigned char>* datas[VoxelMap::NUM_BASIC_STREAMS];
+    PODVector<unsigned char>* datas[VOXEL_MAP_NUM_BASIC_STREAMS];
     voxelMap->GetBasicDataArrays(datas);
 
-    unsigned char** stb_data[VoxelMap::NUM_BASIC_STREAMS] = {
+    unsigned char** stb_data[VOXEL_MAP_NUM_BASIC_STREAMS] = {
         &stbvox_map->blocktype,
         &stbvox_map->color2,
         &stbvox_map->color2_facemask,
@@ -633,13 +642,13 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
 
     // Set voxel maps for stb voxel
     int zero = voxelMap->GetIndex(0, 0, 0);
-    for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
+    for (unsigned i = 0; i < VOXEL_MAP_NUM_BASIC_STREAMS; ++i)
         *stb_data[i] = ((1 << i) & voxelMap->dataMask_) ? &datas[i]->At(zero) : 0;
 
 #if 1
     if (voxelMap->GetVoxelProcessors().Size() > 0 && voxelMap->processorDataMask_)
     {
-        VoxelWriter* writers[VoxelMap::NUM_BASIC_STREAMS] = {
+        VoxelWriter* writers[VOXEL_MAP_NUM_BASIC_STREAMS] = {
             &slot->processorWriters.blocktype,
             &slot->processorWriters.color2,
             &slot->processorWriters.color2Facemask,
@@ -659,14 +668,14 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
             &slot->processorWriters.vHeight
         };
 
-        Vector<VoxelProcessorFunc> processors = voxelMap->GetVoxelProcessors();
-        for (unsigned p = 0; p < processors.Size(); ++p)
-            processors[p](chunk, voxelMap, workload->range, slot->processorWriters);
+        //Vector<VoxelProcessorFunc> processors = voxelMap->GetVoxelProcessors();
+        //for (unsigned p = 0; p < processors.Size(); ++p)
+        //    processors[p](voxelMap, workload->range, slot->processorWriters);
 
-        for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
+        for (unsigned i = 0; i < VOXEL_MAP_NUM_BASIC_STREAMS; ++i)
         {
             if (((1 << i) & voxelMap->processorDataMask_))
-                *stb_data[i] =  &writers[i]->buffer[zero];
+                *stb_data[i] =  &writers[i]->buffer_[zero];
         }
     }
 #endif
@@ -713,7 +722,7 @@ bool VoxelBuilder::UpdateMaterialParameters(Material* material, bool setColors)
     material->SetShaderParameter("TexScale", texscaleTable_);
     material->SetShaderParameter("TexGen", texgenTable_);
     if (setColors)
-        material->SetShaderParameter("ColorTable", colorTable_);
+        material->SetShaderParameter("ColorTable", default_colorTable_);
     return true;
 }
 

@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <Urho3D/Graphics/Voxel.h>
+#include <Urho3D/Voxel/Voxel.h>
 
 #include "Sample.h"
 #include "ProcSky.h"

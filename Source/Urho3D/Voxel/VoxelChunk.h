@@ -1,19 +1,21 @@
 #pragma once
 
-#include "VoxelSet.h"
-#include "Drawable.h"
-#include "Geometry.h"
-#include "VertexBuffer.h"
+#include "../Graphics/Drawable.h"
+#include "../Graphics/Geometry.h"
+#include "../Graphics/VertexBuffer.h"
+#include "../Graphics/OcclusionBuffer.h"
 #include "../Container/Ptr.h"
 #include "../Core/Mutex.h"
-#include "TextureBuffer.h"
-#include "Voxel.h"
-#include "VoxelBuilder.h"
+#include "../Graphics/TextureBuffer.h"
+
+#include "VoxelMap.h"
+#include "VoxelSet.h"
 
 namespace Urho3D {
 
-class URHO3D_API VoxelSet;
+URHO3D_API class VoxelMap;
 struct VoxelJob;
+
 class URHO3D_API VoxelChunk : public Drawable
 {
     OBJECT(VoxelChunk);

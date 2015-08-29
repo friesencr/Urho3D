@@ -47,10 +47,4 @@ EVENT(E_TERRAINCREATED, TerrainCreated)
     PARAM(P_NODE, Node);                    // Node pointer
 }
 
-/// Voxel chunk geometry created.
-EVENT(E_VOXELCHUNKCREATED, VoxelChunkCreated)
-{
-    PARAM(P_NODE, Node);                    // Node pointer
-}
-
 }

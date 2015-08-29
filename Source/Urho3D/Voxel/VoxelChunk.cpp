@@ -1,14 +1,7 @@
+#include "../Scene/Node.h"
+#include "../Graphics/Camera.h"
+
 #include "VoxelChunk.h"
-#include "Drawable.h"
-#include "Geometry.h"
-#include "OctreeQuery.h"
-#include "Scene/Node.h"
-#include "Graphics/VertexBuffer.h"
-#include "Graphics/Camera.h"
-#include "DebugRenderer.h"
-#include "VoxelBuilder.h"
-#include "OcclusionBuffer.h"
-#include "DrawableEvents.h"
 
 #include "../DebugNew.h"
 

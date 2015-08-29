@@ -1,19 +1,8 @@
-#include "VoxelSet.h"
-#include "Drawable.h"
-#include "../Core/Object.h"
-#include "../Scene/Scene.h"
-#include "../Scene/SceneEvents.h"
-#include "../Core/WorkQueue.h"
+#include "../Core/Profiler.h"
 #include "../IO/Log.h"
-#include "../Resource/ResourceCache.h"
-#include "Renderer.h"
-#include "Camera.h"
-#include "OctreeQuery.h"
-#include "Octree.h"
-#include "Core/Profiler.h"
-#include "VoxelBuilder.h"
-#include "../Physics/CollisionShape.h"
-#include "../Physics/RigidBody.h"
+#include "../Scene/Node.h"
+
+#include "VoxelSet.h"
 
 #include "../DebugNew.h"
 
@@ -105,9 +94,9 @@ void VoxelSet::SetVoxelStoreInternal()
     chunkXStride_ = numChunksY_ * numChunksZ_;
 
     chunkSpacing_ = Vector3(
-        (float)VOXEL_STORE_CHUNK_SIZE_X,
-        (float)VOXEL_STORE_CHUNK_SIZE_Y,
-        (float)VOXEL_STORE_CHUNK_SIZE_Z
+        (float)VOXEL_CHUNK_SIZE_X,
+        (float)VOXEL_CHUNK_SIZE_Y,
+        (float)VOXEL_CHUNK_SIZE_Z
     );
 
     setBox = BoundingBox(Vector3(0.0, 0.0, 0.0), Vector3((float)numChunksX_, (float)numChunksY_, (float)numChunksZ_) * chunkSpacing_);

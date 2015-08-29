@@ -37,10 +37,8 @@
 #include <Urho3D/Graphics/StaticModel.h>
 #include <Urho3D/UI/Text.h>
 #include <Urho3D/UI/UI.h>
-#include <Urho3D/Graphics/VoxelSet.h>
 #include <Urho3D/Graphics/Zone.h>
 #include <Urho3D/Graphics/DebugRenderer.h>
-#include <Urho3D/Graphics/VoxelBuilder.h>
 #include <Urho3D/Graphics/Skybox.h>
 #include <Urho3D/Graphics/Texture2D.h>
 #include <Urho3D/Physics/PhysicsWorld.h>
@@ -49,7 +47,7 @@
 #include <Urho3D/IO/Generator.h>
 #include <Urho3D/IO/Log.h>
 #include <Urho3D/IO/File.h>
-#include <Urho3D/Graphics/VoxelStreamer.h>
+#include <Urho3D/Voxel/Voxel.h>
 
 #include "VoxelWorld.h"
 
@@ -144,11 +142,11 @@ void VoxelWorld::CreateScene()
     //light->SetShadowCascade(CascadeParameters(10.0f, 150.0f, 400.0f, 0.0f, 0.8f));
 
     Zone* zone = skyNode->CreateComponent<Zone>();
-    zone->SetBoundingBox(BoundingBox(Vector3(-100000, 0, -100000), Vector3(100000, 128, 100000)));
-    zone->SetAmbientColor(Color(0.7, 0.7, 0.7));
+    zone->SetBoundingBox(BoundingBox(Vector3(-100000.0f, 0.0f, -100000.0f), Vector3(100000.0f, 128.0f, 100000.0f)));
+    zone->SetAmbientColor(Color(0.7f, 0.7f, 0.7f));
     //zone->SetHeightFog(true);
     //zone->SetAmbientGradient(true);
-    zone->SetFogColor(Color(0.3, 0.3, 0.3));
+    zone->SetFogColor(Color(0.3f, 0.3f, 0.3f));
     zone->SetFogStart(400.0f);
     zone->SetFogEnd(900.0f);
 

@@ -5,15 +5,16 @@
 #include "../Container/Ptr.h"
 #include "../Scene/Component.h"
 #include "../Math/StringHash.h"
-#include "Material.h"
+#include "../Graphics/Material.h"
 
 #include "VoxelChunk.h"
-#include "Voxel.h"
 #include "VoxelStore.h"
 
 namespace Urho3D {
 
-class URHO3D_API VoxelChunk;
+class VoxelChunk;
+class VoxelStore;
+
 class URHO3D_API VoxelSet : public Component
 {
     OBJECT(VoxelSet);

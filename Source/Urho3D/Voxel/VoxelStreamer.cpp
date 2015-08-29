@@ -1,11 +1,15 @@
-#include "VoxelStreamer.h"
 #include "../Core/Profiler.h"
-#include "Camera.h"
+#include "../Graphics/Camera.h"
 #include "../Scene/Node.h"
 #include "../Scene/Scene.h"
-#include "Renderer.h"
+#include "../Graphics/Renderer.h"
 #include "../Scene/SceneEvents.h"
 #include "../IO/Log.h"
+
+#include "VoxelSet.h"
+#include "VoxelStreamer.h"
+
+#include "../DebugNew.h"
 
 namespace Urho3D
 {

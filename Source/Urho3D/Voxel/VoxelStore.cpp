@@ -1,10 +1,178 @@
-#include "VoxelStore.h"
-#include "Voxel.h"
 #include "../Core/Profiler.h"
 #include "../IO/Log.h"
+#include "../IO/VectorBuffer.h"
+#include "../IO/MemoryBuffer.h"
+#include "../IO/File.h"
+#include "../IO/FileSystem.h"
+#include "../Resource/ResourceCache.h"
+
+#include "VoxelStore.h"
+
+#include "../DebugNew.h"
 
 namespace Urho3D
 {
+
+VoxelMapPage::VoxelMapPage(Context* context) :
+    Resource(context)
+{
+
+}
+
+VoxelMapPage::~VoxelMapPage()
+{
+
+}
+
+void VoxelMapPage::RegisterObject(Context* context)
+{
+    context->RegisterFactory<VoxelMapPage>("Voxel");
+}
+
+void VoxelMapPage::SetDataMask(unsigned dataMask)
+{
+    dataMask_ = dataMask;
+}
+
+bool VoxelMapPage::BeginLoad(Deserializer& source)
+{
+    if (source.ReadFileID() != "VOXP")
+        return false;
+
+    dataMask_ = source.ReadUInt();
+    // resource ref
+    for (unsigned i = 0; i < VOXEL_STORE_PAGE_SIZE_3D; ++i)
+        buffers_[i] = source.ReadBuffer();
+
+    return true;
+}
+
+bool VoxelMapPage::Save(Serializer& dest)
+{
+    if (!dest.WriteFileID("VOXP"))
+        return false;
+
+    dest.WriteUInt(dataMask_);
+    for (unsigned i = 0; i < VOXEL_STORE_PAGE_SIZE_3D; ++i)
+        dest.WriteBuffer(buffers_[i]);
+
+    return true;
+}
+
+void VoxelMapPage::SetVoxelMap(unsigned index, VoxelMap* voxelMap)
+{
+    if (index >= VOXEL_STORE_PAGE_SIZE_3D)
+        return;
+
+    // TODO validate sizes
+    VectorBuffer dest;
+    VoxelMap::EncodeData(voxelMap, dest);
+    buffers_[index] = dest.GetBuffer();
+}
+
+SharedPtr<VoxelMap> VoxelMapPage::GetVoxelMap(unsigned index)
+{
+    SharedPtr<VoxelMap> voxelMap;
+    if (index >= VOXEL_STORE_PAGE_SIZE_3D)
+        return voxelMap;
+
+    MemoryBuffer source(buffers_[index]);
+    if (source.GetSize())
+    {
+        voxelMap = new VoxelMap(context_);
+        voxelMap->SetDataMask(dataMask_);
+        voxelMap->SetSize(VOXEL_CHUNK_SIZE_X, VOXEL_CHUNK_SIZE_Y, VOXEL_CHUNK_SIZE_Z);
+        VoxelMap::DecodeData(voxelMap, source);
+        return voxelMap;
+    }
+    else
+    {
+        voxelMap = new VoxelMap(context_);
+        voxelMap->SetDataMask(dataMask_);
+        voxelMap->SetSize(VOXEL_CHUNK_SIZE_X, VOXEL_CHUNK_SIZE_Y, VOXEL_CHUNK_SIZE_Z);
+        return voxelMap;
+    }
+}
+
+
+VoxelStore::VoxelStore(Context* context) : Resource(context)
+    , dataMask_(0)
+    , processorDataMask_(0)
+    , numChunks_(0)
+    , numChunksX_(0)
+    , numChunksY_(0)
+    , numChunksZ_(0)
+    , chunkXStride_(0)
+    , chunkZStride_(0)
+    , numPagesX_(0)
+    , numPagesY_(0)
+    , numPagesZ_(0)
+    , numPages_(0)
+    , voxelBlocktypeMap_(0)
+{
+
+}
+
+VoxelStore::~VoxelStore() {
+
+};
+
+void VoxelStore::RegisterObject(Context* context)
+{
+    context->RegisterFactory<VoxelStore>("Voxel");
+}
+
+bool VoxelStore::BeginLoad(Deserializer& source)
+{
+    if (source.ReadFileID() != "VOXS")
+        return false;
+
+    ResourceCache* cache = GetSubsystem<ResourceCache>();
+
+    SetDataMask(source.ReadUInt());
+    SetProcessorDataMask(source.ReadUInt());
+    SetSize(source.ReadUInt(), source.ReadUInt(), source.ReadUInt());
+    ResourceRef blocktypeMap = source.ReadResourceRef();
+    SetVoxelBlocktypeMap(cache->GetResource<VoxelBlocktypeMap>(blocktypeMap.name_));
+
+    for (unsigned i = 0; i < numPages_; ++i)
+    {
+        String pageName = ReplaceExtension(source.GetName(), String(".").AppendWithFormat("%d", i));
+        VoxelMapPage* page = cache->GetResource<VoxelMapPage>(pageName);
+        if (!page)
+            return false;
+        voxelMapPages_[i] = page;
+    }
+
+    return true;
+}
+
+bool VoxelStore::Save(Serializer& dest)
+{
+    if (!dest.WriteFileID("VOXS"))
+        return false;
+
+    ResourceCache* cache = GetSubsystem<ResourceCache>();
+
+    dest.WriteUInt(dataMask_);
+    dest.WriteUInt(processorDataMask_);
+    dest.WriteUInt(numChunksX_);
+    dest.WriteUInt(numChunksY_);
+    dest.WriteUInt(numChunksZ_);
+    if (voxelBlocktypeMap_)
+        dest.WriteResourceRef(ResourceRef(VoxelBlocktypeMap::GetTypeNameStatic(), voxelBlocktypeMap_->GetName()));
+    else
+        dest.WriteResourceRef(Variant::emptyResourceRef);
+
+    for (unsigned i = 0; i < numPages_; ++i)
+    {
+        String pageName = ReplaceExtension(GetName(), String(".").AppendWithFormat("%d", i));
+        File file(context_, pageName, FILE_WRITE);
+        if (!voxelMapPages_[i]->Save(file))
+            return false;
+    }
+    return true;
+}
 
 void VoxelStore::UpdateVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap, bool updateNeighbors)
 {
@@ -122,7 +290,7 @@ SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
     voxelMap->SetBlocktypeMap(GetVoxelBlocktypeMap());
     voxelMap->SetDataMask(GetDataMask());
     voxelMap->SetProcessorDataMask(GetProcessorDataMask());
-    voxelMap->SetVoxelProcessors(voxelProcessors_);
+    //voxelMap->SetVoxelProcessors(voxelProcessors_);
     return voxelMap;
 
 #if VOXEL_MAP_CACHE
@@ -158,9 +326,9 @@ void VoxelStore::SetSizeInternal()
     chunkXStride_ = numChunksY_ * numChunksZ_;
 
     // voxel map page settings
-    numPagesX_ = ceilf((float)numChunksX_ / (float)(VOXEL_STORE_PAGE_SIZE_1D));
-    numPagesY_ = ceilf((float)numChunksY_ / (float)(VOXEL_STORE_PAGE_SIZE_1D));
-    numPagesZ_ = ceilf((float)numChunksZ_ / (float)(VOXEL_STORE_PAGE_SIZE_1D));
+    numPagesX_ = (unsigned)ceilf((float)numChunksX_ / (float)(VOXEL_STORE_PAGE_SIZE_1D));
+    numPagesY_ = (unsigned)ceilf((float)numChunksY_ / (float)(VOXEL_STORE_PAGE_SIZE_1D));
+    numPagesZ_ = (unsigned)ceilf((float)numChunksZ_ / (float)(VOXEL_STORE_PAGE_SIZE_1D));
     numPages_ = numPagesX_ * numPagesY_ * numPagesZ_;
     voxelMapPages_.Resize(numPages_);
     for (unsigned i = 0; i < numPages_; ++i)
@@ -182,5 +350,27 @@ void VoxelStore::SetSizeInternal()
     }
 
 }
+
+const PODVector<StringHash>& VoxelStore::GetVoxelProcessors()
+{
+    return voxelProcessors_;
+}
+
+void VoxelStore::SetVoxelProcessors(PODVector<StringHash>& voxelProcessors)
+{
+    voxelProcessors_ = voxelProcessors;
+}
+
+void VoxelStore::AddVoxelProcessor(StringHash voxelProcessorHash)
+{
+    voxelProcessors_.Push(voxelProcessorHash);
+}
+
+void VoxelStore::RemoveVoxelProcessor(const StringHash& voxelProcessorHash)
+{
+    voxelProcessors_.Remove(voxelProcessorHash);
+}
+
+
 
 }

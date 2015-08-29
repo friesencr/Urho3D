@@ -23,8 +23,7 @@
 #include <Urho3D/Urho3D.h>
 
 #include "WorldBuilder.h"
-#include <Urho3D/Graphics/Voxel.h>
-#include <Urho3D/Graphics/VoxelChunk.h>
+#include <Urho3D/Voxel/Voxel.h>
 #include <Urho3D/IO/File.h>
 #include <Urho3D/Resource/ResourceCache.h>
 

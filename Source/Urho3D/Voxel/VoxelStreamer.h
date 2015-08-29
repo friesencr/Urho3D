@@ -6,12 +6,12 @@
 #include "../Math/Vector3.h"
 #include "../Math/Frustum.h"
 #include "../Scene/Component.h"
-#include "VoxelSet.h"
-#include "VoxelChunk.h"
-#include "VoxelBuilder.h"
+#include "Voxel.h"
 
 namespace Urho3D 
 { 
+
+class URHO3D_API VoxelSet;
 
 /// Heightmap terrain component.
 class URHO3D_API VoxelStreamer : public Component
@@ -30,9 +30,9 @@ public:
     /// Apply attribute changes that can not be applied immediately. Called after scene load or a network update.
     virtual void ApplyAttributes();
     /// Builds appropriate chunks.
-    void Build();
+    //void Build();
 
-	unsigned GetNumberOfLoadedChunks() { return loadedChunks_.Size(); }
+    unsigned GetNumberOfLoadedChunks() { return loadedChunks_.Size(); }
 protected:
     /// Handle enabled/disabled state change.
     virtual void OnSetEnabled();
@@ -47,8 +47,8 @@ private:
     void UnloadBestChunks();
     void HandleSceneUpdate(StringHash eventType, VariantMap& eventData);
     void UpdateSubscriptions();
-    unsigned ChunkInCameraGrid(int x, int y, int z, unsigned viewport);
-    unsigned ChunkInCameraGrid(int x, int y, int z, const Frustum& frustrum);
+    //unsigned ChunkInCameraGrid(int x, int y, int z, unsigned viewport);
+    //unsigned ChunkInCameraGrid(int x, int y, int z, const Frustum& frustrum);
 
     unsigned maxInMemoryMeshPeak_;
     unsigned maxInMemoryMesh_;
