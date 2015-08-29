@@ -40,7 +40,8 @@
 #include "../Resource/ResourceCache.h"
 #include "../Resource/ResourceEvents.h"
 #include "../Scene/Scene.h"
-#include "../Graphics/VoxelChunk.h"
+#include "../Voxel/VoxelEvents.h"
+#include "../Voxel/VoxelChunk.h"
 
 #include <Bullet/BulletCollision/CollisionDispatch/btInternalEdgeUtility.h>
 #include <Bullet/BulletCollision/CollisionShapes/btBoxShape.h>

@@ -28,9 +28,14 @@ void VoxelWriter::SetSize(unsigned width, unsigned height, unsigned depth)
     size_ = (width + 4)*(height + 4)*(depth + 4);
 }
 
-void VoxelWriter::SetBuffer(unsigned char* data)
+void VoxelWriter::SetBuffer(unsigned char* buffer)
 {
-    buffer_ = data;
+    buffer_ = buffer;
+}
+
+unsigned char* VoxelWriter::GetBuffer()
+{
+    return buffer_;
 }
 
 void VoxelWriter::Clear(unsigned char value)

@@ -31,8 +31,8 @@
 namespace Urho3D
 {
 
-class Node;
-class Scene;
+    class Node;
+    class Scene;
 
 }
 
@@ -66,13 +66,12 @@ private:
     /// Handle the logic update event.
     void HandleUpdate(StringHash eventType, VariantMap& eventData);
     void HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData);
-	void SpawnObject();
+    void SpawnObject();
 
-	SharedPtr<VoxelBlocktypeMap> voxelBlocktypeMap_;
     SharedPtr<Node> voxelNode_;
     SharedPtr<ProcSky> procSky_;
     SharedPtr<WorldBuilder> worldBuilder_;
     int counter_;
-	bool drawDebug_;
+    bool drawDebug_;
     SharedPtr<Text> cameraPositionText_;
 };

@@ -10,6 +10,7 @@
 
 namespace Urho3D
 { 
+class VoxelMap;
 
 struct VoxelMapCacheNode : public LinkedListNode
 {

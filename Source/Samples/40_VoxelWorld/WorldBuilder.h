@@ -1,9 +1,10 @@
 #pragma once
 
-#include <Urho3D/Graphics/Voxel.h>
 #include <Urho3D/Core/Object.h>
 #include <Urho3D/Core/Context.h>
-#include <Urho3D/Voxel/Voxel.h>
+#include <Urho3D/Voxel/VoxelSet.h>
+#include <Urho3D/Voxel/VoxelBlocktypeMap.h>
+#include <Urho3D/Voxel/VoxelStore.h>
 
 using namespace Urho3D;
 

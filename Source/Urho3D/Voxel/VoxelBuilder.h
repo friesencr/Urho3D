@@ -6,12 +6,19 @@
 #include "../Container/Ptr.h"
 #include "../Graphics/IndexBuffer.h"
 #include "../Graphics/VertexBuffer.h"
-#include "Voxel.h"
+#include "../Graphics/Technique.h"
+#include "../Graphics/Material.h"
+
+#include "VoxelDefs.h"
+#include "VoxelUtils.h"
+#include "VoxelMap.h"
+#include "VoxelChunk.h"
 
 namespace Urho3D {
 
-URHO3D_API class VoxelMap;
-URHO3D_API class VoxelChunk;
+class VoxelMap;
+class VoxelChunk;
+class VoxelBuilder;
 
 struct VoxelJob {
     SharedPtr<VoxelChunk> chunk;

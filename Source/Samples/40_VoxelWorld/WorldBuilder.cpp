@@ -26,13 +26,14 @@
 #include <Urho3D/Voxel/Voxel.h>
 #include <Urho3D/IO/File.h>
 #include <Urho3D/Resource/ResourceCache.h>
+#include <Urho3D/Voxel/VoxelWriter.h>
 
 #define STB_PERLIN_IMPLEMENTATION
 #include "stb_perlin.h"
 
 
 #if 1
-    static void AOVoxelLighting(VoxelChunk* chunk, VoxelMap* src, const VoxelRangeFragment& range, VoxelProcessorWriters writers)
+static void AOVoxelLighting(VoxelMap* src, const VoxelRangeFragment& range, VoxelProcessorWriters writers)
 {
     const unsigned char* bt = 0;
     const int xStride = src->GetStrideX();
@@ -45,6 +46,8 @@
     int endX = range.indexX == (range.lenX - 1) ? range.endX + 1 : range.endX;
     int endY = range.indexY == (range.lenY - 1) ? range.endY + 1 : range.endY;
     int endZ = range.indexZ == (range.lenZ - 1) ? range.endZ + 1 : range.endZ;
+
+    unsigned char* lightingBuffer = writers.lighting.GetBuffer();
 
     for (int x = startX; x < endX; x++)
     {
@@ -113,9 +116,9 @@
                     (bt[zStride] == 0) +             // s
                     (bt[xStride + zStride] == 0);    // se
 
-                writers.lighting.buffer[index - 1] += light * 255 / 27;
-                writers.lighting.buffer[index] += light * 255 / 27;
-                writers.lighting.buffer[index + 1] += light * 255 / 27;
+                lightingBuffer[index - 1] += light * 255 / 27;
+                lightingBuffer[index] += light * 255 / 27;
+                lightingBuffer[index + 1] += light * 255 / 27;
             }
         }
     }
@@ -136,7 +139,7 @@ struct WorldBuildWorkload
 
 void FillTerrainPerlinWorker(const WorkItem* workItem, unsigned threadIndex)
 {
-	WorldBuildWorkload* workload = (WorldBuildWorkload*)workItem->aux_;
+    WorldBuildWorkload* workload = (WorldBuildWorkload*)workItem->aux_;
     VoxelMap* voxelMap = workload->voxelMap;
     int heightMap[68][68];
     float detailMap[68][68];
@@ -267,26 +270,21 @@ void WorldBuilder::ConfigureParameters()
     voxelStore_ = new VoxelStore(context_);
     voxelStore_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
     voxelStore_->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
-    voxelStore_->AddVoxelProcessor(AOVoxelLighting);
-    voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+    /* voxelStore_->AddVoxelProcessor(AOVoxelLighting); */
+    /* voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING); */
     voxelStore_->SetSize(width_, 1, depth_);
     voxelSet_->SetVoxelStore(voxelStore_);
 }
 
 void WorldBuilder::CreateWorld()
 {
-	WorkQueue* queue = GetSubsystem<WorkQueue>();
-	for (unsigned x = 0; x < width_; ++x)
-	{
-		for (unsigned z = 0; z < depth_; ++z)
-		{
+    WorkQueue* queue = GetSubsystem<WorkQueue>();
+    for (int x = 0; x < width_; ++x)
+    {
+        for (int z = 0; z < depth_; ++z)
+        {
             const unsigned chunkSize = 16;
             SharedPtr<VoxelMap> voxelMap = voxelStore_->GetVoxelMap(x, 0, z);
-
-            if (voxelMap.Null())
-            {
-                int a = 1;
-            }
 
             // split up into pieces for performance
             for (unsigned blockX = 0; blockX < 4; ++blockX)
@@ -312,8 +310,8 @@ void WorldBuilder::CreateWorld()
 
             queue->Complete(M_MAX_UNSIGNED);
             voxelStore_->UpdateVoxelMap(x, 0, z, voxelMap, false);
-		}
-	}
+        }
+    }
 }
 
 void WorldBuilder::SaveWorld()
@@ -332,8 +330,8 @@ void WorldBuilder::LoadWorld()
 {
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     voxelStore_ = cache->GetResource<VoxelStore>("VoxelWorld.vox");
-    voxelStore_->AddVoxelProcessor(AOVoxelLighting);
-    voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+    /* voxelStore_->AddVoxelProcessor(AOVoxelLighting); */
+    /* voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING); */
     voxelSet_->SetVoxelStore(voxelStore_);
 }
 

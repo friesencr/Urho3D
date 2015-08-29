@@ -56,8 +56,8 @@
 #endif
 #include "../Core/WorkQueue.h"
 #include "../Resource/XMLFile.h"
-#include "../Graphics/VoxelBuilder.h"
 
+#include "../Voxel/VoxelBuilder.h"
 #include "../Voxel/Voxel.h"
 
 #if defined(EMSCRIPTEN) && defined(URHO3D_TESTING)

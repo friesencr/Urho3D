@@ -3,7 +3,12 @@
 #include "../Core/Object.h"
 #include "../Resource/Resource.h"
 #include "../Container/Vector.h"
-#include "Voxel.h"
+
+#include "VoxelBlocktypeMap.h"
+#include "VoxelTextureMap.h"
+#include "VoxelOverlayMap.h"
+#include "VoxelColorPalette.h"
+#include "VoxelBuilder.h"
 
 namespace Urho3D 
 {
@@ -114,17 +119,17 @@ public:
     const PODVector<unsigned char>& GetTex2ReplaceData() const { return tex2Facemask; }
     const PODVector<unsigned char>& GetTex2FacemaskData() const { return tex2Replace; }
 
-    inline void SetColor(int x, int y, int z, unsigned char val);
+    void SetColor(int x, int y, int z, unsigned char val);
 
-    inline void SetBlocktype(int x, int y, int z, unsigned char val);
+    void SetBlocktype(int x, int y, int z, unsigned char val);
 
-    inline void SetVheight(int x, int y, int z, VoxelHeight sw, VoxelHeight se, VoxelHeight nw, VoxelHeight ne);
+    void SetVheight(int x, int y, int z, VoxelHeight sw, VoxelHeight se, VoxelHeight nw, VoxelHeight ne);
 
-    inline void SetLighting(int x, int y, int z, unsigned char val);
+    void SetLighting(int x, int y, int z, unsigned char val);
 
-    inline void SetTex2(int x, int y, int z, unsigned char val);
+    void SetTex2(int x, int y, int z, unsigned char val);
 
-    inline void SetGeometry(int x, int y, int z, VoxelGeometry voxelGeometry, VoxelRotation rotation, VoxelHeight height);
+    void SetGeometry(int x, int y, int z, VoxelGeometry voxelGeometry, VoxelRotation rotation, VoxelHeight height);
 
 private:
     unsigned dataMask_;

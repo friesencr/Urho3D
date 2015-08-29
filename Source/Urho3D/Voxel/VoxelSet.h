@@ -10,7 +10,8 @@
 #include "VoxelChunk.h"
 #include "VoxelStore.h"
 
-namespace Urho3D {
+namespace Urho3D
+{
 
 class VoxelChunk;
 class VoxelStore;

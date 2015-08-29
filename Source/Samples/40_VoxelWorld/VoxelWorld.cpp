@@ -47,7 +47,7 @@
 #include <Urho3D/IO/Generator.h>
 #include <Urho3D/IO/Log.h>
 #include <Urho3D/IO/File.h>
-#include <Urho3D/Voxel/Voxel.h>
+#include <Urho3D/Voxel/VoxelStreamer.h>
 
 #include "VoxelWorld.h"
 

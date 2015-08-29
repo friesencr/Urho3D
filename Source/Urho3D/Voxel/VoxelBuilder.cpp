@@ -2,6 +2,7 @@
 #include "../Core/Profiler.h"
 #include "../Resource/ResourceCache.h"
 
+#include "VoxelWriter.h"
 #include "VoxelBuilder.h"
 
 #include "../DebugNew.h"

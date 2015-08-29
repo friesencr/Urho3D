@@ -9,11 +9,12 @@
 #include "../Graphics/TextureBuffer.h"
 
 #include "VoxelMap.h"
+#include "VoxelBuilder.h"
 #include "VoxelSet.h"
 
-namespace Urho3D {
-
-URHO3D_API class VoxelMap;
+namespace Urho3D
+{
+class VoxelMap;
 struct VoxelJob;
 
 class URHO3D_API VoxelChunk : public Drawable
@@ -62,10 +63,10 @@ class URHO3D_API VoxelChunk : public Drawable
 
     void SetNumberOfMeshes(unsigned count);
 
-	unsigned GetNumMeshes() const { return numMeshes_; }
-	unsigned GetTotalQuads() const;
-	unsigned GetNumQuads(unsigned index) const { return numQuads_[index]; }
-	unsigned GetReducedNumQuads(unsigned index) const { return reducedQuadCount_[index]; }
+    unsigned GetNumMeshes() const { return numMeshes_; }
+    unsigned GetTotalQuads() const;
+    unsigned GetNumQuads(unsigned index) const { return numQuads_[index]; }
+    unsigned GetReducedNumQuads(unsigned index) const { return reducedQuadCount_[index]; }
     unsigned char GetIndexX();
     unsigned char GetIndexY();
     unsigned char GetIndexZ();

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Voxel.h"
+#include "VoxelUtils.h"
+#include "VoxelMap.h"
 
 namespace Urho3D 
 {
-URHO3D_API class VoxelMap;
 
 class URHO3D_API VoxelWriter
 {
@@ -18,6 +18,7 @@ public:
     unsigned GetStrideZ() const { return strideZ_; }
     void SetSize(unsigned width, unsigned height, unsigned depth);
     void SetBuffer(unsigned char* data);
+    unsigned char* GetBuffer();
     void Clear(unsigned char value);
     inline void Set(int x, int y, int z, unsigned char val);
     inline void SetColor(int x, int y, int z, unsigned char val);
@@ -55,7 +56,6 @@ struct URHO3D_API VoxelProcessorWriters
     VoxelWriter vHeight;
 };
 
-//typedef void(*VoxelProcessorFunc)(VoxelMap* source, const VoxelRangeFragment& range, VoxelProcessorWriters writers);
-typedef void(*VoxelProcessorFunc)(void);
+typedef void(*VoxelProcessorFunc)(VoxelMap* source, const VoxelRangeFragment& range, VoxelProcessorWriters writers);
 
 }

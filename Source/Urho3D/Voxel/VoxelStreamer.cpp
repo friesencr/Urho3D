@@ -6,7 +6,6 @@
 #include "../Scene/SceneEvents.h"
 #include "../IO/Log.h"
 
-#include "VoxelSet.h"
 #include "VoxelStreamer.h"
 
 #include "../DebugNew.h"
@@ -18,10 +17,10 @@ extern const char* GEOMETRY_CATEGORY;
 
 VoxelStreamer::VoxelStreamer(Context* context) 
     : Component(context),
-    maxInMemoryMesh_(1600),
     maxInMemoryMeshPeak_(2000),
-    maxBuildFrameTime_(0),
-    maxBuildsPerFrame_(0)
+    maxInMemoryMesh_(1600),
+    maxBuildsPerFrame_(0),
+    maxBuildFrameTime_(0)
 {
 
 }
@@ -57,10 +56,10 @@ void VoxelStreamer::ApplyAttributes()
 
 void VoxelStreamer::UpdateSubscriptions()
 {
-	using namespace SceneUpdate;
-	Scene* scene = GetScene();
+    using namespace SceneUpdate;
+    Scene* scene = GetScene();
     Node* node = GetNode();
-    if (scene && scene && IsEnabled())
+    if (scene && node && IsEnabled())
         SubscribeToEvent(scene, E_SCENEUPDATE, HANDLER(VoxelStreamer, HandleSceneUpdate));
     else
         UnsubscribeFromEvent(scene, E_SCENEUPDATE);

@@ -6,12 +6,11 @@
 #include "../Math/Vector3.h"
 #include "../Math/Frustum.h"
 #include "../Scene/Component.h"
-#include "Voxel.h"
+
+#include "VoxelSet.h"
 
 namespace Urho3D 
 { 
-
-class URHO3D_API VoxelSet;
 
 /// Heightmap terrain component.
 class URHO3D_API VoxelStreamer : public Component
