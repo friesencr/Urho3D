@@ -35,6 +35,8 @@ class VoxelBuilder;
 class VoxelChunk;
 struct VoxelWorkSlot;
 struct VoxelWorkload;
+class VoxelMap;
+struct VoxelProcessorWriters;
 
 struct VoxelJob {
     SharedPtr<VoxelChunk> chunk;
@@ -77,9 +79,7 @@ struct VoxelWorkload
     int slot;
     VoxelBuilder* builder;
     SharedPtr<WorkItem> workItem;
-    unsigned char index[3];
-    unsigned char start[3];
-    unsigned char end[3];
+    VoxelRangeFragment range;
     unsigned workloadIndex;
     int numQuads;
     BoundingBox box;

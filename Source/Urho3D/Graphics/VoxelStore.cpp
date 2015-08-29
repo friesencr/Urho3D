@@ -69,9 +69,9 @@ void VoxelStore::UpdateVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* vo
 VoxelMapPage* VoxelStore::GetVoxelMapPageByChunkIndex(unsigned x, unsigned y, unsigned z)
 {
     unsigned index = 
-        ((x / pageSizeX_) * pageStrideX_) +
-        (y / pageSizeY_) +
-        ((z / pageSizeZ_) * pageStrideZ_);
+        ((x / (VOXEL_STORE_PAGE_SIZE_1D)) * numPagesZ_) +
+        (y / (VOXEL_STORE_PAGE_SIZE_1D)) +
+        ((z / (VOXEL_STORE_PAGE_SIZE_1D)) * numPagesY_);
 
     if (index >= numPages_)
         return 0;
@@ -80,9 +80,9 @@ VoxelMapPage* VoxelStore::GetVoxelMapPageByChunkIndex(unsigned x, unsigned y, un
 
 unsigned VoxelStore::GetVoxelMapIndexInPage(unsigned x, unsigned y, unsigned z)
 {
-    return ((x % pageSizeX_) * (pageSizeY_ * pageSizeZ_)) + 
-            (y % pageSizeY_) +
-            ((z % pageSizeZ_) * pageSizeY_);
+    return (y & VOXEL_STORE_PAGE_MASK_1D) | 
+        ((z & VOXEL_STORE_PAGE_MASK_1D) << VOXEL_STORE_PAGE_STRIDE_Z) | 
+        ((x & VOXEL_STORE_PAGE_MASK_1D) << VOXEL_STORE_PAGE_STRIDE_X);
 }
 
 SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
@@ -90,8 +90,8 @@ SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
     if (x >= numChunksX_ || y >= numChunksY_ || z >= numChunksZ_)
         return SharedPtr<VoxelMap>();
 
-    unsigned chunkIndex = GetMapIndex(x, y, z);
 #if VOXEL_MAP_CACHE
+    unsigned chunkIndex = GetMapIndex(x, y, z);
     VoxelMapCacheNode* cacheItem = 0;
     {
         PROFILE(GetVoxelMapFromCache);
@@ -124,6 +124,7 @@ SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
     voxelMap->SetProcessorDataMask(GetProcessorDataMask());
     voxelMap->SetVoxelProcessors(voxelProcessors_);
     return voxelMap;
+
 #if VOXEL_MAP_CACHE
     if (voxelMap)
     {
@@ -139,18 +140,14 @@ SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
         voxelMapCacheCount_++;
     }
 #endif
-
 }
 
-void VoxelStore::SetSize(unsigned numChunksX, unsigned numChunksY, unsigned numChunksZ, unsigned chunkSizeX, unsigned chunkSizeY, unsigned chunkSizeZ)
+void VoxelStore::SetSize(unsigned numChunksX, unsigned numChunksY, unsigned numChunksZ)
 {
     numChunksX_ = numChunksX;
     numChunksY_ = numChunksY;
     numChunksZ_ = numChunksZ;
     numChunks_ = numChunksX * numChunksY * numChunksZ;
-    chunkSizeX_ = chunkSizeX;
-    chunkSizeY_ = chunkSizeY;
-    chunkSizeZ_ = chunkSizeZ;
     SetSizeInternal();
 }
 
@@ -161,15 +158,10 @@ void VoxelStore::SetSizeInternal()
     chunkXStride_ = numChunksY_ * numChunksZ_;
 
     // voxel map page settings
-    pageSizeX_ = Min(numChunksX_, 8);
-    pageSizeY_ = Min(numChunksY_, 8);
-    pageSizeZ_ = Min(numChunksZ_, 8);
-    numPagesX_ = ceilf((float)numChunksX_ / (float)pageSizeX_);
-    numPagesY_ = ceilf((float)numChunksY_ / (float)pageSizeY_);
-    numPagesZ_ = ceilf((float)numChunksZ_ / (float)pageSizeZ_);
+    numPagesX_ = ceilf((float)numChunksX_ / (float)(VOXEL_STORE_PAGE_SIZE_1D));
+    numPagesY_ = ceilf((float)numChunksY_ / (float)(VOXEL_STORE_PAGE_SIZE_1D));
+    numPagesZ_ = ceilf((float)numChunksZ_ / (float)(VOXEL_STORE_PAGE_SIZE_1D));
     numPages_ = numPagesX_ * numPagesY_ * numPagesZ_;
-    pageStrideX_ = numPagesY_ * numPagesZ_;
-    pageStrideZ_ = numPagesY_;
     voxelMapPages_.Resize(numPages_);
     for (unsigned i = 0; i < numPages_; ++i)
         voxelMapPages_[i] = new VoxelMapPage(context_);
@@ -183,9 +175,7 @@ void VoxelStore::SetSizeInternal()
             for (unsigned y = 0; y < numPagesY_; ++y)
             {
                 VoxelMapPage* voxelMapPage = voxelMapPages_[pageIndex];
-                voxelMapPage->SetVoxelMapSize(chunkSizeX_, chunkSizeY_, chunkSizeZ_);
                 voxelMapPage->SetDataMask(dataMask_);
-                voxelMapPage->SetNumberOfMaps(pageSizeX_ * pageSizeY_ * pageSizeZ_);
                 pageIndex++;
             }
         }

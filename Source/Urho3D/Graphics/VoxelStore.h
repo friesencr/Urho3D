@@ -1,24 +1,31 @@
 #pragma once
 
+#include "../Core/Context.h"
 #include "../IO/MemoryBuffer.h"
 #include "../Scene/Component.h"
 #include "../Resource/Resource.h"
+#include "../Resource/ResourceCache.h"
 #include "../Container/LinkedList.h"
+#include "../IO/File.h"
+#include "../IO/FileSystem.h"
 #include "Voxel.h"
 
 namespace Urho3D
 { 
 
+static const unsigned VOXEL_STORE_CHUNK_SIZE_X = 64;
+static const unsigned VOXEL_STORE_CHUNK_SIZE_Y = 128;
+static const unsigned VOXEL_STORE_CHUNK_SIZE_Z = 64;
+static const unsigned VOXEL_STORE_PAGE_SIZE_1D = 8;
+static const unsigned VOXEL_STORE_PAGE_MASK_1D = 0x7;
+static const unsigned VOXEL_STORE_PAGE_SIZE_2D = 8 * 8;
+static const unsigned VOXEL_STORE_PAGE_SIZE_3D = 8 * 8 * 8;
+static const unsigned VOXEL_STORE_PAGE_STRIDE_X = 6; // bits
+static const unsigned VOXEL_STORE_PAGE_STRIDE_Z = 3; // bits
+
 #define VOXEL_NEIGHBOR_DIRTY(x,y,z) \
     if (x < 2) \
         west = true; \
-
-
-struct VoxelPageItem : public RefCounted
-{
-    unsigned char dirty;
-
-};
 
 struct VoxelMapCacheNode : public LinkedListNode
 {
@@ -36,28 +43,18 @@ public:
 private:
     unsigned dataMask_;
     unsigned processorDataMask_;
-    unsigned height_;
-    unsigned width_;
-    unsigned depth_;
-    Vector<PODVector<unsigned char> > buffers_;
+    PODVector<unsigned char> buffers_[VOXEL_STORE_PAGE_SIZE_3D];
 
 public:
+
+    static void RegisterObject(Context* context)
+    {
+        context->RegisterFactory<VoxelMapPage>("Voxel");
+    }
 
     void SetDataMask(unsigned dataMask)
     {
         dataMask_ = dataMask;
-    }
-
-	void SetVoxelMapSize(unsigned width, unsigned height, unsigned depth)
-	{
-		width_ = width;
-		height_ = height;
-		depth_ = depth;
-	}
-
-    void SetNumberOfMaps(unsigned numberOfMaps)
-    {
-        buffers_.Resize(numberOfMaps);
     }
 
     bool BeginLoad(Deserializer& source)
@@ -65,11 +62,9 @@ public:
         if (source.ReadFileID() != "VOXP")
             return false;
 
-        SetVoxelMapSize(source.ReadUInt(), source.ReadUInt(), source.ReadUInt());
         dataMask_ = source.ReadUInt();
-        unsigned numberOfBuffers = source.ReadUInt();
         // resource ref
-        for (unsigned i = 0; i < numberOfBuffers; ++i)
+        for (unsigned i = 0; i < VOXEL_STORE_PAGE_SIZE_3D; ++i)
             buffers_[i] = source.ReadBuffer();
 
         return true;
@@ -77,12 +72,11 @@ public:
 
     bool Save(Serializer& dest)
     {
-        dest.WriteUInt(width_);
-        dest.WriteUInt(height_);
-        dest.WriteUInt(depth_);
+        if (!dest.WriteFileID("VOXP"))
+            return false;
+
         dest.WriteUInt(dataMask_);
-        dest.WriteUInt(buffers_.Size());
-        for (unsigned i = 0; i < buffers_.Size(); ++i)
+        for (unsigned i = 0; i < VOXEL_STORE_PAGE_SIZE_3D; ++i)
             dest.WriteBuffer(buffers_[i]);
 
         return true;
@@ -90,7 +84,7 @@ public:
 
     void SetVoxelMap(unsigned index, VoxelMap* voxelMap)
     {
-        if (index >= buffers_.Size())
+        if (index >= VOXEL_STORE_PAGE_SIZE_3D)
             return;
 
         // TODO validate sizes
@@ -102,7 +96,7 @@ public:
     SharedPtr<VoxelMap> GetVoxelMap(unsigned index)
     {
         SharedPtr<VoxelMap> voxelMap;
-        if (index >= buffers_.Size())
+        if (index >= VOXEL_STORE_PAGE_SIZE_3D)
             return voxelMap;
 
         MemoryBuffer source(buffers_[index]);
@@ -110,7 +104,7 @@ public:
         {
             voxelMap = new VoxelMap(context_);
             voxelMap->SetDataMask(dataMask_);
-            voxelMap->SetSize(width_, height_, depth_);
+            voxelMap->SetSize(VOXEL_STORE_CHUNK_SIZE_X, VOXEL_STORE_CHUNK_SIZE_Y, VOXEL_STORE_CHUNK_SIZE_Z);
             VoxelMap::DecodeData(voxelMap, source);
             return voxelMap;
         }
@@ -118,7 +112,7 @@ public:
         {
             voxelMap = new VoxelMap(context_);
             voxelMap->SetDataMask(dataMask_);
-            voxelMap->SetSize(width_, height_, depth_);
+            voxelMap->SetSize(VOXEL_STORE_CHUNK_SIZE_X, VOXEL_STORE_CHUNK_SIZE_Y, VOXEL_STORE_CHUNK_SIZE_Z);
             return voxelMap;
         }
     }
@@ -126,16 +120,13 @@ public:
 
 class URHO3D_API VoxelStore : public Resource
 {
-    const static unsigned MAX_PAGE_SIZE = 8;
     OBJECT(VoxelStore);
 
 public:
+    static const unsigned MAX_PAGES = 4096;
     VoxelStore(Context* context) : Resource(context)
         , dataMask_(0)
         , processorDataMask_(0)
-        , chunkSizeX_(0)
-        , chunkSizeY_(0)
-        , chunkSizeZ_(0)
         , numChunks_(0)
         , numChunksX_(0)
         , numChunksY_(0)
@@ -146,19 +137,73 @@ public:
         , numPagesY_(0)
         , numPagesZ_(0)
         , numPages_(0)
-        , pageSizeX_(0)
-        , pageSizeY_(0)
-        , pageSizeZ_(0)
-        , pageStrideX_(0)
-        , pageStrideY_(0)
-        , pageStrideZ_(0)
         , voxelBlocktypeMap_(0)
     {
     }
     virtual ~VoxelStore() {};
+
+    static void RegisterObject(Context* context)
+    {
+        context->RegisterFactory<VoxelStore>("Voxel");
+    }
+
+    bool BeginLoad(Deserializer& source)
+    {
+        if (source.ReadFileID() != "VOXS")
+            return false;
+
+        ResourceCache* cache = GetSubsystem<ResourceCache>();
+
+        SetDataMask(source.ReadUInt());
+        SetProcessorDataMask(source.ReadUInt());
+        SetSize(source.ReadUInt(), source.ReadUInt(), source.ReadUInt());
+        ResourceRef blocktypeMap = source.ReadResourceRef();
+        SetVoxelBlocktypeMap(cache->GetResource<VoxelBlocktypeMap>(blocktypeMap.name_));
+
+        for (unsigned i = 0; i < numPages_; ++i)
+        {
+            String pageName = ReplaceExtension(source.GetName(), String(".").AppendWithFormat("%d", i));
+            VoxelMapPage* page = cache->GetResource<VoxelMapPage>(pageName);
+            if (!page)
+                return false;
+            voxelMapPages_[i] = page;
+        }
+
+        return true;
+    }
+
+    bool Save(Serializer& dest)
+    {
+        if (!dest.WriteFileID("VOXS"))
+            return false;
+
+        ResourceCache* cache = GetSubsystem<ResourceCache>();
+
+        dest.WriteUInt(dataMask_);
+        dest.WriteUInt(processorDataMask_);
+        dest.WriteUInt(numChunksX_);
+        dest.WriteUInt(numChunksY_);
+        dest.WriteUInt(numChunksZ_);
+        if (voxelBlocktypeMap_)
+            dest.WriteResourceRef(ResourceRef(VoxelBlocktypeMap::GetTypeNameStatic(), voxelBlocktypeMap_->GetName()));
+        else
+            dest.WriteResourceRef(Variant::emptyResourceRef);
+
+        for (unsigned i = 0; i < numPages_; ++i)
+        {
+            String pageName = ReplaceExtension(GetName(), String(".").AppendWithFormat("%d", i));
+            File file(context_, pageName, FILE_WRITE);
+            if (!voxelMapPages_[i]->Save(file))
+                return false;
+        }
+        return true;
+    }
+
+
+
     void UpdateVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap, bool updateNeighbors = true);
     SharedPtr<VoxelMap> GetVoxelMap(unsigned x, unsigned y, unsigned z);
-    void SetSize(unsigned numChunksX, unsigned numChunksY, unsigned numChunksZ, unsigned chunkSizeX, unsigned chunkSizeY, unsigned chunkSizeZ);
+    void SetSize(unsigned numChunksX, unsigned numChunksY, unsigned numChunksZ);
     void SetDataMask(unsigned dataMask) { dataMask_ = dataMask; }
     unsigned GetDataMask() const { return dataMask_; }
     unsigned GetMapIndex(int x, int y, int z) { return x * chunkXStride_ + y + z * chunkZStride_; }
@@ -166,9 +211,6 @@ public:
     unsigned GetNumChunksX() const { return numChunksX_; }
     unsigned GetNumChunksY() const { return numChunksY_; }
     unsigned GetNumChunksZ() const { return numChunksZ_; }
-    unsigned GetChunkSizeX() const { return chunkSizeX_; }
-    unsigned GetChunkSizeY() const { return chunkSizeY_; }
-    unsigned GetChunkSizeZ() const { return chunkSizeZ_; }
     void SetVoxelBlocktypeMap(VoxelBlocktypeMap* voxelBlocktypeMap) { voxelBlocktypeMap_ = voxelBlocktypeMap; }
     VoxelBlocktypeMap* GetVoxelBlocktypeMap() { return voxelBlocktypeMap_; }
 
@@ -183,14 +225,11 @@ private:
     void SetSizeInternal();
     SharedPtr<VoxelBlocktypeMap> voxelBlocktypeMap_;
     VoxelMapPage* GetVoxelMapPageByChunkIndex(unsigned x, unsigned y, unsigned z);
-    unsigned GetVoxelMapIndexInPage(unsigned x, unsigned y, unsigned z);
+    inline unsigned GetVoxelMapIndexInPage(unsigned x, unsigned y, unsigned z);
     Vector<VoxelProcessorFunc> voxelProcessors_;
 
     unsigned dataMask_;
     unsigned processorDataMask_;
-    unsigned chunkSizeX_;
-    unsigned chunkSizeY_;
-    unsigned chunkSizeZ_;
     unsigned numChunks_;
     unsigned numChunksX_;
     unsigned numChunksY_;
@@ -201,12 +240,6 @@ private:
     unsigned numPagesY_;
     unsigned numPagesZ_;
     unsigned numPages_;
-    unsigned pageSizeX_;
-    unsigned pageSizeY_;
-    unsigned pageSizeZ_;
-    unsigned pageStrideX_;
-    unsigned pageStrideY_;
-    unsigned pageStrideZ_;
     unsigned voxelMapCacheCount_;
     LinkedList<VoxelMapCacheNode> voxelMapCache_;
     Vector<SharedPtr<VoxelMapPage> > voxelMapPages_;

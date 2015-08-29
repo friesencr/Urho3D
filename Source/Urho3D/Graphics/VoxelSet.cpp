@@ -93,6 +93,9 @@ void VoxelSet::SetVoxelStore(VoxelStore* voxelStore)
 
 void VoxelSet::SetVoxelStoreInternal()
 {
+    if (!voxelStore_)
+        return;
+
     // chunk settings
     numChunks_ = voxelStore_->GetNumChunks();
     numChunksX_ = voxelStore_->GetNumChunksX();
@@ -102,9 +105,9 @@ void VoxelSet::SetVoxelStoreInternal()
     chunkXStride_ = numChunksY_ * numChunksZ_;
 
     chunkSpacing_ = Vector3(
-        (float)voxelStore_->GetChunkSizeX(),
-        (float)voxelStore_->GetChunkSizeY(),
-        (float)voxelStore_->GetChunkSizeZ()
+        (float)VOXEL_STORE_CHUNK_SIZE_X,
+        (float)VOXEL_STORE_CHUNK_SIZE_Y,
+        (float)VOXEL_STORE_CHUNK_SIZE_Z
     );
 
     setBox = BoundingBox(Vector3(0.0, 0.0, 0.0), Vector3((float)numChunksX_, (float)numChunksY_, (float)numChunksZ_) * chunkSpacing_);
@@ -127,7 +130,7 @@ void VoxelSet::Build()
     BuildInternal();
 }
 
-void VoxelSet::LoadChunk(unsigned x, unsigned y, unsigned z)
+void VoxelSet::LoadChunk(unsigned x, unsigned y, unsigned z, bool async)
 {
     SharedPtr<VoxelMap> map;
     {
@@ -144,7 +147,7 @@ void VoxelSet::LoadChunk(unsigned x, unsigned y, unsigned z)
         PROFILE(BuildChunk);
         VoxelChunk* chunk = FindOrCreateVoxelChunk(x, y, z);
         VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
-        builder->BuildVoxelChunk(chunk, map, true);
+        builder->BuildVoxelChunk(chunk, map, async);
     }
 }
 
@@ -179,7 +182,7 @@ void VoxelSet::BuildInternal()
         {
             for (unsigned y = 0; y < numChunksY_; ++y)
             {
-                LoadChunk(x, y, z);
+                LoadChunk(x, y, z, false);
             }
         }
     }

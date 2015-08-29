@@ -33,17 +33,25 @@
 
 
 #if 1
-    static void AOVoxelLighting(VoxelChunk* chunk, VoxelMap* src, VoxelProcessorWriters writers)
+    static void AOVoxelLighting(VoxelChunk* chunk, VoxelMap* src, const VoxelRangeFragment& range, VoxelProcessorWriters writers)
 {
     const unsigned char* bt = 0;
     const int xStride = src->GetStrideX();
     const int zStride = src->GetStrideZ();
 
-    for (int x = -1; x < (int)src->GetWidth()+1; x++)
+    // have to generate data 1 block outside the normal chunk data
+    int startX = range.indexX == 0 ? -1 : range.startX;
+    int startY = range.indexY == 0 ? -1 : range.startY;
+    int startZ = range.indexZ == 0 ? -1 : range.startZ;
+    int endX = range.indexX == (range.lenX - 1) ? range.endX + 1 : range.endX;
+    int endY = range.indexY == (range.lenY - 1) ? range.endY + 1 : range.endY;
+    int endZ = range.indexZ == (range.lenZ - 1) ? range.endZ + 1 : range.endZ;
+
+    for (int x = startX; x < endX; x++)
     {
-        for (int z = -1; z < (int)src->GetDepth()+1; z++)
+        for (int z = startZ; z < endZ; z++)
         {
-            for (int y = -1; y < (int)src->GetHeight()+1; y++)
+            for (int y = startY; y < endY; y++)
             {
                 int index = src->GetIndex(x, y, z);
                 bt = &src->GetBlocktypeData()[index];
@@ -259,18 +267,14 @@ void WorldBuilder::ConfigureParameters()
 
     voxelStore_ = new VoxelStore(context_);
     voxelStore_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
+    voxelStore_->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
     voxelStore_->AddVoxelProcessor(AOVoxelLighting);
     voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
-    voxelStore_->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
-    voxelStore_->SetSize(width_, 1, depth_, 64, 128, 64);
+    voxelStore_->SetSize(width_, 1, depth_);
     voxelSet_->SetVoxelStore(voxelStore_);
-
-    //File file(context_);
-    //if (file.Open("BlocktypeMap.bin", FILE_WRITE))
-    //    voxelBlocktypeMap_->Save(file);
 }
 
-void WorldBuilder::BuildWorld()
+void WorldBuilder::CreateWorld()
 {
 	WorkQueue* queue = GetSubsystem<WorkQueue>();
 	for (unsigned x = 0; x < width_; ++x)
@@ -279,6 +283,11 @@ void WorldBuilder::BuildWorld()
 		{
             const unsigned chunkSize = 16;
             SharedPtr<VoxelMap> voxelMap = voxelStore_->GetVoxelMap(x, 0, z);
+
+            if (voxelMap.Null())
+            {
+                int a = 1;
+            }
 
             // split up into pieces for performance
             for (unsigned blockX = 0; blockX < 4; ++blockX)
@@ -308,15 +317,28 @@ void WorldBuilder::BuildWorld()
 	}
 }
 
+void WorldBuilder::SaveWorld()
+{
+    voxelStore_->SetName("Data/VoxelWorldMap/VoxelWorld");
+    {
+        File file(context_, "Data/VoxelWorldMap/VoxelWorld.vox", FILE_WRITE);
+        if (!voxelStore_->Save(file))
+        {
+            return;
+        }
+    }
+}
+
 void WorldBuilder::LoadWorld()
 {
-    //for (unsigned x = 0; x < width_ * 16; ++x)
-    //{
-    //    for (unsigned z = 0; z < depth_ * 16; ++z)
-    //    {
-    //        String filename = "VoxelWorldMap/VoxelWorldMap_" + String(x % 64) + "_" + String(z % 64) + ".bin";
-    //        voxelSet_->SetVoxelMapResource(x, 0, z, filename);
-    //    }
-    //}
+    ResourceCache* cache = GetSubsystem<ResourceCache>();
+    voxelStore_ = cache->GetResource<VoxelStore>("VoxelWorld.vox");
+    voxelStore_->AddVoxelProcessor(AOVoxelLighting);
+    voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+    voxelSet_->SetVoxelStore(voxelStore_);
+}
+
+void WorldBuilder::BuildWorld()
+{
     //voxelSet_->Build();
 }

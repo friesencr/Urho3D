@@ -24,7 +24,9 @@ public:
     ~WorldBuilder();
     void SetVoxelSet(VoxelSet* voxelSet) { voxelSet_ = voxelSet; }
     void ConfigureParameters();
-    void BuildWorld();
+    void CreateWorld();
     void LoadWorld();
+    void SaveWorld();
+    void BuildWorld();
     void SetSize(unsigned width, unsigned depth) { height_ = 1; width_ = width; depth_ = depth; }
 };

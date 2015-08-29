@@ -140,7 +140,7 @@ void VoxelStreamer::BuildInternal()
     if (!voxelSet_ || voxelSet_->GetNumChunks() == 0)
         return;
 
-    maxBuildsPerFrame_ = 10;
+    maxBuildsPerFrame_ = 0;
     maxBuildFrameTime_ = 1;
     maxPriorityBuildFrameTime_ = 0;
 

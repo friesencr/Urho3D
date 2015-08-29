@@ -12,6 +12,24 @@
 
 namespace Urho3D {
 
+static const unsigned VOXEL_BLOCK_BLOCKTYPE      = 0x00000001;
+static const unsigned VOXEL_BLOCK_COLOR2         = 0x00000002;
+static const unsigned VOXEL_BLOCK_COLOR2FACEMASK = 0x00000004;
+static const unsigned VOXEL_BLOCK_COLOR3         = 0x00000008;
+static const unsigned VOXEL_BLOCK_COLOR3FACEMASK = 0x00000010;
+static const unsigned VOXEL_BLOCK_COLOR          = 0x00000020;
+static const unsigned VOXEL_BLOCK_ECOLOR         = 0x00000040;
+static const unsigned VOXEL_BLOCK_ECOLORFACEMASK = 0x00000080;
+static const unsigned VOXEL_BLOCK_EXTENDEDCOLOR  = 0x00000100;
+static const unsigned VOXEL_BLOCK_GEOMETRY       = 0x00000200;
+static const unsigned VOXEL_BLOCK_LIGHTING       = 0x00000400;
+static const unsigned VOXEL_BLOCK_OVERLAY        = 0x00000800;
+static const unsigned VOXEL_BLOCK_ROTATE         = 0x00001000;
+static const unsigned VOXEL_BLOCK_TEX2           = 0x00002000;
+static const unsigned VOXEL_BLOCK_TEX2FACEMASK   = 0x00004000;
+static const unsigned VOXEL_BLOCK_TEX2REPLACE    = 0x00008000;
+static const unsigned VOXEL_BLOCK_VHEIGHT        = 0x00010000;
+
 class VoxelChunk;
 class VoxelMap;
 
@@ -20,9 +38,6 @@ struct VoxelRGB {
     unsigned char g;
     unsigned char b;
 };
-
-struct VoxelProcessorWriters;
-typedef void(*VoxelProcessorFunc)(VoxelChunk* chunk, VoxelMap* source, VoxelProcessorWriters writers);
 
 // Shapes of blocks that aren't always cubes
 enum VoxelGeometry
@@ -79,29 +94,123 @@ enum VoxelFaceRotation
     VOXEL_FACEROT_270
 };
 
-static const unsigned VOXEL_BLOCK_BLOCKTYPE      = 0x00000001;
-static const unsigned VOXEL_BLOCK_COLOR2         = 0x00000002;
-static const unsigned VOXEL_BLOCK_COLOR2FACEMASK = 0x00000004;
-static const unsigned VOXEL_BLOCK_COLOR3         = 0x00000008;
-static const unsigned VOXEL_BLOCK_COLOR3FACEMASK = 0x00000010;
-static const unsigned VOXEL_BLOCK_COLOR          = 0x00000020;
-static const unsigned VOXEL_BLOCK_ECOLOR         = 0x00000040;
-static const unsigned VOXEL_BLOCK_ECOLORFACEMASK = 0x00000080;
-static const unsigned VOXEL_BLOCK_EXTENDEDCOLOR  = 0x00000100;
-static const unsigned VOXEL_BLOCK_GEOMETRY       = 0x00000200;
-static const unsigned VOXEL_BLOCK_LIGHTING       = 0x00000400;
-static const unsigned VOXEL_BLOCK_OVERLAY        = 0x00000800;
-static const unsigned VOXEL_BLOCK_ROTATE         = 0x00001000;
-static const unsigned VOXEL_BLOCK_TEX2           = 0x00002000;
-static const unsigned VOXEL_BLOCK_TEX2FACEMASK   = 0x00004000;
-static const unsigned VOXEL_BLOCK_TEX2REPLACE    = 0x00008000;
-static const unsigned VOXEL_BLOCK_VHEIGHT        = 0x00010000;
-
 unsigned char VoxelEncodeColor(Color c, bool tex1Enabled, bool tex2Enabled);
-
 unsigned char VoxelEncodeVHeight(VoxelHeight southWest, VoxelHeight southEast, VoxelHeight northWest, VoxelHeight northEast);
-
 unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot, VoxelHeight height);
+
+class URHO3D_API VoxelWriter
+{
+public:
+    unsigned size;
+    unsigned strideX;
+    unsigned strideZ;
+    unsigned char* buffer;
+
+    VoxelWriter() :
+        size(0),
+        strideX(0),
+        strideZ(0)
+    {
+
+    }
+    
+    inline unsigned GetIndex(int x, int y, int z) { return (y + 2) + ((z + 2) * strideZ) + ((x + 2) * strideX); }
+
+    void SetSize(unsigned width, unsigned height, unsigned depth)
+    {
+        strideZ = height + 4;
+        strideX = (height + 4) * (depth + 4);
+        size = (width + 4)*(height + 4)*(depth + 4);
+    }
+
+    void InitializeBuffer(unsigned char* data)
+    {
+        buffer = data;
+    }
+
+    void Clear(unsigned char value)
+    {
+        memset(buffer, value, sizeof(char) * size);
+    }
+
+    inline void Set(int x, int y, int z, unsigned char val)
+    {
+        buffer[GetIndex(x, y, z)] = val;
+    }
+
+    inline void SetColor(int x, int y, int z, unsigned char val)
+    {
+        buffer[GetIndex(x, y, z)] = val;
+    }
+
+    inline void SetBlocktype(int x, int y, int z, unsigned char val)
+    {
+        buffer[GetIndex(x, y, z)] = val;
+    }
+
+    inline void SetVheight(int x, int y, int z, VoxelHeight sw, VoxelHeight se, VoxelHeight nw, VoxelHeight ne)
+    {
+        buffer[GetIndex(x, y, z)] = VoxelEncodeVHeight(sw, se, nw, ne);
+    }
+
+    inline void SetLighting(int x, int y, int z, unsigned char val)
+    {
+        buffer[GetIndex(x, y, z)] = val;
+    }
+
+    inline void SetTex2(int x, int y, int z, unsigned char val)
+    {
+        buffer[GetIndex(x, y, z)] = val;
+    }
+
+    inline void SetGeometry(int x, int y, int z, VoxelGeometry geometry, VoxelRotation rotation, VoxelHeight height)
+    {
+        buffer[GetIndex(x, y, z)] = VoxelEncodeGeometry(geometry, rotation, height);
+    }
+};
+
+struct VoxelProcessorWriters
+{
+	VoxelWriter blocktype;
+	VoxelWriter color2;
+	VoxelWriter color2Facemask;
+	VoxelWriter color3;
+	VoxelWriter color3Facemask;
+	VoxelWriter color;
+	VoxelWriter eColor;
+	VoxelWriter eColorFaceMask;
+	VoxelWriter extendedColor;
+	VoxelWriter geometry;
+	VoxelWriter lighting;
+	VoxelWriter overlay;
+	VoxelWriter rotate;
+	VoxelWriter tex2;
+	VoxelWriter tex2Facemask;
+	VoxelWriter tex2Replace;
+	VoxelWriter vHeight;
+};
+
+struct VoxelRange
+{
+    int startX;
+    int startY;
+    int startZ;
+    int endX;
+    int endY;
+    int endZ;
+};
+
+struct VoxelRangeFragment : VoxelRange
+{
+    int indexX;
+    int indexY;
+    int indexZ;
+    int lenX;
+    int lenY;
+    int lenZ;
+};
+
+typedef void(*VoxelProcessorFunc)(VoxelChunk* voxelChunk, VoxelMap* source, const VoxelRangeFragment& range, VoxelProcessorWriters writers);
 
 //unsigned char VoxelEncodeGeometry(VoxelGeometry geometry, VoxelRotation rot);
 //
@@ -222,76 +331,6 @@ public:
     //virtual bool Save(Serializer& dest);
 };
 
-class URHO3D_API VoxelWriter
-{
-public:
-    unsigned size;
-    unsigned strideX;
-    unsigned strideZ;
-    unsigned char* buffer;
-
-    VoxelWriter() :
-        size(0),
-        strideX(0),
-        strideZ(0)
-    {
-
-    }
-    
-    inline unsigned GetIndex(int x, int y, int z) { return (y + 2) + ((z + 2) * strideZ) + ((x + 2) * strideX); }
-
-    void SetSize(unsigned width, unsigned height, unsigned depth)
-    {
-        strideZ = height + 4;
-        strideX = (height + 4) * (depth + 4);
-        size = (width + 4)*(height + 4)*(depth + 4);
-    }
-
-    void InitializeBuffer(unsigned char* data)
-    {
-        buffer = data;
-    }
-
-    void Clear(unsigned char value)
-    {
-        memset(buffer, value, sizeof(char) * size);
-    }
-
-    inline void Set(int x, int y, int z, unsigned char val)
-    {
-        buffer[GetIndex(x, y, z)] = val;
-    }
-
-    inline void SetColor(int x, int y, int z, unsigned char val)
-    {
-        buffer[GetIndex(x, y, z)] = val;
-    }
-
-    inline void SetBlocktype(int x, int y, int z, unsigned char val)
-    {
-        buffer[GetIndex(x, y, z)] = val;
-    }
-
-    inline void SetVheight(int x, int y, int z, VoxelHeight sw, VoxelHeight se, VoxelHeight nw, VoxelHeight ne)
-    {
-        buffer[GetIndex(x, y, z)] = VoxelEncodeVHeight(sw, se, nw, ne);
-    }
-
-    inline void SetLighting(int x, int y, int z, unsigned char val)
-    {
-        buffer[GetIndex(x, y, z)] = val;
-    }
-
-    inline void SetTex2(int x, int y, int z, unsigned char val)
-    {
-        buffer[GetIndex(x, y, z)] = val;
-    }
-
-    inline void SetGeometry(int x, int y, int z, VoxelGeometry geometry, VoxelRotation rotation, VoxelHeight height)
-    {
-        buffer[GetIndex(x, y, z)] = VoxelEncodeGeometry(geometry, rotation, height);
-    }
-};
 
 class URHO3D_API VoxelMap : public Resource {
     OBJECT(VoxelMap);
@@ -390,9 +429,7 @@ public:
 
     Vector<VoxelProcessorFunc> GetVoxelProcessors() { return voxelProcessors_; }
     void SetVoxelProcessors(Vector<VoxelProcessorFunc>& voxelProcessors) { voxelProcessors_ = voxelProcessors; }
-
     void AddVoxelProcessor(VoxelProcessorFunc voxelProcessor) { voxelProcessors_.Push(voxelProcessor); }
-
     void RemoveVoxelProcessor(unsigned index) { voxelProcessors_.Erase(index); }
 
     unsigned char GetBlocktype(int x, int y, int z) const { return blocktype[GetIndex(x,y,z)]; }
@@ -483,27 +520,6 @@ private:
 	datas[15] = &tex2Replace;
 	datas[16] = &vHeight;
     }
-};
-
-struct VoxelProcessorWriters
-{
-	VoxelWriter blocktype;
-	VoxelWriter color2;
-	VoxelWriter color2Facemask;
-	VoxelWriter color3;
-	VoxelWriter color3Facemask;
-	VoxelWriter color;
-	VoxelWriter eColor;
-	VoxelWriter eColorFaceMask;
-	VoxelWriter extendedColor;
-	VoxelWriter geometry;
-	VoxelWriter lighting;
-	VoxelWriter overlay;
-	VoxelWriter rotate;
-	VoxelWriter tex2;
-	VoxelWriter tex2Facemask;
-	VoxelWriter tex2Replace;
-	VoxelWriter vHeight;
 };
 
 //class Voxel

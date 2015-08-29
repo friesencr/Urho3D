@@ -64,6 +64,7 @@
 #include "../../Graphics/VoxelSet.h"
 #include "../../Graphics/VoxelChunk.h"
 #include "../../Graphics/VoxelStreamer.h"
+#include "../../Graphics/VoxelStore.h"
 #include "../../IO/File.h"
 #include "../../IO/Log.h"
 #include "../../Resource/ResourceCache.h"
@@ -3390,6 +3391,8 @@ void RegisterGraphicsLibrary(Context* context)
     VoxelTextureMap::RegisterObject(context);
     VoxelColorPalette::RegisterObject(context);
     VoxelMap::RegisterObject(context);
+    VoxelStore::RegisterObject(context);
+    VoxelMapPage::RegisterObject(context);
 }
 
 }

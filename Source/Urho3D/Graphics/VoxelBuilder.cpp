@@ -453,36 +453,39 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
             writers[i]->SetSize(voxelMap->width_, voxelMap->height_, voxelMap->depth_);
         }
 
-        Vector<VoxelProcessorFunc> processors = voxelMap->GetVoxelProcessors();
-        for (unsigned p = 0; p < processors.Size(); ++p)
-            processors[p](chunk, voxelMap, slot->processorWriters);
+        //Vector<VoxelProcessorFunc> processors = voxelMap->GetVoxelProcessors();
+        //for (unsigned p = 0; p < processors.Size(); ++p)
+        //    processors[p](chunk, voxelMap, slot->processorWriters);
     }
 #endif
 
-    unsigned char workloadsX = (unsigned char)ceil((float)voxelMap->width_ / (float)VOXEL_WORKER_SIZE_X);
-    unsigned char workloadsY = (unsigned char)ceil((float)voxelMap->height_ / (float)VOXEL_WORKER_SIZE_Y);
-    unsigned char workloadsZ = (unsigned char)ceil((float)voxelMap->depth_ / (float)VOXEL_WORKER_SIZE_Z);
+    int workloadsX = (int)ceil((float)voxelMap->width_ / (float)VOXEL_WORKER_SIZE_X);
+    int workloadsY = (int)ceil((float)voxelMap->height_ / (float)VOXEL_WORKER_SIZE_Y);
+    int workloadsZ = (int)ceil((float)voxelMap->depth_ / (float)VOXEL_WORKER_SIZE_Z);
     unsigned index = 0;
     slot->numWorkloads = workloadsX * workloadsY * workloadsZ;
     slot->workCounter = slot->numWorkloads;
-    for (unsigned char x = 0; x < workloadsX; ++x)
+    for (int x = 0; x < workloadsX; ++x)
     {
-        for (unsigned char z = 0; z < workloadsZ; ++z)
+        for (int z = 0; z < workloadsZ; ++z)
         {
-            for (unsigned char y = 0; y < workloadsY; ++y)
+            for (int y = 0; y < workloadsY; ++y)
             {
                 VoxelWorkload* workload = &slot->workloads[index];
                 workload->builder = this;
                 workload->slot = job->slot;
-                workload->index[0] = x;
-                workload->index[1] = y;
-                workload->index[2] = z;
-                workload->start[0] = x * VOXEL_WORKER_SIZE_X;
-                workload->start[1] = 0;
-                workload->start[2] = z * VOXEL_WORKER_SIZE_Z;
-                workload->end[0] = Min((int)voxelMap->width_, (x + 1) * VOXEL_WORKER_SIZE_X);
-                workload->end[1] = Min((int)voxelMap->height_, (y + 1) * VOXEL_WORKER_SIZE_Y);
-                workload->end[2] = Min((int)voxelMap->depth_, (z + 1) * VOXEL_WORKER_SIZE_Z);
+                workload->range.indexX = x;
+                workload->range.indexY = y;
+                workload->range.indexZ = z;
+                workload->range.lenX = workloadsX;
+                workload->range.lenY = workloadsY;
+                workload->range.lenZ = workloadsZ;
+                workload->range.startX = x * VOXEL_WORKER_SIZE_X;
+                workload->range.startY = 0;
+                workload->range.startZ = z * VOXEL_WORKER_SIZE_Z;
+                workload->range.endX = Min((int)voxelMap->width_, (x + 1) * VOXEL_WORKER_SIZE_X);
+                workload->range.endY = Min((int)voxelMap->height_, (y + 1) * VOXEL_WORKER_SIZE_Y);
+                workload->range.endZ = Min((int)voxelMap->depth_, (z + 1) * VOXEL_WORKER_SIZE_Z);
                 workload->workloadIndex = index;
                 workload->numQuads = 0;
                 index++;
@@ -631,7 +634,7 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
     // Set voxel maps for stb voxel
     int zero = voxelMap->GetIndex(0, 0, 0);
     for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
-        *stb_data[i] = ((1 << i) & VOXEL_BLOCK_BLOCKTYPE & voxelMap->dataMask_) ? &datas[i]->At(zero) : 0;
+        *stb_data[i] = ((1 << i) & voxelMap->dataMask_) ? &datas[i]->At(zero) : 0;
 
 #if 1
     if (voxelMap->GetVoxelProcessors().Size() > 0 && voxelMap->processorDataMask_)
@@ -655,6 +658,11 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
             &slot->processorWriters.tex2Replace,
             &slot->processorWriters.vHeight
         };
+
+        Vector<VoxelProcessorFunc> processors = voxelMap->GetVoxelProcessors();
+        for (unsigned p = 0; p < processors.Size(); ++p)
+            processors[p](chunk, voxelMap, workload->range, slot->processorWriters);
+
         for (unsigned i = 0; i < VoxelMap::NUM_BASIC_STREAMS; ++i)
         {
             if (((1 << i) & voxelMap->processorDataMask_))
@@ -670,16 +678,16 @@ bool VoxelBuilder::BuildMesh(VoxelWorkload* workload)
     stbvox_set_default_mesh(mm, 0);
 
     bool success = true;
-    for (unsigned y = 0; y < workload->end[1]; y += 16)
+    for (unsigned y = 0; y < workload->range.endY; y += 16)
     {
         stbvox_set_input_range(
             mm,
-            workload->start[0],
-            workload->start[2],
-            workload->start[1] + y,
-            workload->end[0],
-            workload->end[2],
-            Min(y + 16, workload->end[1])
+            workload->range.startX,
+            workload->range.startZ,
+            workload->range.startY + y,
+            workload->range.endX,
+            workload->range.endZ,
+            Min(y + 16, workload->range.endY)
         );
 
         if (stbvox_make_mesh(mm) == 0)

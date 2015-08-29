@@ -43,7 +43,7 @@ public:
     void GetCoordinatesFromIndex(unsigned index, unsigned &x, unsigned &y, unsigned &z);
     unsigned GetChunkIndex(unsigned x, unsigned y, unsigned z) const;
 
-    void LoadChunk(unsigned x, unsigned y, unsigned z);
+    void LoadChunk(unsigned x, unsigned y, unsigned z, bool async = true);
 
     void UnloadChunk(unsigned x, unsigned y, unsigned z);
 
