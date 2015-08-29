@@ -169,7 +169,7 @@ void VoxelStreamer::BuildInternal()
                 unsigned y = 0;
                 unsigned z = 0;
                 voxelSet_->GetCoordinatesFromIndex(buildItem, x, y, z);
-                voxelSet_->LoadChunk(x,y,z);
+                voxelSet_->LoadChunk(x,y,z,true);
                 loadedChunks_.Push(Pair<unsigned, bool>(buildItem, false));
                 if (i % 2 == 1)
                     voxelBuilder->CompleteWork();
@@ -261,7 +261,7 @@ void VoxelStreamer::CreateChunksWithGrid(int indexX, int indexY, int indexZ, uns
                 else
                     buildQueue_.Push(index);
 
-                if (priorityBuildQueue_.Size() > maxBuildsPerFrame_)
+                if (maxBuildsPerFrame_ && priorityBuildQueue_.Size() > maxBuildsPerFrame_)
                     return;
                 // TODO: Check build queue for existing item from different viewports
             }
