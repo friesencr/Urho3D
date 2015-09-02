@@ -33,9 +33,9 @@
 
 
 #if 1
-static void AOVoxelLighting(VoxelMap* src, const VoxelRangeFragment& range, VoxelProcessorWriters writers)
+static void AOVoxelLighting(VoxelData* src, VoxelData* dest, const VoxelRangeFragment& range)
 {
-    const unsigned char* bt = 0;
+    unsigned char* bt = 0;
     const int xStride = src->GetStrideX();
     const int zStride = src->GetStrideZ();
 
@@ -47,7 +47,7 @@ static void AOVoxelLighting(VoxelMap* src, const VoxelRangeFragment& range, Voxe
     int endY = range.indexY == (range.lenY - 1) ? range.endY + 1 : range.endY;
     int endZ = range.indexZ == (range.lenZ - 1) ? range.endZ + 1 : range.endZ;
 
-    unsigned char* lightingBuffer = writers.lighting.GetBuffer();
+    unsigned char* lightingBuffer = &dest->GetLightingData().Front();
 
     for (int x = startX; x < endX; x++)
     {
@@ -267,11 +267,14 @@ void WorldBuilder::ConfigureParameters()
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     cache->AddManualResource(voxelBlocktypeMap_);
 
+    VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
+    builder->RegisterProcessor("AOVoxelLighting", AOVoxelLighting);
+
     voxelStore_ = new VoxelStore(context_);
     voxelStore_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
     voxelStore_->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
-    /* voxelStore_->AddVoxelProcessor(AOVoxelLighting); */
-    /* voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING); */
+    voxelStore_->AddVoxelProcessor("AOVoxelLighting");
+    voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
     voxelStore_->SetSize(width_, 1, depth_);
     voxelSet_->SetVoxelStore(voxelStore_);
 }
@@ -330,8 +333,10 @@ void WorldBuilder::LoadWorld()
 {
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     voxelStore_ = cache->GetResource<VoxelStore>("VoxelWorld.vox");
-    /* voxelStore_->AddVoxelProcessor(AOVoxelLighting); */
-    /* voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING); */
+    VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
+    builder->RegisterProcessor("AOVoxelLighting", AOVoxelLighting);
+    voxelStore_->AddVoxelProcessor("AOVoxelLighting");
+    voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
     voxelSet_->SetVoxelStore(voxelStore_);
 }
 

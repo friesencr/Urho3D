@@ -66,7 +66,7 @@ void VoxelMapPage::SetVoxelMap(unsigned index, VoxelMap* voxelMap)
 
     // TODO validate sizes
     VectorBuffer dest;
-    VoxelMap::EncodeData(voxelMap, dest);
+    VoxelMap::RunLengthEncodeData(voxelMap, dest);
     buffers_[index] = dest.GetBuffer();
 }
 
@@ -82,7 +82,7 @@ SharedPtr<VoxelMap> VoxelMapPage::GetVoxelMap(unsigned index)
         voxelMap = new VoxelMap(context_);
         voxelMap->SetDataMask(dataMask_);
         voxelMap->SetSize(VOXEL_CHUNK_SIZE_X, VOXEL_CHUNK_SIZE_Y, VOXEL_CHUNK_SIZE_Z);
-        VoxelMap::DecodeData(voxelMap, source);
+        VoxelMap::RunLengthDecodeData(voxelMap, source);
         return voxelMap;
     }
     else
@@ -290,7 +290,7 @@ SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
     voxelMap->SetBlocktypeMap(GetVoxelBlocktypeMap());
     voxelMap->SetDataMask(GetDataMask());
     voxelMap->SetProcessorDataMask(GetProcessorDataMask());
-    //voxelMap->SetVoxelProcessors(voxelProcessors_);
+    voxelMap->SetVoxelProcessors(voxelProcessors_);
     return voxelMap;
 
 #if VOXEL_MAP_CACHE

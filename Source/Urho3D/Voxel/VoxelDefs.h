@@ -39,7 +39,6 @@ static const unsigned VOXEL_CHUNK_SIZE_X              = 64;
 static const unsigned VOXEL_CHUNK_SIZE_Y              = 128;
 static const unsigned VOXEL_CHUNK_SIZE_Z              = 64;
 static const unsigned VOXEL_CHUNK_SIZE                = VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Y * VOXEL_CHUNK_SIZE_Z;
-static const unsigned VOXEL_PROCESSOR_SIZE            = (VOXEL_CHUNK_SIZE_X + 4) * (VOXEL_CHUNK_SIZE_Y + 4) * (VOXEL_CHUNK_SIZE_Z + 4);
 
 static const unsigned VOXEL_STORE_PAGE_SIZE_1D        = 8;
 static const unsigned VOXEL_STORE_PAGE_MASK_1D        = 0x7;
@@ -48,7 +47,7 @@ static const unsigned VOXEL_STORE_PAGE_SIZE_3D        = 8 * 8 * 8;
 static const unsigned VOXEL_STORE_PAGE_STRIDE_X       = 6; // bits
 static const unsigned VOXEL_STORE_PAGE_STRIDE_Z       = 3; // bits
 
-static const unsigned VOXEL_MAP_NUM_BASIC_STREAMS     = 17;
+static const unsigned VOXEL_DATA_NUM_BASIC_STREAMS     = 17;
 
 // Shapes of blocks that aren't always cubes
 enum VoxelGeometry

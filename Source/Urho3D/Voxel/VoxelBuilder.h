@@ -20,6 +20,8 @@ class VoxelMap;
 class VoxelChunk;
 class VoxelBuilder;
 
+typedef void(*VoxelProcessorFunc)(VoxelData* source, VoxelData* dest, const VoxelRangeFragment& range);
+
 struct VoxelJob {
     SharedPtr<VoxelChunk> chunk;
     SharedPtr<VoxelMap> voxelMap;
@@ -61,6 +63,8 @@ public:
     void BuildWorkload(VoxelWorkload* workload);
     void CompleteWork(unsigned = M_MAX_UNSIGNED);
     void CancelJob(VoxelJob* job);
+    void RegisterProcessor(String name, VoxelProcessorFunc function);
+    bool UnregisterProcessor(String name);
 
 private:
 
@@ -76,8 +80,6 @@ private:
     bool UploadGpuData(VoxelCompletedWorkload* workload);
     bool UploadGpuDataCompatibilityMode(VoxelWorkSlot* slot, bool append = false);
     bool UpdateMaterialParameters(Material* material, bool setColor);
-    void HandleBeginFrame(StringHash eventType, VariantMap& eventData);
-    bool PendingWork();
 
     //
     // slot management
@@ -91,8 +93,6 @@ private:
     // job management
     //
     void ProcessJob(VoxelJob* job);
-    void RemoveJob(VoxelJob* job);
-    void QueueJob(VoxelJob* job);
     VoxelJob* CreateJob(VoxelChunk* chunk);
     void PurgeAllJobs();
     bool RunJobs();
@@ -117,6 +117,7 @@ private:
     unsigned completedJobCount_;
     Mutex slotMutex_;
     Mutex completedWorkMutex_;
+    HashMap<StringHash, VoxelProcessorFunc> processors_;
 };
 
 }

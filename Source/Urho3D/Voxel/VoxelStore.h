@@ -5,12 +5,14 @@
 #include "../IO/Deserializer.h"
 #include "../Resource/Resource.h"
 
+#include "VoxelBrush.h"
 #include "VoxelBlocktypeMap.h"
 #include "VoxelMap.h"
 
 namespace Urho3D
 { 
 class VoxelMap;
+class VoxelBrush;
 
 struct VoxelMapCacheNode : public LinkedListNode
 {
@@ -74,6 +76,10 @@ public:
     void AddVoxelProcessor(StringHash voxelProcessorName);
     void RemoveVoxelProcessor(const StringHash& voxelProcessorName);
 
+    void ApplyBrushStroke(VoxelBrush* brush, unsigned positionX, unsigned positionY, unsigned positionZ)
+    {
+
+    }
 
 private:
     void SetSizeInternal();
