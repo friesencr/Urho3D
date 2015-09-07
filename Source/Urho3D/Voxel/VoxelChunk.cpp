@@ -9,13 +9,10 @@ namespace Urho3D {
 
 VoxelChunk::VoxelChunk(Context* context) :
     Drawable(context, DRAWABLE_GEOMETRY),
-    numMeshes_(0),
     voxelJob_(0),
     voxelMap_(0)
 {
-    size_[0] = 0; size_[1] = 0; size_[2] = 0;
     index_[0] = 0; index_[1] = 0; index_[2] = 0;
-    SetNumberOfMeshes(numMeshes_);
 }
 
 VoxelChunk::~VoxelChunk()
@@ -35,22 +32,7 @@ void VoxelChunk::RegisterObject(Context* context)
 
 Geometry* VoxelChunk::GetGeometry(unsigned index) const
 {
-    return geometries_[index];
-}
-
-VertexBuffer* VoxelChunk::GetVertexBuffer(unsigned index) const
-{
-    return vertexData_[index];
-}
-
-IndexBuffer* VoxelChunk::GetFaceData(unsigned index) const
-{
-    return faceData_[index];
-}
-
-TextureBuffer* VoxelChunk::GetFaceBuffer(unsigned index) const
-{
-    return faceBuffer_[index];
+    return voxelMeshes_[index].geometry_;
 }
 
 UpdateGeometryType VoxelChunk::GetUpdateGeometryType()
@@ -58,7 +40,7 @@ UpdateGeometryType VoxelChunk::GetUpdateGeometryType()
     return UPDATE_MAIN_THREAD;
 }
 
-bool VoxelChunk::Build(VoxelMap* voxelMap, VoxelMap* northMap, VoxelMap* southMap, VoxelMap* eastMap, VoxelMap* westMap)
+bool VoxelChunk::Build(VoxelMap* voxelMap)
 {
     if (!voxelMap)
         return false;
@@ -68,7 +50,6 @@ bool VoxelChunk::Build(VoxelMap* voxelMap, VoxelMap* northMap, VoxelMap* southMa
     {
         voxelBuilder->CancelJob(voxelJob_);
     }
-    voxelMap->TransferAdjacentData(northMap, southMap, eastMap, westMap);
     voxelJob_ = voxelBuilder->BuildVoxelChunk(this, voxelMap, false);
     return true;
 }
@@ -185,46 +166,41 @@ void VoxelChunk::ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQuery
 
 void VoxelChunk::SetNumberOfMeshes(unsigned count)
 {
-    if (count > 64)
+    if (count > 2)
         return;
 
-    if (count == numMeshes_)
+    if (count == voxelMeshes_.Size())
         return;
 
-    numMeshes_ = count;
-
+    unsigned oldCount = voxelMeshes_.Size();
+    voxelMeshes_.Resize(count);
     batches_.Resize(count);
-    vertexData_.Resize(count);
-    faceData_.Resize(count);
-    faceBuffer_.Resize(count);
-    geometries_.Resize(count);
-    materials_.Resize(count);
-    batches_.Resize(count);
-    updateMaterialParameters_.Resize(count);
-    numQuads_.Resize(count);
-    reducedQuadCount_.Resize(count);
 
-    for (unsigned i = 0; i < count; ++i)
+    for (unsigned i = oldCount; i < count; ++i)
     {
-        updateMaterialParameters_[i] = false;
-        vertexData_[i] = new VertexBuffer(context_);
-        //vertexData_[i]->SetShadowed(false);
-        faceData_[i] = new IndexBuffer(context_);
-        //faceData_[i]->SetShadowed(false);
-        faceBuffer_[i] = new TextureBuffer(context_);
-        materials_[i] = new Material(context_);
-        geometries_[i] = new Geometry(context_);
-        geometries_[i]->SetVertexBuffer(0, vertexData_[i], MASK_DATA);
-        batches_[i].material_ = materials_[i];
-        batches_[i].geometry_ = geometries_[i];
+        VoxelMesh& mesh = voxelMeshes_[i];
+
+        mesh.dirtyShaderParameters_ = false;
+        mesh.faceBuffer_ = new TextureBuffer(context_);
+        mesh.faceData_ = new IndexBuffer(context_);
+        mesh.faceData_->SetShadowed(false);
+        mesh.vertexData_ = new VertexBuffer(context_);
+        mesh.vertexData_->SetShadowed(false);
+        mesh.material_ = new Material(context_);
+        mesh.geometry_ = new Geometry(context_);
+        mesh.geometry_->SetVertexBuffer(0, mesh.vertexData_, MASK_DATA);
+        mesh.numQuads_ = 0;
+
+        batches_[i].material_ = mesh.material_;
+        batches_[i].geometry_ = mesh.geometry_;
         batches_[i].geometryType_ = GEOM_STATIC_NOINSTANCING;
-        numQuads_[i] = 0;
     }
 }
 
-void VoxelChunk::SetMaterial(unsigned selector, Material* material)
+void VoxelChunk::SetMaterial(unsigned slot, Material* material)
 {
-    batches_[selector].material_ = material;
+    voxelMeshes_[slot].material_ = material;
+    batches_[slot].material_ = material;
 }
 
 Material* VoxelChunk::GetMaterial(unsigned selector) const
@@ -242,16 +218,6 @@ void VoxelChunk::SetIndex(unsigned char x, unsigned char y, unsigned char z)
     index_[2] = z;
 }
 
-void VoxelChunk::SetSize(unsigned char x, unsigned char y, unsigned char z)
-{
-    size_[0] = x;
-    size_[1] = y;
-    size_[2] = z;
-}
-
-unsigned char VoxelChunk::GetSizeX() { return size_[0]; }
-unsigned char VoxelChunk::GetSizeY() { return size_[1]; }
-unsigned char VoxelChunk::GetSizeZ() { return size_[2]; }
 unsigned char VoxelChunk::GetIndexX() { return index_[0]; }
 unsigned char VoxelChunk::GetIndexY() { return index_[1]; }
 unsigned char VoxelChunk::GetIndexZ() { return index_[2]; }
@@ -266,6 +232,7 @@ unsigned VoxelChunk::GetTotalQuads() const
 
 bool VoxelChunk::DrawOcclusion(OcclusionBuffer* buffer)
 {
+#if 0
     Matrix4 viewProj = buffer->GetProjection() * buffer->GetView();
     Matrix4 modelViewProj = viewProj * GetNode()->GetWorldTransform();
 
@@ -302,6 +269,7 @@ bool VoxelChunk::DrawOcclusion(OcclusionBuffer* buffer)
         if (!buffer->Draw(node_->GetWorldTransform(), vertexData, vertexSize, indexData, indexSize, indexStart, indexCount))
             return false;
     }
+#endif
     return true;
 }
 
@@ -330,7 +298,6 @@ void VoxelChunk::UpdateMaterialParameters(unsigned slot, VoxelMap* voxelMap)
             Texture* diffuse2 = textureMap->GetDiffuse2Texture();
             if (diffuse2)
                 material->SetTexture(TU_NORMAL, diffuse2);
-
         }
 
         VoxelColorPalette* colorPalette = voxelMap->colorPalette;
@@ -343,14 +310,14 @@ void VoxelChunk::UpdateMaterialParameters(unsigned slot, VoxelMap* voxelMap)
     VoxelBuilder* voxelBuilder = GetSubsystem<VoxelBuilder>();
     voxelBuilder->UpdateMaterialParameters(material, true);
 
-    updateMaterialParameters_[slot] = false;
+    voxelMeshes_[slot].dirtyShaderParameters_ = false;
 }
 
 void VoxelChunk::OnVoxelChunkCreated()
 {
     UpdateMaterialParameters(0, voxelJob_->voxelMap);
-    updateMaterialParameters_[0] = true;
     voxelJob_ = 0;
+    voxelMeshes_[0].dirtyShaderParameters_ = true;
     if (!node_)
         return;
 

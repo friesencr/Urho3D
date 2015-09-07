@@ -17,8 +17,8 @@ extern const char* GEOMETRY_CATEGORY;
 
 VoxelStreamer::VoxelStreamer(Context* context) 
     : Component(context),
-    maxInMemoryMeshPeak_(2000),
-    maxInMemoryMesh_(1600),
+    maxInMemoryMeshPeak_(1000),
+    maxInMemoryMesh_(1000),
     maxBuildsPerFrame_(0),
     maxBuildFrameTime_(0)
 {

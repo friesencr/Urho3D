@@ -71,8 +71,7 @@ void VoxelData::SetGeometry(int x, int y, int z, VoxelGeometry voxelGeometry, Vo
     geometry[GetIndex(x, y, z)] = VoxelEncodeGeometry(voxelGeometry, rotation, height);
 }
 
-
-void VoxelData::RunLengthEncodeData(VoxelData* voxelMap, Serializer& dest)
+void VoxelData::RawEncode(VoxelData* voxelMap, Serializer& dest)
 {
     PODVector<unsigned char>* datas[VOXEL_DATA_NUM_BASIC_STREAMS];
     voxelMap->GetBasicDataArrays(datas);
@@ -82,10 +81,48 @@ void VoxelData::RunLengthEncodeData(VoxelData* voxelMap, Serializer& dest)
     {
         if (dataMask & (1 << i))
         {
-            unsigned char* data = &datas[i]->Front();
+            if (!datas[i]->Size())
+                continue;
+            dest.Write(&datas[i]->Front(), size);
+        }
+    }
+}
+
+unsigned VoxelData::RawDecode(VoxelData* voxelMap, Deserializer& source)
+{
+    unsigned numDatas = 0;
+    PODVector<unsigned char>* datas[VOXEL_DATA_NUM_BASIC_STREAMS];
+    voxelMap->GetBasicDataArrays(datas);
+    unsigned dataMask = voxelMap->GetDataMask();
+    unsigned size = voxelMap->GetSize();
+
+    for (unsigned i = 0; i < VOXEL_DATA_NUM_BASIC_STREAMS; ++i)
+    {
+        if (dataMask & (1 << i))
+        {
+            numDatas++;
+            datas[i]->Resize(size);
+            source.Read(&datas[i]->Front(), size);
+        }
+    }
+    return numDatas * size;
+}
+
+void VoxelData::RunLengthEncodeData(VoxelData* voxelMap, Serializer& dest)
+{
+    PODVector<unsigned char>* datas[VOXEL_DATA_NUM_BASIC_STREAMS];
+    voxelMap->GetBasicDataArrays(datas);
+    unsigned dataMask = voxelMap->GetDataMask();
+    unsigned size = voxelMap->GetSize();
+
+    for (unsigned i = 0; i < VOXEL_DATA_NUM_BASIC_STREAMS; ++i)
+    {
+        if (dataMask & (1 << i))
+        {
             if (!datas[i]->Size())
                 continue;
 
+            unsigned char* data = &datas[i]->Front();
             unsigned char val = data[0];
             unsigned count = 1;
             unsigned position = 1;

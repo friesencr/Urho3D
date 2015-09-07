@@ -19,6 +19,10 @@ public:
 
     virtual ~VoxelData();
 
+    static void RawEncode(VoxelData* voxelData, Serializer& dest);
+
+    static unsigned RawDecode(VoxelData* voxelData, Deserializer &source);
+
     static void RunLengthEncodeData(VoxelData* voxelData, Serializer& dest);
 
     static unsigned RunLengthDecodeData(VoxelData* voxelData, Deserializer &source);
@@ -37,7 +41,7 @@ public:
 
     unsigned GetStrideZ() const { return strideZ_; }
 
-    virtual unsigned GetPadding() const = 0;
+    virtual inline unsigned GetPadding() const = 0;
 
     virtual inline unsigned GetIndex(int x, int y, int z) const { return (y + GetPadding()) + ((z + GetPadding()) * strideZ_) + ((x + GetPadding()) * strideX_); }
 

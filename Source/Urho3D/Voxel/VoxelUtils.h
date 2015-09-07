@@ -25,6 +25,16 @@ struct URHO3D_API VoxelRGB {
 
 struct URHO3D_API VoxelRange
 {
+    int positionX;
+    int positionY;
+    int positionZ;
+    int lengthX;
+    int lengthY;
+    int lengthZ;
+};
+
+struct URHO3D_API VoxelRangeFragment : VoxelRange
+{
     int startX;
     int startY;
     int startZ;
@@ -32,16 +42,5 @@ struct URHO3D_API VoxelRange
     int endY;
     int endZ;
 };
-
-struct URHO3D_API VoxelRangeFragment : VoxelRange
-{
-    int indexX;
-    int indexY;
-    int indexZ;
-    int lenX;
-    int lenY;
-    int lenZ;
-};
-
 
 }

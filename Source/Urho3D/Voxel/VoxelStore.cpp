@@ -5,6 +5,7 @@
 #include "../IO/File.h"
 #include "../IO/FileSystem.h"
 #include "../Resource/ResourceCache.h"
+#include "../IO/Compression.h"
 
 #include "VoxelStore.h"
 
@@ -12,6 +13,11 @@
 
 namespace Urho3D
 {
+
+static void ApplyBrushFragment(VoxelData* src, VoxelData* dest, const VoxelRange& range)
+{
+
+}
 
 VoxelMapPage::VoxelMapPage(Context* context) :
     Resource(context)
@@ -39,6 +45,7 @@ bool VoxelMapPage::BeginLoad(Deserializer& source)
     if (source.ReadFileID() != "VOXP")
         return false;
 
+    compressionMask_ = source.ReadUByte();
     dataMask_ = source.ReadUInt();
     // resource ref
     for (unsigned i = 0; i < VOXEL_STORE_PAGE_SIZE_3D; ++i)
@@ -52,10 +59,12 @@ bool VoxelMapPage::Save(Serializer& dest)
     if (!dest.WriteFileID("VOXP"))
         return false;
 
+    dest.WriteUByte(compressionMask_);
     dest.WriteUInt(dataMask_);
     for (unsigned i = 0; i < VOXEL_STORE_PAGE_SIZE_3D; ++i)
         dest.WriteBuffer(buffers_[i]);
-
+    
+    dirtySave_ = false;
     return true;
 }
 
@@ -66,7 +75,17 @@ void VoxelMapPage::SetVoxelMap(unsigned index, VoxelMap* voxelMap)
 
     // TODO validate sizes
     VectorBuffer dest;
-    VoxelMap::RunLengthEncodeData(voxelMap, dest);
+
+    if (compressionMask_ & VOXEL_COMPRESSION_RLE)
+        VoxelMap::RunLengthEncodeData(voxelMap, dest);
+    else
+        VoxelMap::RawEncode(voxelMap, dest);
+
+    if (compressionMask_ & VOXEL_COMPRESSION_LZ4)
+        dest = CompressVectorBuffer(dest);
+
+    dirtySave_ = true;
+
     buffers_[index] = dest.GetBuffer();
 }
 
@@ -76,13 +95,21 @@ SharedPtr<VoxelMap> VoxelMapPage::GetVoxelMap(unsigned index)
     if (index >= VOXEL_STORE_PAGE_SIZE_3D)
         return voxelMap;
 
-    MemoryBuffer source(buffers_[index]);
+    VectorBuffer source(buffers_[index]);
     if (source.GetSize())
     {
         voxelMap = new VoxelMap(context_);
         voxelMap->SetDataMask(dataMask_);
         voxelMap->SetSize(VOXEL_CHUNK_SIZE_X, VOXEL_CHUNK_SIZE_Y, VOXEL_CHUNK_SIZE_Z);
-        VoxelMap::RunLengthDecodeData(voxelMap, source);
+
+        if (compressionMask_ & VOXEL_COMPRESSION_LZ4)
+            source = DecompressVectorBuffer(source);
+
+        if (compressionMask_ & VOXEL_COMPRESSION_RLE)
+            VoxelMap::RunLengthDecodeData(voxelMap, source);
+        else
+            VoxelMap::RawDecode(voxelMap, source);
+
         return voxelMap;
     }
     else
@@ -109,6 +136,7 @@ VoxelStore::VoxelStore(Context* context) : Resource(context)
     , numPagesZ_(0)
     , numPages_(0)
     , voxelBlocktypeMap_(0)
+    , compressionMask_(0)
 {
 
 }
@@ -129,6 +157,7 @@ bool VoxelStore::BeginLoad(Deserializer& source)
 
     ResourceCache* cache = GetSubsystem<ResourceCache>();
 
+    SetCompressionMask(source.ReadUByte());
     SetDataMask(source.ReadUInt());
     SetProcessorDataMask(source.ReadUInt());
     SetSize(source.ReadUInt(), source.ReadUInt(), source.ReadUInt());
@@ -154,6 +183,7 @@ bool VoxelStore::Save(Serializer& dest)
 
     ResourceCache* cache = GetSubsystem<ResourceCache>();
 
+    dest.WriteUByte(compressionMask_);
     dest.WriteUInt(dataMask_);
     dest.WriteUInt(processorDataMask_);
     dest.WriteUInt(numChunksX_);
@@ -232,6 +262,7 @@ void VoxelStore::UpdateVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* vo
 
     unsigned mapIndex = GetVoxelMapIndexInPage(x, y, z);
     page->SetVoxelMap(mapIndex, voxelMap);
+    page->dirtySave_ = true;
 }
 
 VoxelMapPage* VoxelStore::GetVoxelMapPageByChunkIndex(unsigned x, unsigned y, unsigned z)
@@ -344,11 +375,22 @@ void VoxelStore::SetSizeInternal()
             {
                 VoxelMapPage* voxelMapPage = voxelMapPages_[pageIndex];
                 voxelMapPage->SetDataMask(dataMask_);
+                voxelMapPage->compressionMask_ = compressionMask_;
                 pageIndex++;
             }
         }
     }
 
+}
+
+void VoxelStore::SetCompressionMask(unsigned compressionMask)
+{
+    compressionMask_ = compressionMask;
+}
+
+unsigned VoxelStore::GetCompressionMask() const
+{
+    return compressionMask_;
 }
 
 const PODVector<StringHash>& VoxelStore::GetVoxelProcessors()
@@ -369,6 +411,36 @@ void VoxelStore::AddVoxelProcessor(StringHash voxelProcessorHash)
 void VoxelStore::RemoveVoxelProcessor(const StringHash& voxelProcessorHash)
 {
     voxelProcessors_.Remove(voxelProcessorHash);
+}
+
+void VoxelStore::ApplyBrushStroke(VoxelBrush* brush, unsigned positionX, unsigned positionY, unsigned positionZ)
+{
+    unsigned globalStartX = positionX;
+    unsigned globalEndX = positionX + brush->GetWidth();
+    unsigned globalStartY = positionY;
+    unsigned globalEndY = positionY + brush->GetHeight();
+    unsigned globalStartZ = positionZ;
+    unsigned globalEndZ = positionZ + brush->GetDepth();
+
+    unsigned mapStartX = positionX / VOXEL_CHUNK_SIZE_X;
+    unsigned mapEndX = (positionX + brush->GetWidth()) / VOXEL_CHUNK_SIZE_X;
+    unsigned mapStartY = positionY / VOXEL_CHUNK_SIZE_Y;
+    unsigned mapEndY = (positionY + brush->GetHeight()) / VOXEL_CHUNK_SIZE_Y;
+    unsigned mapStartZ = positionZ / VOXEL_CHUNK_SIZE_Z;
+    unsigned mapEndZ = (positionZ + brush->GetDepth()) / VOXEL_CHUNK_SIZE_Z;
+    
+    for (unsigned x = mapStartX; x <= mapEndX; ++x)
+    {
+        for (unsigned z = mapStartZ; z <= mapEndZ; ++z)
+        {
+            for (unsigned y = mapStartY; y <= mapEndY; ++y)
+            {
+                VoxelRangeFragment range;
+                range.startX = x * VOXEL_CHUNK_SIZE;
+                range.endX = (x + 1) * VOXEL_CHUNK_SIZE;
+            }
+        }
+    }
 }
 
 

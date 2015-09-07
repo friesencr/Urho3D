@@ -13,6 +13,7 @@ namespace Urho3D
 { 
 class VoxelMap;
 class VoxelBrush;
+class VoxelStore;
 
 struct VoxelMapCacheNode : public LinkedListNode
 {
@@ -22,6 +23,7 @@ struct VoxelMapCacheNode : public LinkedListNode
 
 class VoxelMapPage : public Resource
 {
+    friend class VoxelStore;
     OBJECT(VoxelMapPage);
 
 public:
@@ -35,8 +37,10 @@ public:
     SharedPtr<VoxelMap> GetVoxelMap(unsigned index);
 
 private:
+    bool dirtySave_;
     unsigned dataMask_;
     unsigned processorDataMask_;
+    unsigned char compressionMask_;
     PODVector<unsigned char> buffers_[VOXEL_STORE_PAGE_SIZE_3D];
 
 };
@@ -75,11 +79,10 @@ public:
     void SetVoxelProcessors(PODVector<StringHash>& voxelProcessors);
     void AddVoxelProcessor(StringHash voxelProcessorName);
     void RemoveVoxelProcessor(const StringHash& voxelProcessorName);
+    void ApplyBrushStroke(VoxelBrush* brush, unsigned positionX, unsigned positionY, unsigned positionZ);
+    unsigned GetCompressionMask() const;
+    void SetCompressionMask(unsigned compressionMask);
 
-    void ApplyBrushStroke(VoxelBrush* brush, unsigned positionX, unsigned positionY, unsigned positionZ)
-    {
-
-    }
 
 private:
     void SetSizeInternal();
@@ -101,6 +104,7 @@ private:
     unsigned numPagesZ_;
     unsigned numPages_;
     unsigned voxelMapCacheCount_;
+    unsigned char compressionMask_;
     LinkedList<VoxelMapCacheNode> voxelMapCache_;
     Vector<SharedPtr<VoxelMapPage> > voxelMapPages_;
 };

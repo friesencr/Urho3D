@@ -223,7 +223,7 @@ public:
             unsigned indexCount = geometry->GetIndexCount();
 
             btIndexedMesh meshIndex;
-            meshIndex.m_numTriangles = voxelChunk->GetReducedNumQuads(i) * 2;
+            meshIndex.m_numTriangles = voxelChunk->GetNumQuads(i) * 2;
             meshIndex.m_triangleIndexBase = &indexData[indexStart * indexSize];
             meshIndex.m_triangleIndexStride = 3 * indexSize;
             meshIndex.m_numVertices = 0;

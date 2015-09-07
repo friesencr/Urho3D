@@ -206,7 +206,7 @@ VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z)
     chunkNode->SetPosition(Vector3((float)x, (float)y, (float)z) * chunkSpacing_);
     chunk = chunkNode->CreateComponent<VoxelChunk>();
     chunk->SetIndex(x, y, z);
-    chunk->SetSize((unsigned char)chunkSpacing_.x_, (unsigned char)chunkSpacing_.y_, (unsigned char)chunkSpacing_.z_);
+    //chunk->SetSize((unsigned char)chunkSpacing_.x_, (unsigned char)chunkSpacing_.y_, (unsigned char)chunkSpacing_.z_);
     //chunk->SetCastShadows(false);
 	//CollisionShape* cs = chunkNode->CreateComponent<CollisionShape>();
 	//cs->SetVoxelTriangleMesh(true);

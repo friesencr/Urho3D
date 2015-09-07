@@ -154,12 +154,12 @@ void VoxelWorld::CreateScene()
     voxelNode_ = scene_->CreateChild("VoxelNode");
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     worldBuilder_ = new WorldBuilder(context_);
-    worldBuilder_->SetSize(128, 128);
+    worldBuilder_->SetSize(32, 32);
     worldBuilder_->SetVoxelSet(voxelSet);
     worldBuilder_->ConfigureParameters();
-    //worldBuilder_->CreateWorld();
+    worldBuilder_->CreateWorld();
     //worldBuilder_->SaveWorld();
-    worldBuilder_->LoadWorld();
+    //worldBuilder_->LoadWorld();
     //worldBuilder_->BuildWorld();
     VoxelStreamer* streamer = voxelNode_->CreateComponent<VoxelStreamer>();
     streamer->SetEnabled(true);
@@ -215,7 +215,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 400.0f;
+    const float MOVE_SPEED = 1200.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
@@ -300,6 +300,8 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 {
     using namespace Update;
 
+    //worldBuilder_->BuildWorld();
+
     // Take the frame time step, which is stored as a float
     float timeStep = eventData[P_TIMESTEP].GetFloat();
     // Move the camera, scale movement with time step
@@ -308,9 +310,9 @@ void VoxelWorld::HandleUpdate(StringHash eventType, VariantMap& eventData)
 
 void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData)
 {
-    //DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
+    DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
 
-    // If draw debug mode is enabled, draw navigation mesh debug geometry
+     //If draw debug mode is enabled, draw navigation mesh debug geometry
     //PODVector<VoxelChunk*> voxelChunks;
     //scene_->GetComponents<VoxelChunk>(voxelChunks, true);
     //for (unsigned i = 0; i < voxelChunks.Size(); ++i)

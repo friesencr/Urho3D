@@ -161,37 +161,29 @@ void VoxelMap::TransferAdjacentDataDirection(VoxelMap* source, int direction)
         {
             for (unsigned x = 0; x < this->width_; ++x)
                 for (unsigned y = 0; y < this->height_; ++y)
-                {
-                    dstPtr[this->GetIndex(x, y, this->depth_)] = srcPtr[source->GetIndex(x, y, 0)];
-                    dstPtr[this->GetIndex(x, y, this->depth_ + 1)] = srcPtr[source->GetIndex(x, y, 1)];
-                }
+                    for(unsigned p = 0; p < GetPadding(); ++p)
+                        dstPtr[this->GetIndex(x, y, this->depth_ + p)] = srcPtr[source->GetIndex(x, y, p)];
         }
         else if (direction == VOXEL_NEIGHBOR_SOUTH)
         {
             for (unsigned x = 0; x < this->width_; ++x)
                 for (unsigned y = 0; y < this->height_; ++y)
-                {
-                    dstPtr[this->GetIndex(x, y, -1)] = srcPtr[source->GetIndex(x, y, source->depth_ - 1)];
-                    dstPtr[this->GetIndex(x, y, -2)] = srcPtr[source->GetIndex(x, y, source->depth_ - 2)];
-                }
+                    for(unsigned p = -GetPadding(); p < 0; ++p)
+                        dstPtr[this->GetIndex(x, y, p)] = srcPtr[source->GetIndex(x, y, source->depth_ - p)];
         }
         else if (direction == VOXEL_NEIGHBOR_EAST)
         {
             for (unsigned z = 0; z < this->depth_; ++z)
                 for (unsigned y = 0; y < this->height_; ++y)
-                {
-                    dstPtr[this->GetIndex(this->width_, y, z)] = srcPtr[source->GetIndex(0, y, z)];
-                    dstPtr[this->GetIndex(this->width_ + 1, y, z)] = srcPtr[source->GetIndex(1, y, z)];
-                }
+                    for(unsigned p = 0; p < GetPadding(); ++p)
+                        dstPtr[this->GetIndex(this->width_ + p, y, z)] = srcPtr[source->GetIndex(p, y, z)];
         }
         else if (direction == VOXEL_NEIGHBOR_WEST)
         {
             for (unsigned z = 0; z < this->depth_; ++z)
                 for (unsigned y = 0; y < this->height_; ++y)
-                {
-                    dstPtr[this->GetIndex(-1, y, z)] = srcPtr[source->GetIndex(source->width_ - 1, y, z)];
-                    dstPtr[this->GetIndex(-2, y, z)] = srcPtr[source->GetIndex(source->width_ - 2, y, z)];
-                }
+                    for(unsigned p = -GetPadding(); p < 0; ++p)
+                        dstPtr[this->GetIndex(p, y, z)] = srcPtr[source->GetIndex(source->width_ - p, y, z)];
         }
     }
 }

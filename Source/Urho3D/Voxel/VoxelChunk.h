@@ -8,6 +8,7 @@
 #include "../Core/Mutex.h"
 #include "../Graphics/TextureBuffer.h"
 
+#include "VoxelDefs.h"
 #include "VoxelMap.h"
 #include "VoxelBuilder.h"
 #include "VoxelSet.h"
@@ -16,6 +17,19 @@ namespace Urho3D
 {
 class VoxelMap;
 struct VoxelJob;
+
+struct URHO3D_API VoxelMesh
+{
+    SharedPtr<Geometry> geometry_;
+    SharedPtr<Material> material_;
+    SharedPtr<VertexBuffer> vertexData_;
+    SharedPtr<IndexBuffer> faceData_;
+    SharedPtr<TextureBuffer> faceBuffer_;
+    PODVector<unsigned char> rawVertexData_[4];
+    PODVector<unsigned char> rawFaceData_[4];
+    unsigned numQuads_;
+    bool dirtyShaderParameters_;
+};
 
 class URHO3D_API VoxelChunk : public Drawable
 {
@@ -30,9 +44,6 @@ class URHO3D_API VoxelChunk : public Drawable
     static void RegisterObject(Context* context);
 
     Geometry* GetGeometry(unsigned index) const;
-    VertexBuffer* GetVertexBuffer(unsigned index) const;
-    IndexBuffer* GetFaceData(unsigned index) const;
-    TextureBuffer* GetFaceBuffer(unsigned index) const;
 
     /// Process octree raycast. May be called from a worker thread.
     virtual void ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results);
@@ -63,19 +74,18 @@ class URHO3D_API VoxelChunk : public Drawable
 
     void SetNumberOfMeshes(unsigned count);
 
-    unsigned GetNumMeshes() const { return numMeshes_; }
+    unsigned GetNumMeshes() const { return voxelMeshes_.Size(); }
     unsigned GetTotalQuads() const;
-    unsigned GetNumQuads(unsigned index) const { return numQuads_[index]; }
-    unsigned GetReducedNumQuads(unsigned index) const { return reducedQuadCount_[index]; }
+    unsigned GetNumQuads(unsigned index) const { return voxelMeshes_[index].numQuads_; }
     unsigned char GetIndexX();
     unsigned char GetIndexY();
     unsigned char GetIndexZ();
-    unsigned char GetSizeX();
-    unsigned char GetSizeY();
-    unsigned char GetSizeZ();
+    unsigned char GetSizeX() const { return VOXEL_CHUNK_SIZE_X; }
+    unsigned char GetSizeY() const { return VOXEL_CHUNK_SIZE_Y; }
+    unsigned char GetSizeZ() const { return VOXEL_CHUNK_SIZE_Z; }
+    VoxelMesh& GetVoxelMesh(unsigned index) { return voxelMeshes_[index]; }
     void SetIndex(unsigned char x, unsigned char y, unsigned char z);
-    void SetSize(unsigned char x, unsigned char y, unsigned char z);
-    bool Build(VoxelMap* voxelMap, VoxelMap* northMap, VoxelMap* southMap, VoxelMap* eastMap, VoxelMap* westMap);
+    bool Build(VoxelMap* voxelMap);
 
 protected:
     /// Recalculate the world-space bounding box.
@@ -83,24 +93,12 @@ protected:
 
 private:
     void UpdateMaterialParameters(unsigned slot, VoxelMap* voxelMap);
-    bool BuildInternal(bool async);
     void OnVoxelChunkCreated();
-    // Voxel chunk geometry
     unsigned char index_[3];
-    unsigned char size_[3];
-    unsigned numMeshes_;
     VoxelJob* voxelJob_;
     WeakPtr<VoxelMap> voxelMap_;
-    ResourceRef resourceRef_;
+    Vector<VoxelMesh> voxelMeshes_;
 
-    Vector<SharedPtr<Geometry> > geometries_;
-    Vector<SharedPtr<Material> > materials_;
-    Vector<SharedPtr<VertexBuffer> > vertexData_;
-    Vector<SharedPtr<IndexBuffer> > faceData_;
-    Vector<SharedPtr<TextureBuffer> > faceBuffer_;
-    Vector<unsigned > reducedQuadCount_;
-    Vector<unsigned> numQuads_;
-    Vector<bool> updateMaterialParameters_;
 };
 
 }

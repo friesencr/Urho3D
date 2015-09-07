@@ -27,11 +27,11 @@ static const unsigned VOXEL_NEIGHBOR_EAST  = 0x4;
 static const unsigned VOXEL_NEIGHBOR_WEST  = 0x8;
 
 static const unsigned VOXEL_WORKER_SIZE_X             = 32;
-static const unsigned VOXEL_WORKER_SIZE_Y             = 255;
+static const unsigned VOXEL_WORKER_SIZE_Y             = 128;
 static const unsigned VOXEL_WORKER_SIZE_Z             = 32;
 static const unsigned VOXEL_MAX_WORKERS               = 2 * 2 * 1; // chunk size / worker size
 
-static const unsigned VOXEL_WORKER_MAX_QUADS          = 100000;
+static const unsigned VOXEL_WORKER_MAX_QUADS          = 200000;
 static const unsigned VOXEL_WORKER_VERTEX_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4 * 4; // 4 uint vertices
 static const unsigned VOXEL_WORKER_FACE_BUFFER_SIZE   = VOXEL_WORKER_MAX_QUADS * 4;
 
@@ -46,6 +46,10 @@ static const unsigned VOXEL_STORE_PAGE_SIZE_2D        = 8 * 8;
 static const unsigned VOXEL_STORE_PAGE_SIZE_3D        = 8 * 8 * 8;
 static const unsigned VOXEL_STORE_PAGE_STRIDE_X       = 6; // bits
 static const unsigned VOXEL_STORE_PAGE_STRIDE_Z       = 3; // bits
+
+static const unsigned char VOXEL_COMPRESSION_NONE = 0x00;
+static const unsigned char VOXEL_COMPRESSION_RLE  = 0x01;
+static const unsigned char VOXEL_COMPRESSION_LZ4  = 0x02;
 
 static const unsigned VOXEL_DATA_NUM_BASIC_STREAMS     = 17;
 

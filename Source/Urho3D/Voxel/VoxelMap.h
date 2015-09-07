@@ -51,7 +51,7 @@ public:
     /// Gets the blocktype map attribute
     ResourceRef GetBlocktypeMapAttr() const;
 
-    virtual unsigned GetPadding() const { return 2; }
+    virtual inline unsigned GetPadding() const { return 2; }
 
     void TransferAdjacentData(VoxelMap* north, VoxelMap* south, VoxelMap* east, VoxelMap* west);
     void TransferAdjacentNorthData(VoxelMap* source);

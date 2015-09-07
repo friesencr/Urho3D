@@ -19,6 +19,7 @@ namespace Urho3D {
 class VoxelMap;
 class VoxelChunk;
 class VoxelBuilder;
+struct VoxelBuildSlot;
 
 typedef void(*VoxelProcessorFunc)(VoxelData* source, VoxelData* dest, const VoxelRangeFragment& range);
 
@@ -28,18 +29,6 @@ struct VoxelJob {
     unsigned slot;
 };
 
-struct VoxelCompletedWorkload
-{
-    PODVector<unsigned> vertexData;
-    PODVector<unsigned> faceData;
-    void* job;
-    bool completed;
-    BoundingBox box;
-    unsigned numQuads;
-};
-
-struct VoxelWorkSlot;
-
 struct VoxelWorkload 
 {
     int slot;
@@ -48,7 +37,6 @@ struct VoxelWorkload
     VoxelRangeFragment range;
     unsigned workloadIndex;
     int numQuads;
-    BoundingBox box;
 };
 
 class URHO3D_API VoxelBuilder : public Object {
@@ -77,46 +65,44 @@ private:
     //
     bool BuildMesh(VoxelWorkload* workload);
     void DecodeWorkBuffer(VoxelWorkload* workload);
-    bool UploadGpuData(VoxelCompletedWorkload* workload);
-    bool UploadGpuDataCompatibilityMode(VoxelWorkSlot* slot, bool append = false);
+    bool UploadGpuData(VoxelJob* job);
+    bool UploadGpuDataCompatibilityMode(VoxelBuildSlot* slot, bool append = false);
     bool UpdateMaterialParameters(Material* material, bool setColor);
 
     //
     // slot management
     //
-    int GetFreeWorkSlot();
-    unsigned DecrementWorkSlot(VoxelWorkSlot* slot);
-    void TransferCompletedWork(VoxelWorkSlot* slot);
-    void FreeWorkSlot(VoxelWorkSlot* slot);
+    int GetFreeBuildSlot();
+    unsigned DecrementBuildSlot(VoxelBuildSlot* slot);
+    void PrepareCompletedWork(VoxelBuildSlot* slot);
+    void FreeBuildSlot(VoxelBuildSlot* slot);
 
     //
     // job management
     //
     void ProcessJob(VoxelJob* job);
     VoxelJob* CreateJob(VoxelChunk* chunk);
-    void PurgeAllJobs();
     bool RunJobs();
+    bool IsBuilding();
     bool UploadCompletedWork();
 
     // 
     // state
     //
-    Vector<VoxelJob*> jobs_;
+    Vector<VoxelJob*> buildJobs_;
+    Vector<VoxelJob*> uploadJobs_;
     SharedPtr<IndexBuffer> sharedIndexBuffer_;
-    Vector<VoxelWorkSlot> slots_;
+    Vector<VoxelBuildSlot> slots_;
     Vector<Variant> transform_;
     Vector<Variant> normals_;
     Vector<Variant> ambientTable_;
     Vector<Variant> texscaleTable_;
     Vector<Variant> texgenTable_;
-    Vector<Variant> default_colorTable_;
+    Vector<Variant> defaultColorTable_;
 
     // completed work 
-    unsigned maxReservedCompletedBuffers_;
-    Vector<VoxelCompletedWorkload> completedChunks_;
-    unsigned completedJobCount_;
     Mutex slotMutex_;
-    Mutex completedWorkMutex_;
+    Mutex uploadJobMutex_;
     HashMap<StringHash, VoxelProcessorFunc> processors_;
 };
 
