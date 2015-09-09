@@ -10,9 +10,13 @@
 namespace Urho3D
 {
 
+class VoxelBuilder;
+class VoxelMeshBuilder;
+
 class VoxelData
 {
 friend class VoxelBuilder;
+friend class VoxelMeshBuilder;
 
 public:
     VoxelData();
@@ -49,9 +53,6 @@ public:
 
     /// Sets the block type data mask.
     void SetDataMask(unsigned dataMask) { dataMask_ = dataMask; }
-
-    /// Sets the block type data mask.
-    void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
 
     void SetColor(int x, int y, int z, unsigned char val);
 
@@ -120,7 +121,6 @@ protected:
     PODVector<unsigned char> tex2Replace;
     PODVector<unsigned char> tex2Facemask;
     unsigned dataMask_;
-    unsigned processorDataMask_;
     unsigned height_;
     unsigned width_;
     unsigned depth_;

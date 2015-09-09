@@ -133,6 +133,7 @@ Engine::Engine(Context* context) :
     context_->RegisterSubsystem(new Audio(context_));
     context_->RegisterSubsystem(new UI(context_));
     context_->RegisterSubsystem(new VoxelBuilder(context_));
+    context_->RegisterSubsystem(new STBMeshBuilder(context_));
     RegisterVoxelLibrary(context_);
 
     // Register object factories for libraries which are not automatically registered along with subsystem creation

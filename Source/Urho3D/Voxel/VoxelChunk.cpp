@@ -286,6 +286,9 @@ void VoxelChunk::UpdateMaterialParameters(unsigned slot, VoxelMap* voxelMap)
 
     bool setColor = true;
 
+    VoxelMeshBuilder* meshBuilder = GetSubsystem<STBMeshBuilder>();
+    meshBuilder->UpdateMaterialParameters(material);
+
     if (voxelMap)
     {
         VoxelTextureMap* textureMap = voxelMap->textureMap;
@@ -307,8 +310,6 @@ void VoxelChunk::UpdateMaterialParameters(unsigned slot, VoxelMap* voxelMap)
             material->SetShaderParameter("ColorTable", colorPalette->GetColors());
         }
     }
-    VoxelBuilder* voxelBuilder = GetSubsystem<VoxelBuilder>();
-    voxelBuilder->UpdateMaterialParameters(material, true);
 
     voxelMeshes_[slot].dirtyShaderParameters_ = false;
 }

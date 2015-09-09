@@ -9,8 +9,7 @@ VoxelData::VoxelData() :
     width_(0),
     height_(0),
     depth_(0),
-    dataMask_(0),
-    processorDataMask_(0)
+    dataMask_(0)
 {
 
 }

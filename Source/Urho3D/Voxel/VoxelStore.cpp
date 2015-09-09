@@ -77,9 +77,9 @@ void VoxelMapPage::SetVoxelMap(unsigned index, VoxelMap* voxelMap)
     VectorBuffer dest;
 
     if (compressionMask_ & VOXEL_COMPRESSION_RLE)
-        VoxelMap::RunLengthEncodeData(voxelMap, dest);
+        VoxelData::RunLengthEncodeData(voxelMap, dest);
     else
-        VoxelMap::RawEncode(voxelMap, dest);
+        VoxelData::RawEncode(voxelMap, dest);
 
     if (compressionMask_ & VOXEL_COMPRESSION_LZ4)
         dest = CompressVectorBuffer(dest);
@@ -106,9 +106,9 @@ SharedPtr<VoxelMap> VoxelMapPage::GetVoxelMap(unsigned index)
             source = DecompressVectorBuffer(source);
 
         if (compressionMask_ & VOXEL_COMPRESSION_RLE)
-            VoxelMap::RunLengthDecodeData(voxelMap, source);
+            VoxelData::RunLengthDecodeData(voxelMap, source);
         else
-            VoxelMap::RawDecode(voxelMap, source);
+            VoxelData::RawDecode(voxelMap, source);
 
         return voxelMap;
     }

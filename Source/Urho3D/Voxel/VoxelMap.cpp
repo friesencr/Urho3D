@@ -10,9 +10,10 @@
 namespace Urho3D 
 {
 
-VoxelMap::VoxelMap(Context* context) 
-    : Resource(context),
-    blocktypeMap(0)
+VoxelMap::VoxelMap(Context* context) : 
+    Resource(context),
+    blocktypeMap(0),
+    processorDataMask_(0)
 {
 
 }

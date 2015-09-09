@@ -12,10 +12,15 @@
 #include "VoxelDefs.h"
 #include "VoxelUtils.h"
 #include "VoxelMap.h"
+#include "VoxelWriter.h"
 #include "VoxelChunk.h"
+#include "VoxelMeshBuilder.h"
+#include "STBMeshBuilder.h"
+#include "TransvoxelMeshBuilder.h"
 
 namespace Urho3D {
 
+class VoxelData;
 class VoxelMap;
 class VoxelChunk;
 class VoxelBuilder;
@@ -26,22 +31,36 @@ typedef void(*VoxelProcessorFunc)(VoxelData* source, VoxelData* dest, const Voxe
 struct VoxelJob {
     SharedPtr<VoxelChunk> chunk;
     SharedPtr<VoxelMap> voxelMap;
-    unsigned slot;
+    VoxelBuildSlot* slot;
+    StringHash backend;
 };
 
 struct VoxelWorkload 
 {
-    int slot;
+    unsigned index;
+    VoxelBuildSlot* slot;
     VoxelBuilder* builder;
-    SharedPtr<WorkItem> workItem;
     VoxelRangeFragment range;
-    unsigned workloadIndex;
-    int numQuads;
+    SharedPtr<WorkItem> workItem;
+};
+
+struct VoxelBuildSlot
+{
+    unsigned index;
+    VoxelJob* job;
+    bool failed;
+    bool free;
+    int workCounter;
+    int numWorkloads;
+    VoxelMeshBuilder* backend;
+    VoxelWorkload workloads[4];
+    Mutex slotMutex;
+    void* workBuffer;
+    VoxelWriter writer;
 };
 
 class URHO3D_API VoxelBuilder : public Object {
     OBJECT(VoxelBuilder);
-    friend class VoxelChunk;
 
 public:
     VoxelBuilder(Context* context);
@@ -55,33 +74,21 @@ public:
     bool UnregisterProcessor(String name);
 
 private:
-
-    bool ResizeIndexBuffer(unsigned size);
     void AllocateWorkerBuffers();
     void FreeWorkerBuffers();
-
-    //
-    // work commands
-    //
-    bool BuildMesh(VoxelWorkload* workload);
-    void DecodeWorkBuffer(VoxelWorkload* workload);
-    bool UploadGpuData(VoxelJob* job);
-    bool UploadGpuDataCompatibilityMode(VoxelBuildSlot* slot, bool append = false);
-    bool UpdateMaterialParameters(Material* material, bool setColor);
+    bool RunVoxelProcessor(VoxelWorkload* workload);
 
     //
     // slot management
     //
     int GetFreeBuildSlot();
     unsigned DecrementBuildSlot(VoxelBuildSlot* slot);
-    void PrepareCompletedWork(VoxelBuildSlot* slot);
     void FreeBuildSlot(VoxelBuildSlot* slot);
 
     //
     // job management
     //
     void ProcessJob(VoxelJob* job);
-    VoxelJob* CreateJob(VoxelChunk* chunk);
     bool RunJobs();
     bool IsBuilding();
     bool UploadCompletedWork();
@@ -91,14 +98,7 @@ private:
     //
     Vector<VoxelJob*> buildJobs_;
     Vector<VoxelJob*> uploadJobs_;
-    SharedPtr<IndexBuffer> sharedIndexBuffer_;
     Vector<VoxelBuildSlot> slots_;
-    Vector<Variant> transform_;
-    Vector<Variant> normals_;
-    Vector<Variant> ambientTable_;
-    Vector<Variant> texscaleTable_;
-    Vector<Variant> texgenTable_;
-    Vector<Variant> defaultColorTable_;
 
     // completed work 
     Mutex slotMutex_;

@@ -1,12 +1,11 @@
 #pragma once
 
-#include "VoxelBuilder.h"
+#include "VoxelData.h"
 #include "VoxelUtils.h"
-#include "VoxelMap.h"
 
 namespace Urho3D 
 {
-
+class VoxelBuilder;
 class VoxelWriter : public VoxelData
 {
 friend class VoxelBuilder;

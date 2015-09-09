@@ -289,12 +289,12 @@ void WorldBuilder::ConfigureParameters()
     builder->RegisterProcessor("AOVoxelLighting", AOVoxelLighting);
 
     voxelStore_ = new VoxelStore(context_);
-    voxelStore_->SetCompressionMask(VOXEL_COMPRESSION_RLE | VOXEL_COMPRESSION_LZ4);
+    voxelStore_->SetCompressionMask(VOXEL_COMPRESSION_RLE);
     voxelStore_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
     voxelStore_->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
     //voxelStore_->AddVoxelProcessor("AOVoxelLighting");
     //voxelStore_->AddVoxelProcessor("DancingWorld");
-    voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+    //voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
     voxelStore_->SetSize(width_, 1, depth_);
     voxelSet_->SetVoxelStore(voxelStore_);
 }

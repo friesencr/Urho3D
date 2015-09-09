@@ -12,7 +12,6 @@
 
 namespace Urho3D 
 {
-
 class URHO3D_API VoxelMap : public Resource, public VoxelData
 {
     OBJECT(VoxelMap);
@@ -65,9 +64,15 @@ public:
     void AddVoxelProcessor(StringHash voxelProcessorName);
     void RemoveVoxelProcessor(const StringHash& voxelProcessorName);
 
+    /// Sets the block type data mask.
+    void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
+
+    unsigned GetProcessorDataMask() const { return processorDataMask_; }
+
 private:
     String loadVoxelBlocktypeMap_;
     PODVector<StringHash> voxelProcessors_;
+    unsigned processorDataMask_;
 };
 
 }
