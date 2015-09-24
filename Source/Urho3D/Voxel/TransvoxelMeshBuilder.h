@@ -1,26 +1,37 @@
 #pragma once
 
-#if 0
 #include "../Core/Context.h"
 #include "../Core/Variant.h"
 #include "../Core/WorkQueue.h"
 #include "../Container/Ptr.h"
+#include "../Graphics/IndexBuffer.h"
 
 #include "VoxelMeshBuilder.h"
 
 namespace Urho3D
 {
 
+struct VoxelWorkload;
+struct VoxelBuildSlot;
+
+struct TransvoxelWorkBuffer
+{
+    int fragmentTriangles[VOXEL_MAX_WORKERS];
+    int fragmentVertices[VOXEL_MAX_WORKERS];
+    BoundingBox box[VOXEL_MAX_WORKERS];
+    unsigned char workVertexBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
+    unsigned char workIndexBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_FACE_BUFFER_SIZE];
+    unsigned vertexMask;
+};
 
 class TransvoxelMeshBuilder : public VoxelMeshBuilder
 {
+
 public:
     TransvoxelMeshBuilder(Context* context);
-    virtual ~TransvoxelMeshBuilder();
+    virtual ~TransvoxelMeshBuilder() {}
 
-    virtual unsigned VoxelDataCompatibilityMask() const {
-        return 0xffffffff;
-    }
+    virtual unsigned VoxelDataCompatibilityMask() const;
 
     virtual bool BuildMesh(VoxelWorkload* workload);
 
@@ -32,14 +43,13 @@ public:
 
     virtual bool UpdateMaterialParameters(Material* material);
 
+    virtual void AssignWork(VoxelBuildSlot* slot);
+
+    virtual void FreeWork(VoxelBuildSlot* slot);
+
 protected:
-    Vector<Variant> transform_;
-    Vector<Variant> normals_;
-    Vector<Variant> ambientTable_;
-    Vector<Variant> texscaleTable_;
-    Vector<Variant> texgenTable_;
-    Vector<Variant> defaultColorTable_;
+    bool ResizeIndexBuffer(unsigned numQuads);
+    Vector<TransvoxelWorkBuffer> workBuffers_;
 };
 
 }
-#endif

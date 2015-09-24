@@ -80,7 +80,7 @@ VoxelJob* VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, b
     chunk->voxelJob_ = job;
     job->slot = 0;
     job->voxelMap = voxelMap;
-    job->backend = STBMeshBuilder::GetBaseTypeStatic();
+    job->backend = TransvoxelMeshBuilder::GetBaseTypeStatic();
     buildJobs_.Push(job);
 
     RunJobs();

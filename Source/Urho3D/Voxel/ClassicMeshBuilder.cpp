@@ -1,3 +1,4 @@
+#if 0
 #define STB_VOXEL_RENDER_IMPLEMENTATION
 #define STBVOX_CONFIG_MODE  1
 
@@ -9,7 +10,7 @@
 
 #include "VoxelDefs.h"
 #include "VoxelBuilder.h"
-#include "STBMeshBuilder.h"
+#include "ClassicMeshBuilder.h"
 
 namespace Urho3D
 {
@@ -128,7 +129,7 @@ static unsigned char URHO3D_default_palette_compact[64][3] =
 	{ 120, 200, 160 }, { 60, 200, 150 }, { 100, 220, 130 }, { 0, 255, 128 },
 };
 
-STBMeshBuilder::STBMeshBuilder(Context* context) : VoxelMeshBuilder(context),
+ClassicMeshBuilder::ClassicMeshBuilder(Context* context) : VoxelMeshBuilder(context),
     sharedIndexBuffer_(0)
 {
     transform_.Resize(3);
@@ -171,11 +172,11 @@ STBMeshBuilder::STBMeshBuilder(Context* context) : VoxelMeshBuilder(context),
         defaultColorTable_[i] = Vector4(URHO3D_default_palette[i]);
 }
 
-unsigned STBMeshBuilder::VoxelDataCompatibilityMask() const {
+unsigned ClassicMeshBuilder::VoxelDataCompatibilityMask() const {
     return 0xffffffff;
 }
 
-bool STBMeshBuilder::BuildMesh(VoxelWorkload* workload) 
+bool ClassicMeshBuilder::BuildMesh(VoxelWorkload* workload) 
 {
     VoxelBuildSlot* slot = workload->slot;
     VoxelJob* job = slot->job;
@@ -274,7 +275,7 @@ bool STBMeshBuilder::BuildMesh(VoxelWorkload* workload)
     return success;
 }
 
-bool STBMeshBuilder::ProcessMeshFragment(VoxelWorkload* workload)
+bool ClassicMeshBuilder::ProcessMeshFragment(VoxelWorkload* workload)
 {
     STBWorkBuffer* workBuffer = (STBWorkBuffer*)workload->slot->workBuffer;
     VoxelBuildSlot* slot = workload->slot;
@@ -284,6 +285,75 @@ bool STBMeshBuilder::ProcessMeshFragment(VoxelWorkload* workload)
     int numQuads = workBuffer->fragmentQuads[workload->index];
     unsigned workloadIndex = workload->index;
     unsigned numVertices = numQuads * 4; // 4 verts in a quad
+
+
+geometry_->SetVertexBuffer(0, vertexBuffer_, MASK_POSITION | MASK_NORMAL | MASK_TEXCOORD1 | MASK_TANGENT);
+
+VoxelWorkSlot* slot = workload->slot;
+		int threadIndex = workload->threadIndex;
+		int gpuVertexSize = sizeof(float) * 8; // position(3) / normal(3) / uv1(2)
+		int cpuVertexSize = sizeof(float) * 3; // position(3)
+		int numVertices = numQuads * 4; // 4 verts in a quad
+
+		workload->gpuData.Resize(numVertices * gpuVertexSize);
+		workload->cpuData.Resize(numVertices * cpuVertexSize);
+		float* gpu = (float*)&workload->gpuData.Front();
+		float* cpu = (float*)&workload->cpuData.Front();
+		unsigned int* workData = (unsigned int*)slot->workBuffers[threadIndex];
+
+        BoundingBox box;
+		for (int i = 0; i < numVertices; ++i)
+		{
+			unsigned int v1 = *workData++;
+			unsigned int v2 = *workData++;
+
+			Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0, (float)((v1 >> 7u) & 127u));
+			//float amb_occ = (float)((v1 >> 23u) & 63u) / 63.0;
+			unsigned char tex1 = v2 & 0xFF;
+			unsigned char tex2 = (v2 >> 8) & 0xFF;
+			unsigned char color = (v2 >> 16) & 0xFF;
+			unsigned char face_info = (v2 >> 24) & 0xFF;
+			unsigned char normal = face_info >> 2u;
+			//unsigned char face_rot = face_info & 2u;
+			Vector3 normalf(URHO3D_default_normals[normal]);
+
+            box.Merge(position);
+
+			//LOGINFO(position.ToString());
+
+			*gpu++ = position.x_;
+			*gpu++ = position.y_;
+			*gpu++ = position.z_;
+			*cpu++ = position.x_;
+			*cpu++ = position.y_;
+			*cpu++ = position.z_;
+
+			*gpu++ = normalf.x_;
+			*gpu++ = normalf.y_;
+			*gpu++ = normalf.z_;
+
+			if (i % 4 == 0)
+			{
+				*gpu++ = 0.0;
+				*gpu++ = 0.0;
+			}
+			else if (i % 4 == 1)
+			{
+				*gpu++ = 1.0;
+				*gpu++ = 0.0;
+			}
+			else if (i % 4 == 2)
+			{
+				*gpu++ = 1.0;
+				*gpu++ = 1.0;
+			}
+			else if (i % 4 == 3)
+			{
+				*gpu++ = 0.0;
+				*gpu++ = 1.0;
+			}
+		}
+
     {
         BoundingBox box;
         // vertex data
@@ -311,7 +381,7 @@ bool STBMeshBuilder::ProcessMeshFragment(VoxelWorkload* workload)
     return true;
 }
 
-bool STBMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
+bool ClassicMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
 {
     if (slot->failed)
         return false;
@@ -328,14 +398,14 @@ bool STBMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
             totalQuads += workBuffer->fragmentQuads[i];
             box.Merge(workBuffer->box[i]);
         }
-        mesh.numTris_ = totalQuads * 2;
+        mesh.numQuads_ = totalQuads;
         chunk->SetBoundingBox(box);
     }
 
     return true;
 }
 
-bool STBMeshBuilder::UploadGpuData(VoxelJob* job)
+bool ClassicMeshBuilder::UploadGpuData(VoxelJob* job)
 {
     PROFILE(UploadGpuData);
 
@@ -343,22 +413,20 @@ bool STBMeshBuilder::UploadGpuData(VoxelJob* job)
     chunk->SetNumberOfMeshes(1);
 
     VoxelMesh& mesh = chunk->GetVoxelMesh(0);
-    unsigned numQuads = mesh.numTris_ / 2;
+    unsigned numQuads = mesh.numQuads_;
     if (numQuads == 0)
         return true;
 
-    VertexBuffer* vb = new VertexBuffer(context_);
-    IndexBuffer* faceData = new IndexBuffer(context_);
-    mesh.vertexBuffer_ = vb;
-    mesh.faceData_ = faceData;
+    VertexBuffer* chunkVertexData = mesh.vertexData_;
+    IndexBuffer* chunkFaceData = mesh.faceData_;
 
-    if (!vb->SetSize(numQuads * 4, MASK_DATA, false))
+    if (!chunkVertexData->SetSize(numQuads * 4, MASK_DATA, false))
     {
         LOGERROR("Error allocating voxel vertex data.");
         return false;
     }
 
-    if (!faceData->SetSize(numQuads, true, false))
+    if (!chunkFaceData->SetSize(numQuads, true, false))
     {
         LOGERROR("Error allocating voxel face data.");
         return false;
@@ -368,13 +436,13 @@ bool STBMeshBuilder::UploadGpuData(VoxelJob* job)
     for (unsigned i = 0; i < VOXEL_MAX_WORKERS; ++i)
     {
         unsigned quadCount = mesh.rawFaceData_[i].Size() / sizeof(unsigned);
-        if (!vb->SetDataRange(&mesh.rawVertexData_[i].Front(), quadPosition * 4, quadCount * 4))
+        if (!chunkVertexData->SetDataRange(&mesh.rawVertexData_[i].Front(), quadPosition * 4, quadCount * 4))
         {
             LOGERROR("Error uploading voxel vertex data.");
             return false;
         }
 
-        if (!faceData->SetDataRange(&mesh.rawFaceData_[i].Front(), quadPosition, quadCount))
+        if (!chunkFaceData->SetDataRange(&mesh.rawFaceData_[i].Front(), quadPosition, quadCount))
         {
             LOGERROR("Error uploading voxel face data.");
             return false;
@@ -385,14 +453,13 @@ bool STBMeshBuilder::UploadGpuData(VoxelJob* job)
     // face data
     Material* material = mesh.material_;
     {
-        TextureBuffer* faceDataTexture = new TextureBuffer(context_);
-        mesh.faceBuffer_ = faceDataTexture;
+        TextureBuffer* faceDataTexture = mesh.faceBuffer_;
         if (!faceDataTexture->SetSize(0))
         {
             LOGERROR("Error initializing voxel texture buffer");
             return false;
         }
-        if (!faceDataTexture->SetData(faceData))
+        if (!faceDataTexture->SetData(chunkFaceData))
         {
             LOGERROR("Error setting voxel texture buffer data");
             return false;
@@ -409,7 +476,6 @@ bool STBMeshBuilder::UploadGpuData(VoxelJob* job)
 
     Geometry* geo = mesh.geometry_;
     geo->SetIndexBuffer(sharedIndexBuffer_);
-    geo->SetVertexBuffer(0, vb, MASK_DATA);
     if (!geo->SetDrawRange(TRIANGLE_LIST, 0, numQuads * 6, false))
     {
         LOGERROR("Error setting voxel draw range");
@@ -418,7 +484,7 @@ bool STBMeshBuilder::UploadGpuData(VoxelJob* job)
     return true;
 }
 
-bool STBMeshBuilder::UpdateMaterialParameters(Material* material)
+bool ClassicMeshBuilder::UpdateMaterialParameters(Material* material)
 {
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     Technique* technique = cache->GetResource<Technique>("Techniques/VoxelDiff.xml");
@@ -432,7 +498,7 @@ bool STBMeshBuilder::UpdateMaterialParameters(Material* material)
     return true;
 }
 
-bool STBMeshBuilder::ResizeIndexBuffer(unsigned numQuads)
+bool ClassicMeshBuilder::ResizeIndexBuffer(unsigned numQuads)
 {
     if (!(sharedIndexBuffer_.Null() || sharedIndexBuffer_->GetIndexCount() / 6 < numQuads))
         return true;
@@ -482,7 +548,7 @@ bool STBMeshBuilder::ResizeIndexBuffer(unsigned numQuads)
     return true;
 }
 
-void STBMeshBuilder::AssignWork(VoxelBuildSlot* slot)
+void ClassicMeshBuilder::AssignWork(VoxelBuildSlot* slot)
 {
     unsigned oldSize = workBuffers_.Size();
     if (workBuffers_.Size() <= slot->index)
@@ -503,9 +569,10 @@ void STBMeshBuilder::AssignWork(VoxelBuildSlot* slot)
     slot->workBuffer = workBuffer;
 }
 
-void STBMeshBuilder::FreeWork(VoxelBuildSlot* slot)
+void ClassicMeshBuilder::FreeWork(VoxelBuildSlot* slot)
 {
 
 }
 
 }
+#endif

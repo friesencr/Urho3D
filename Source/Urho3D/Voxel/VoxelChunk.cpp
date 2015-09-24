@@ -181,15 +181,8 @@ void VoxelChunk::SetNumberOfMeshes(unsigned count)
         VoxelMesh& mesh = voxelMeshes_[i];
 
         mesh.dirtyShaderParameters_ = false;
-        mesh.faceBuffer_ = new TextureBuffer(context_);
-        mesh.faceData_ = new IndexBuffer(context_);
-        mesh.faceData_->SetShadowed(false);
-        mesh.vertexData_ = new VertexBuffer(context_);
-        mesh.vertexData_->SetShadowed(false);
         mesh.material_ = new Material(context_);
         mesh.geometry_ = new Geometry(context_);
-        mesh.geometry_->SetVertexBuffer(0, mesh.vertexData_, MASK_DATA);
-        mesh.numQuads_ = 0;
 
         batches_[i].material_ = mesh.material_;
         batches_[i].geometry_ = mesh.geometry_;
@@ -222,11 +215,11 @@ unsigned char VoxelChunk::GetIndexX() { return index_[0]; }
 unsigned char VoxelChunk::GetIndexY() { return index_[1]; }
 unsigned char VoxelChunk::GetIndexZ() { return index_[2]; }
 
-unsigned VoxelChunk::GetTotalQuads() const
+unsigned VoxelChunk::GetTotalTriangles() const
 {
     unsigned total = 0;
     for (unsigned i = 0; i < GetNumMeshes(); ++i)
-        total += GetNumQuads(i);
+        total += GetNumTriangles(i);
     return total;
 }
 

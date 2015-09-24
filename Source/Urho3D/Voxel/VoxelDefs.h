@@ -31,7 +31,7 @@ static const unsigned VOXEL_WORKER_SIZE_Y             = 128;
 static const unsigned VOXEL_WORKER_SIZE_Z             = 32;
 static const unsigned VOXEL_MAX_WORKERS               = 2 * 2 * 1; // chunk size / worker size
 
-static const unsigned VOXEL_WORKER_MAX_QUADS          = 200000;
+static const unsigned VOXEL_WORKER_MAX_QUADS          = 1000000;
 static const unsigned VOXEL_WORKER_VERTEX_BUFFER_SIZE = VOXEL_WORKER_MAX_QUADS * 4 * 4; // 4 uint vertices
 static const unsigned VOXEL_WORKER_FACE_BUFFER_SIZE   = VOXEL_WORKER_MAX_QUADS * 4;
 

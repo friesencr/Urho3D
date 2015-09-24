@@ -22,12 +22,15 @@ struct URHO3D_API VoxelMesh
 {
     SharedPtr<Geometry> geometry_;
     SharedPtr<Material> material_;
-    SharedPtr<VertexBuffer> vertexData_;
+    SharedPtr<VertexBuffer> vertexBuffer_;
+    SharedPtr<IndexBuffer> indexBuffer_;
     SharedPtr<IndexBuffer> faceData_;
     SharedPtr<TextureBuffer> faceBuffer_;
     PODVector<unsigned char> rawVertexData_[4];
+    PODVector<unsigned char> rawIndexData_[4];
     PODVector<unsigned char> rawFaceData_[4];
-    unsigned numQuads_;
+    unsigned numTris_;
+    unsigned numVertices_;
     bool dirtyShaderParameters_;
 };
 
@@ -75,8 +78,8 @@ class URHO3D_API VoxelChunk : public Drawable
     void SetNumberOfMeshes(unsigned count);
 
     unsigned GetNumMeshes() const { return voxelMeshes_.Size(); }
-    unsigned GetTotalQuads() const;
-    unsigned GetNumQuads(unsigned index) const { return voxelMeshes_[index].numQuads_; }
+    unsigned GetTotalTriangles() const;
+    unsigned GetNumTriangles(unsigned index) const { return voxelMeshes_[index].numTris_; }
     unsigned char GetIndexX();
     unsigned char GetIndexY();
     unsigned char GetIndexZ();

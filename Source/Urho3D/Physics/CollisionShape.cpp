@@ -188,6 +188,9 @@ public:
 
 	TriangleMeshInterface(VoxelChunk* voxelChunk) : btTriangleIndexVertexArray()
 	{
+        return;
+
+#if 0
         if (voxelChunk->GetTotalQuads() == 0)
             return;
 
@@ -235,6 +238,8 @@ public:
             totalTriangles += meshIndex.m_numTriangles;
         }
         useQuantize_ = totalTriangles <= QUANTIZE_MAX_TRIANGLES;
+
+#endif
 	}
 
     /// OK to use quantization flag.
@@ -1213,7 +1218,7 @@ void CollisionShape::UpdateShape()
                 if (voxelChunk)
                 { 
 					// TODO doesn't account for missing raw cpu data
-					if (voxelChunk->GetTotalQuads() > 0)
+					if (voxelChunk->GetTotalTriangles() > 0)
 					{
 						geometry_ = new TriangleMeshData(voxelChunk);
 						TriangleMeshData* triMesh = static_cast<TriangleMeshData*>(geometry_.Get());

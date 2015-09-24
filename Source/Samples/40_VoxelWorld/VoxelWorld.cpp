@@ -108,9 +108,9 @@ void VoxelWorld::CreateScene()
     // illusion of the box planes being far away. Use just the ordinary Box model and a suitable material, whose shader will
     // generate the necessary 3D texture coordinates for cube mapping
     Node* skyNode = scene_->CreateChild("Sky");
-    Skybox* skybox = skyNode->CreateComponent<Skybox>();
-    skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
-    skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
+    //Skybox* skybox = skyNode->CreateComponent<Skybox>();
+    //skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
+    //skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
 
     // Create a scene node for the camera, which we will move around
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
@@ -154,7 +154,7 @@ void VoxelWorld::CreateScene()
     voxelNode_ = scene_->CreateChild("VoxelNode");
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     worldBuilder_ = new WorldBuilder(context_);
-    worldBuilder_->SetSize(64, 64);
+    worldBuilder_->SetSize(4, 4);
     worldBuilder_->SetVoxelSet(voxelSet);
     worldBuilder_->ConfigureParameters();
     worldBuilder_->CreateWorld();
@@ -215,7 +215,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 1200.0f;
+    const float MOVE_SPEED = 100.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
@@ -312,12 +312,11 @@ void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventD
 {
     DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
 
-     //If draw debug mode is enabled, draw navigation mesh debug geometry
-    //PODVector<VoxelChunk*> voxelChunks;
-    //scene_->GetComponents<VoxelChunk>(voxelChunks, true);
-    //for (unsigned i = 0; i < voxelChunks.Size(); ++i)
-    //  voxelChunks[i]->DrawDebugGeometry(debug, true);
-    //scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
+    PODVector<VoxelChunk*> voxelChunks;
+    scene_->GetComponents<VoxelChunk>(voxelChunks, true);
+    for (unsigned i = 0; i < voxelChunks.Size(); ++i)
+      voxelChunks[i]->DrawDebugGeometry(debug, true);
+    scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
 
     //if (drawDebug_)
     //    scene_->GetComponent<PhysicsWorld>()->DrawDebugGeometry(true);
