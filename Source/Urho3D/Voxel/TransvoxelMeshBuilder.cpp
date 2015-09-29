@@ -21,90 +21,6 @@ static const Vector3 CORNER_TABLE[8] = {
     {  0.5f,  0.5f,  0.5f }
 };
 
-static const Vector3 EDGE_TABLE[8][8] = {
-    {
-        CORNER_TABLE[0] - CORNER_TABLE[0],
-        CORNER_TABLE[0] - CORNER_TABLE[1],
-        CORNER_TABLE[0] - CORNER_TABLE[2],
-        CORNER_TABLE[0] - CORNER_TABLE[3],
-        CORNER_TABLE[0] - CORNER_TABLE[4],
-        CORNER_TABLE[0] - CORNER_TABLE[5],
-        CORNER_TABLE[0] - CORNER_TABLE[6],
-        CORNER_TABLE[0] - CORNER_TABLE[7],
-    },
-    {
-        CORNER_TABLE[1] - CORNER_TABLE[0],
-        CORNER_TABLE[1] - CORNER_TABLE[1],
-        CORNER_TABLE[1] - CORNER_TABLE[2],
-        CORNER_TABLE[1] - CORNER_TABLE[3],
-        CORNER_TABLE[1] - CORNER_TABLE[4],
-        CORNER_TABLE[1] - CORNER_TABLE[5],
-        CORNER_TABLE[1] - CORNER_TABLE[6],
-        CORNER_TABLE[1] - CORNER_TABLE[7],
-    },
-    {
-        CORNER_TABLE[2] - CORNER_TABLE[0],
-        CORNER_TABLE[2] - CORNER_TABLE[1],
-        CORNER_TABLE[2] - CORNER_TABLE[2],
-        CORNER_TABLE[2] - CORNER_TABLE[3],
-        CORNER_TABLE[2] - CORNER_TABLE[4],
-        CORNER_TABLE[2] - CORNER_TABLE[5],
-        CORNER_TABLE[2] - CORNER_TABLE[6],
-        CORNER_TABLE[2] - CORNER_TABLE[7],
-    },
-    {
-        CORNER_TABLE[3] - CORNER_TABLE[0],
-        CORNER_TABLE[3] - CORNER_TABLE[1],
-        CORNER_TABLE[3] - CORNER_TABLE[2],
-        CORNER_TABLE[3] - CORNER_TABLE[3],
-        CORNER_TABLE[3] - CORNER_TABLE[4],
-        CORNER_TABLE[3] - CORNER_TABLE[5],
-        CORNER_TABLE[3] - CORNER_TABLE[6],
-        CORNER_TABLE[3] - CORNER_TABLE[7],
-    },
-    {
-        CORNER_TABLE[4] - CORNER_TABLE[0],
-        CORNER_TABLE[4] - CORNER_TABLE[1],
-        CORNER_TABLE[4] - CORNER_TABLE[2],
-        CORNER_TABLE[4] - CORNER_TABLE[3],
-        CORNER_TABLE[4] - CORNER_TABLE[4],
-        CORNER_TABLE[4] - CORNER_TABLE[5],
-        CORNER_TABLE[4] - CORNER_TABLE[6],
-        CORNER_TABLE[4] - CORNER_TABLE[7],
-    },
-    {
-        CORNER_TABLE[5] - CORNER_TABLE[0],
-        CORNER_TABLE[5] - CORNER_TABLE[1],
-        CORNER_TABLE[5] - CORNER_TABLE[2],
-        CORNER_TABLE[5] - CORNER_TABLE[3],
-        CORNER_TABLE[5] - CORNER_TABLE[4],
-        CORNER_TABLE[5] - CORNER_TABLE[5],
-        CORNER_TABLE[5] - CORNER_TABLE[6],
-        CORNER_TABLE[5] - CORNER_TABLE[7],
-    },
-    {
-        CORNER_TABLE[6] - CORNER_TABLE[0],
-        CORNER_TABLE[6] - CORNER_TABLE[1],
-        CORNER_TABLE[6] - CORNER_TABLE[2],
-        CORNER_TABLE[6] - CORNER_TABLE[3],
-        CORNER_TABLE[6] - CORNER_TABLE[4],
-        CORNER_TABLE[6] - CORNER_TABLE[5],
-        CORNER_TABLE[6] - CORNER_TABLE[6],
-        CORNER_TABLE[6] - CORNER_TABLE[7],
-    },
-    {
-        CORNER_TABLE[7] - CORNER_TABLE[0],
-        CORNER_TABLE[7] - CORNER_TABLE[1],
-        CORNER_TABLE[7] - CORNER_TABLE[2],
-        CORNER_TABLE[7] - CORNER_TABLE[3],
-        CORNER_TABLE[7] - CORNER_TABLE[4],
-        CORNER_TABLE[7] - CORNER_TABLE[5],
-        CORNER_TABLE[7] - CORNER_TABLE[6],
-        CORNER_TABLE[7] - CORNER_TABLE[7],
-    }
-};
-
-
 TransvoxelMeshBuilder::TransvoxelMeshBuilder(Context* context) : VoxelMeshBuilder(context) 
 {
 
@@ -114,69 +30,80 @@ unsigned TransvoxelMeshBuilder::VoxelDataCompatibilityMask() const {
     return VOXEL_BLOCK_BLOCKTYPE;
 }
 
-bool TransvoxelMeshBuilder::BuildMesh(VoxelWorkload* workload)
+bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
 {
-    VoxelBuildSlot* slot = workload->slot;
     VoxelJob* job = slot->job;
     VoxelChunk* chunk = job->chunk;
     VoxelMap* voxelMap = job->voxelMap;
     VoxelBlocktypeMap* voxelBlocktypeMap = voxelMap->blocktypeMap;
-    TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)slot->workBuffer;
-    VoxelRangeFragment range = workload->range;
-
+    TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)&workBuffers_[slot->index];
+    unsigned char* vb = workBuffer->vertexBuffer;
+    unsigned * ib = workBuffer->indexBuffer;
     unsigned xStride = voxelMap->GetStrideX();
     unsigned zStride = voxelMap->GetStrideZ();
-
-    bool success = true;
     unsigned numVertices = 0;
+    bool success = true;
+    BoundingBox box;
+    unsigned vertexMask = MASK_POSITION | MASK_COLOR; // | MASK_NORMAL;
 
-    unsigned char* blocktype = &voxelMap->GetBlocktypeData().Front();
-
-    const int lsw = -xStride - zStride - 1;
-    const int lse = xStride - zStride - 1;
-    const int lnw = -xStride + zStride - 1;
-    const int lne = xStride + zStride - 1;
-    const int hsw = -xStride - zStride + 1;
-    const int hse = xStride - zStride + 1;
-    const int hnw = -xStride + zStride + 1;
+    // voxel data index offests per direction
+    const int lsw = 0;
+    const int lse = xStride;
+    const int lnw = zStride;
+    const int lne = xStride  +  zStride;
+    const int hsw = 1;
+    const int hse = xStride + 1;
+    const int hnw = zStride + 1;
     const int hne = xStride + zStride + 1;
 
-    static const int relativeCorners[8] = {
+    // holds the index of previous built indexes
+    unsigned deckCache[32*32*2*4]; // 32 * 32 is max size, use 2 Y layers and swap between per Y, max 4 verts reuse per cell
+    unsigned deckSize = 32 * 32;
+
+    // offset to position in deckCache x,y,z | 1,2,4 bits -1 to position per coord respectivly
+    const int reuseOffsets[8] = {
         0,
-        -xStride,
-        -1,
-        -xStride - 1,
-        -zStride,
-        -xStride - zStride,
-        -1 - zStride,
-        -xStride - 1 - zStride
+        -VOXEL_CHUNK_SIZE_Z,
+        -(VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
+        -VOXEL_CHUNK_SIZE_Z - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
+        - 1,
+        -VOXEL_CHUNK_SIZE_Z - 1,
+        -1  - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
+        -1 - VOXEL_CHUNK_SIZE_Z - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
     };
+    
+    unsigned char* blocktype = &voxelMap->GetBlocktypeData().Front();
 
-    unsigned char* vb = workBuffer->workVertexBuffers[workload->index];
-    unsigned * ib = (unsigned*)workBuffer->workIndexBuffers[workload->index];
-    BoundingBox box;
-
-    unsigned vertexMask = MASK_POSITION | MASK_COLOR;
-
-    for (unsigned x = range.startX; x < range.endX; ++x)
-    {
-        for (unsigned z = range.startZ; z < range.endZ; ++z)
+    for (unsigned y = 0; y < VOXEL_CHUNK_SIZE_Y; ++y)
+    { 
+        for (unsigned x = 0; x < VOXEL_CHUNK_SIZE_X; ++x)
         {
-            unsigned index = voxelMap->GetIndex(x, range.startY, z);
+            unsigned index = voxelMap->GetIndex(x, y, 0);
             unsigned char* bt = &blocktype[index];
-            for (unsigned y = range.startY; y < range.endY; ++y)
-            {
-                unsigned char caseCode =
-                      ((bt[lsw] > 0) << 7)
-                    | ((bt[lse] > 0) << 6)
-                    | ((bt[lnw] > 0) << 5)
-                    | ((bt[lne] > 0) << 4)
-                    | ((bt[hsw] > 0) << 3)
-                    | ((bt[hse] > 0) << 2)
-                    | ((bt[hnw] > 0) << 1)
-                    | ( bt[hne] > 0);
 
-                bt++;
+            for (unsigned z = 0; z < VOXEL_CHUNK_SIZE_Z; ++z)
+            {
+                unsigned char bt_lsw = bt[lsw];
+                unsigned char bt_lse = bt[lse];
+                unsigned char bt_lnw = bt[lnw];
+                unsigned char bt_lne = bt[lne];
+                unsigned char bt_hsw = bt[hsw];
+                unsigned char bt_hse = bt[hse];
+                unsigned char bt_hnw = bt[hnw];
+                unsigned char bt_hne = bt[hne];
+
+                bt += zStride;
+
+                unsigned char caseCode =
+                    (bt_lsw > 0)
+                    | ((bt_lse > 0) << 1)
+                    | ((bt_lnw > 0) << 2)
+                    | ((bt_lne > 0) << 3)
+                    | ((bt_hsw > 0) << 4)
+                    | ((bt_hse > 0) << 5)
+                    | ((bt_hnw > 0) << 6)
+                    | ((bt_hne > 0) << 7);
+
 
                 if (caseCode == 0 || caseCode == 0xFF)
                     continue;
@@ -185,76 +112,69 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelWorkload* workload)
                 const unsigned short* vertexData = regularVertexData[caseCode];
                 const unsigned triangleCount = regularData.GetTriangleCount();
 
+                box.Merge(Vector3(x, y, z));
+
                 for (unsigned i = 0; i < triangleCount; ++i)
                 {
                     const unsigned char* triangleData = &regularData.vertexIndex[i * 3];
-                    for (unsigned j = 0; j < 3; ++j)
+                    for (unsigned j = 3; j-- > 0; )
                     {
                         const unsigned short& edgeCode = vertexData[triangleData[j]];
+                        unsigned short reusePos = edgeCode >> 12;
+                        unsigned short reuseTri = (edgeCode >> 8) & 0x0F;
                         unsigned short v0 = (edgeCode >> 4) & 0x0F;
                         unsigned short v1 = edgeCode & 0x0F;
                         unsigned char t = 0x7F; // half way for now
 
-                        if (vertexMask & MASK_POSITION)
+                        if (reusePos == 8)
                         {
-                            Vector3 p1 = CORNER_TABLE[v0];
-                            Vector3 p2 = CORNER_TABLE[v1];
-                            Vector3 position = Vector3((float)x, (float)y, (float)z) + (p2); // *((float)t / 255.0f));
-                            *(Vector3*)vb = position;
-                            vb += sizeof(Vector3);
-                            ib[i] = i;
+                            *ib++ = numVertices;
+                            unsigned deckIndex = ((y % 2) * deckSize) + (x * 32) + z + reuseTri;
+                            deckCache[deckIndex] = numVertices;
                             numVertices++;
-                            box.Merge(position);
-                        }
 
-                        if (vertexMask & MASK_COLOR)
+                            if (vertexMask & MASK_POSITION)
+                            {
+                                const Vector3& p1 = CORNER_TABLE[v0];
+                                const Vector3& p2 = CORNER_TABLE[v1];
+                                Vector3 position = Vector3((float)x, (float)y, (float)z) + p1.Lerp(p2, 0.5);
+                                *(Vector3*)vb = position;
+                                vb += sizeof(Vector3);
+                            }
+
+                            if (vertexMask & MASK_COLOR)
+                            {
+                                *(unsigned*)vb = Color((float)y / 128.0, (float)y / 128.0, (float)y / 128.0, 1.0f).ToUInt();
+                                vb += sizeof(unsigned);
+                            }
+
+                            if (vertexMask & MASK_NORMAL)
+                            {
+                                if (j == 0)
+                                    *(Vector3*)vb = Vector3(1.0, 0.0, 0.0);
+                                else if (j == 1)
+                                    *(Vector3*)vb = Vector3(0.0, 1.0, 0.0);
+                                else if (j == 2)
+                                    *(Vector3*)vb = Vector3(0.0, 0.0, 1.0);
+
+                                vb += sizeof(Vector3);
+                            }
+                        }
+                        else
                         {
-                            *(unsigned*)vb = Color((float)y / 128.0, (float)y / 128.0, (float)y / 128.0, 1.0f).ToUInt();
-                            vb += sizeof(unsigned);
+                            unsigned deckIndex = ((((reuseTri & 0x2) + y) % 2) * deckSize) + (x * 32) + z + reuseTri;
+                            *ib++ = deckCache[deckIndex];
                         }
                     }
                 }
             }
         }
     }
-    workBuffer->box[workload->index] = box;
-    workBuffer->fragmentTriangles[workload->index] = numVertices / 3;
-    workBuffer->fragmentVertices[workload->index] = numVertices;
+    workBuffer->box = box;
+    workBuffer->numVerticies = numVertices;
+    workBuffer->numIndicies = ib - workBuffer->indexBuffer;
+    workBuffer->numTriangles = workBuffer->numIndicies / 3;
     return success;
-}
-
-bool TransvoxelMeshBuilder::ProcessMeshFragment(VoxelWorkload* workload)
-{
-    VoxelBuildSlot* slot = workload->slot;
-    VoxelChunk* chunk = slot->job->chunk;
-    TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)slot->workBuffer;
-    VoxelMesh& voxelMesh = chunk->GetVoxelMesh(0);
-
-    unsigned vertexMask = MASK_POSITION | MASK_COLOR;
-    unsigned vertexSize = 0;
-    for (unsigned i = 0; i < MAX_VERTEX_ELEMENTS; ++i)
-    {
-        if (vertexMask & (1 << i))
-            vertexSize += VertexBuffer::elementSize[i];
-    }
-
-    {
-        unsigned count = workBuffer->fragmentVertices[workload->index];
-        voxelMesh.rawIndexData_[workload->index].Resize(count * sizeof(unsigned));
-        void* destIb = &voxelMesh.rawIndexData_[workload->index].Front();
-        void* srcIb = &workBuffer->workIndexBuffers[workload->index];
-        memcpy(destIb, srcIb, count * sizeof(unsigned));
-    }
-
-    {
-        unsigned count = workBuffer->fragmentVertices[workload->index];
-        voxelMesh.rawVertexData_[workload->index].Resize(count * vertexSize);
-        void* destVb = &voxelMesh.rawVertexData_[workload->index].Front();
-        void* srcVb = &workBuffer->workVertexBuffers[workload->index];
-        memcpy(destVb, srcVb, count * vertexSize);
-    }
-    
-    return true;
 }
 
 bool TransvoxelMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
@@ -263,51 +183,36 @@ bool TransvoxelMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
         return false;
     else
     {
-        TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)slot->workBuffer;
+        TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)&workBuffers_[slot->index];
         VoxelChunk* chunk = slot->job->chunk;
         VoxelMesh& mesh = chunk->GetVoxelMesh(0);
 
-        unsigned numVerts = 0;
-        BoundingBox box;
-        unsigned indexCount = 0;
-        unsigned vertexCount = 0;
-        for (unsigned i = 0; i < slot->numWorkloads; ++i)
-        {
-            if (i > 0)
-            {
-                unsigned* ib = (unsigned*)&mesh.rawIndexData_[i].Front();
-                for (unsigned x = 0; x < workBuffer->fragmentVertices[i]; ++x)
-                    ib[x] += indexCount;
-            }
-            indexCount += workBuffer->fragmentVertices[i];
-            numVerts += workBuffer->fragmentVertices[i];
-            box.Merge(workBuffer->box[i]);
-        }
-        mesh.numVertices_ = numVerts;
-        mesh.numTris_ = numVerts / 3;
-        chunk->SetBoundingBox(box);
+        mesh.numVertices_ = workBuffer->numVerticies;
+        mesh.numTriangles_ = workBuffer->numTriangles;
+        chunk->SetBoundingBox(workBuffer->box);
     }
 
     return true;
 }
 
-bool TransvoxelMeshBuilder::UploadGpuData(VoxelJob* job)
+bool TransvoxelMeshBuilder::UploadGpuData(VoxelBuildSlot* slot)
 {
     PROFILE(UploadGpuData);
 
-    VoxelChunk* chunk = job->chunk;
+    TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)&workBuffers_[slot->index];
+    VoxelChunk* chunk = slot->job->chunk;
     chunk->SetNumberOfMeshes(1);
 
     VoxelMesh& mesh = chunk->GetVoxelMesh(0);
-    VoxelMap* voxelMap = job->voxelMap;
+    VoxelMap* voxelMap = slot->job->voxelMap;
 
     VertexBuffer* vb = new VertexBuffer(context_);
-    //IndexBuffer* ib = new IndexBuffer(context_);
-    mesh.vertexBuffer_ = vb;
-    //mesh.indexBuffer_ = ib;
+    vb->SetShadowed(false);
+    IndexBuffer* ib = new IndexBuffer(context_);
+    ib->SetShadowed(false);
 
     unsigned vertexSize = 0;
-    unsigned vertexMask = MASK_POSITION | MASK_COLOR;
+    unsigned vertexMask = MASK_POSITION | MASK_COLOR; // | MASK_NORMAL;
     for (unsigned i = 0; i < MAX_VERTEX_ELEMENTS; ++i)
     {
         if (vertexMask & (1 << i))
@@ -320,49 +225,41 @@ bool TransvoxelMeshBuilder::UploadGpuData(VoxelJob* job)
         return false;
     }
 
-    //if (!ib->SetSize(mesh.numVertices_, true, false))
-    //{
-    //    LOGERROR("Error allocating voxel index buffer.");
-    //    return false;
-    //}
-
-    unsigned vertexCount = 0;
-    for (unsigned i = 0; i < VOXEL_MAX_WORKERS; ++i)
+    if (!ib->SetSize(mesh.numIndicies_, true, false))
     {
-        if (!vb->SetDataRange(&mesh.rawVertexData_[i].Front(), vertexCount, mesh.rawVertexData_[i].Size() / vertexSize))
-        {
-            LOGERROR("Error uploading voxel vertex data.");
-            return false;
-        }
-        vertexCount += mesh.rawVertexData_[i].Size() / vertexSize;
+        LOGERROR("Error allocating voxel index buffer.");
+        return false;
     }
 
-    //unsigned indexCount = 0;
-    //for (unsigned i = 0; i < VOXEL_MAX_WORKERS; ++i)
-    //{
-    //    if (!ib->SetDataRange(&mesh.rawIndexData_[i].Front(), indexCount, mesh.rawIndexData_[i].Size() / sizeof(unsigned)))
-    //    {
-    //        LOGERROR("Error uploading voxel face data.");
-    //        return false;
-    //    }
-    //    indexCount += mesh.rawIndexData_[i].Size() / sizeof(unsigned);
-    //}
+    unsigned vertexCount = 0;
+    if (!vb->SetData(&workBuffer->vertexBuffer))
+    {
+        LOGERROR("Error uploading voxel vertex data.");
+        return false;
+    }
+
+    if (!ib->SetData(&workBuffer->indexBuffer))
+    {
+        LOGERROR("Error uploading voxel face data.");
+        return false;
+    }
 
     Geometry* geo = mesh.geometry_;
     geo->SetVertexBuffer(0, vb, vertexMask);
-    //geo->SetIndexBuffer(ib);
-    if (!geo->SetDrawRange(TRIANGLE_LIST, 0, 0, 0, mesh.numVertices_, false))
+    geo->SetIndexBuffer(ib);
+    if (!geo->SetDrawRange(TRIANGLE_LIST, 0, mesh.numIndicies_, false))
     {
         LOGERROR("Error setting voxel draw range");
         return false;
     }
+
     return true;
 }
 
 bool TransvoxelMeshBuilder::UpdateMaterialParameters(Material* material)
 {
     ResourceCache* cache = GetSubsystem<ResourceCache>();
-    Technique* technique = cache->GetResource<Technique>("Techniques/NoTextureVCol.xml");
+    Technique* technique = cache->GetResource<Technique>("Techniques/NoTextureUnlitVCol.xml");
     material->SetTechnique(0, technique);
     return true;
 }
@@ -374,12 +271,10 @@ void TransvoxelMeshBuilder::AssignWork(VoxelBuildSlot* slot)
         workBuffers_.Resize(slot->index + 1);
 
     TransvoxelWorkBuffer* workBuffer = &workBuffers_[slot->index];
-    for (unsigned x = 0; x < VOXEL_MAX_WORKERS; ++x)
-    {
-        workBuffer->fragmentTriangles[x] = 0;
-        workBuffer->box[x] = BoundingBox();
-    }
-    slot->workBuffer = workBuffer;
+    workBuffer->numTriangles = 0;
+    workBuffer->numIndicies = 0;
+    workBuffer->numVerticies = 0;
+    workBuffer->box = BoundingBox();
 }
 
 void TransvoxelMeshBuilder::FreeWork(VoxelBuildSlot* slot)

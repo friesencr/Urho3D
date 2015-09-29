@@ -13,34 +13,34 @@
 namespace Urho3D
 {
 
-struct VoxelWorkload;
 struct VoxelBuildSlot;
+
+const unsigned VOXEL_STB_WORKER_MAX_QUADS          = 100000;
+const unsigned VOXEL_STB_WORKER_VERTEX_BUFFER_SIZE = VOXEL_STB_WORKER_MAX_QUADS * 4 * 4; // 4 uint vertices
+const unsigned VOXEL_STB_WORKER_FACE_BUFFER_SIZE   = VOXEL_STB_WORKER_MAX_QUADS * 4;
 
 struct STBWorkBuffer
 {
-    int fragmentQuads[VOXEL_MAX_WORKERS];
-    BoundingBox box[VOXEL_MAX_WORKERS];
-    stbvox_mesh_maker meshMakers[VOXEL_MAX_WORKERS];
-    unsigned char workVertexBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
-    unsigned char workFaceBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_FACE_BUFFER_SIZE];
+    int fragmentQuads;
+    stbvox_mesh_maker meshMaker;
+    unsigned char workVertexBuffer[VOXEL_STB_WORKER_VERTEX_BUFFER_SIZE];
+    unsigned char workFaceBuffer[VOXEL_STB_WORKER_FACE_BUFFER_SIZE];
 };
 
 class STBMeshBuilder : public VoxelMeshBuilder
 {
-
+    OBJECT(STBMeshBuilder);
 public:
     STBMeshBuilder(Context* context);
     virtual ~STBMeshBuilder() {}
 
     virtual unsigned VoxelDataCompatibilityMask() const;
 
-    virtual bool BuildMesh(VoxelWorkload* workload);
-
-    virtual bool ProcessMeshFragment(VoxelWorkload* workload);
+    virtual bool BuildMesh(VoxelBuildSlot* workload);
 
     virtual bool ProcessMesh(VoxelBuildSlot* slot);
 
-    virtual bool UploadGpuData(VoxelJob* job);
+    virtual bool UploadGpuData(VoxelBuildSlot* slot);
 
     virtual bool UpdateMaterialParameters(Material* material);
 

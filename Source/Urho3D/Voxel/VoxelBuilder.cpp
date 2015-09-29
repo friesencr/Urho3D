@@ -24,7 +24,7 @@ VoxelBuilder::~VoxelBuilder()
 
 void VoxelBuilder::AllocateWorkerBuffers()
 {
-    unsigned numSlots = 2;
+    unsigned numSlots = 12;
     if (numSlots == slots_.Size())
         return;
 
@@ -54,14 +54,21 @@ void VoxelBuilder::FreeWorkerBuffers()
 void VoxelBuilder::CompleteWork(unsigned priority)
 {
     //PROFILE(VoxelWork);
-    while (RunJobs() || UploadCompletedWork() || IsBuilding())
+    for (;;)
+    {
+        bool runJobs = RunJobs();
+        bool upload = UploadCompletedWork();
+        if (!(runJobs || upload || IsBuilding()))
+            return;
+
         Time::Sleep(0);
+    }
 }
 
 void BuildWorkloadHandler(const WorkItem* workItem, unsigned threadIndex)
 {
-    VoxelWorkload* workload = (VoxelWorkload*)workItem->aux_;
-    workload->builder->BuildWorkload(workload);
+    VoxelBuildSlot* slot = (VoxelBuildSlot*)workItem->aux_;
+    slot->builder->BuildWorkload(slot);
 }
 
 VoxelJob* VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, bool async)
@@ -80,7 +87,8 @@ VoxelJob* VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, b
     chunk->voxelJob_ = job;
     job->slot = 0;
     job->voxelMap = voxelMap;
-    job->backend = TransvoxelMeshBuilder::GetBaseTypeStatic();
+    job->backend = TransvoxelMeshBuilder::GetTypeStatic();
+    //job->backend = STBMeshBuilder::GetTypeStatic();
     buildJobs_.Push(job);
 
     RunJobs();
@@ -111,27 +119,40 @@ bool VoxelBuilder::RunJobs()
                 break;
             }
         }
+        else
+            break;
     }
     return buildJobs_.Size() > 0;
 }
 
 bool VoxelBuilder::UploadCompletedWork()
 {
-    MutexLock lock(uploadJobMutex_);
     for (;;)
     {
-        if (!uploadJobs_.Size())
-            return false;
+        VoxelBuildSlot* slot = 0;
+        {
+            MutexLock lock(slotMutex_);
+            for (unsigned i = 0; i < slots_.Size(); ++i)
+            {
+                if (slots_[i].upload == true)
+                {
+                    slot = &slots_[i];
+                    break;
+                }
+            }
+            if (!slot)
+                return false;
+        }
 
-        VoxelJob* job = uploadJobs_[0];
-        VoxelMeshBuilder* backend = (VoxelMeshBuilder*)GetSubsystem(job->backend);
-        uploadJobs_.Erase(0);
-        if (!backend->UploadGpuData(job))
+        VoxelMeshBuilder* backend = (VoxelMeshBuilder*)slot->backend;
+        if (!backend->UploadGpuData(slot))
             LOGERROR("Failed to upload data to gpu");
         else
-            job->chunk->OnVoxelChunkCreated();
+            slot->job->chunk->OnVoxelChunkCreated();
 
-        delete job;
+        backend->FreeWork(slot);
+        delete slot->job;
+        FreeBuildSlot(slot);
     }
     return false;
 }
@@ -145,7 +166,7 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
     VoxelChunk* chunk = job->chunk;
     chunk->SetNumberOfMeshes(1);
 
-#if 1
+#if 0
     if (voxelMap->GetVoxelProcessors().Size() > 0 && voxelMap->processorDataMask_)
     {
         PODVector<unsigned char>* datas[VOXEL_DATA_NUM_BASIC_STREAMS];
@@ -169,44 +190,21 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
     }
 #endif
 
-    unsigned index = 0;
-    slot->numWorkloads = 4;
-    slot->workCounter = slot->numWorkloads;
-    for (int x = 0; x < 2; ++x)
-    {
-        for (int z = 0; z < 2; ++z)
-        {
-            VoxelWorkload* workload = &slot->workloads[index];
-            workload->builder = this;
-            workload->slot = job->slot;
-            workload->range.positionX = 0;
-            workload->range.positionY = 0;
-            workload->range.positionZ = 0;
-            workload->range.lengthX = VOXEL_WORKER_SIZE_X;
-            workload->range.lengthY = VOXEL_WORKER_SIZE_Y;
-            workload->range.lengthZ = VOXEL_WORKER_SIZE_Z;
-            workload->range.startX = x * VOXEL_WORKER_SIZE_X;
-            workload->range.startY = 0;
-            workload->range.startZ = z * VOXEL_WORKER_SIZE_Z;
-            workload->range.endX = VOXEL_WORKER_SIZE_X * (x + 1);
-            workload->range.endY = VOXEL_WORKER_SIZE_Y;
-            workload->range.endZ = VOXEL_WORKER_SIZE_Z * (z + 1);
-            workload->index = index++;
+    slot->builder = this;
 
-            SharedPtr<WorkItem> workItem(new WorkItem());
-            workItem->priority_ = 0;
-            workItem->aux_ = workload;
-            workItem->start_ = slot;
-            workItem->workFunction_ = BuildWorkloadHandler;
-            workload->workItem = workItem;
-            workQueue->AddWorkItem(workItem);
-        }
-    }
+    SharedPtr<WorkItem> workItem(new WorkItem());
+    workItem->priority_ = 0;
+    workItem->aux_ = slot;
+    workItem->workFunction_ = BuildWorkloadHandler;
+    slot->workItem = workItem;
+    workQueue->AddWorkItem(workItem);
 }
 
-bool VoxelBuilder::RunVoxelProcessor(VoxelWorkload* workload)
+bool VoxelBuilder::RunVoxelProcessor(VoxelBuildSlot* slot)
 {
-    VoxelBuildSlot* slot = workload->slot;
+    return true;
+
+#if 0
     VoxelMap* voxelMap = slot->job->voxelMap;
     VoxelRangeFragment processRange = workload->range;
     if (voxelMap->GetVoxelProcessors().Size() > 0 && voxelMap->GetProcessorDataMask())
@@ -233,28 +231,22 @@ bool VoxelBuilder::RunVoxelProcessor(VoxelWorkload* workload)
         }
     }
     return true;
+#endif
 }
 
-void VoxelBuilder::BuildWorkload(VoxelWorkload* workload)
+void VoxelBuilder::BuildWorkload(VoxelBuildSlot* slot)
 {
-    VoxelBuildSlot* slot = workload->slot;
     VoxelMeshBuilder* builder = slot->backend;
-
-    if (!(builder->BuildMesh(workload) && RunVoxelProcessor(workload) && builder->ProcessMeshFragment(workload)))
+    if (!(RunVoxelProcessor(slot) && builder->BuildMesh(slot) && builder->ProcessMesh(slot)))
     {
-        MutexLock lock(slot->slotMutex);
         slot->failed = true;
-    }
-
-    if (DecrementBuildSlot(slot) == 0)
-    {
-        slot->failed = builder->ProcessMesh(slot);
-        {
-            MutexLock lock(uploadJobMutex_);
-            uploadJobs_.Push(slot->job);
-        }
         slot->backend->FreeWork(slot);
         FreeBuildSlot(slot);
+    }
+    else
+    {
+        MutexLock lock(slotMutex_);
+        slot->upload = true;
     }
 }
 
@@ -262,13 +254,6 @@ void VoxelBuilder::CancelJob(VoxelJob* job)
 {
     if (buildJobs_.Remove(job))
         delete job;
-}
-
-unsigned VoxelBuilder::DecrementBuildSlot(VoxelBuildSlot* slot)
-{
-    MutexLock lock(slot->slotMutex);
-    slot->workCounter--;
-    return slot->workCounter;
 }
 
 bool VoxelBuilder::IsBuilding()
@@ -286,11 +271,9 @@ void VoxelBuilder::FreeBuildSlot(VoxelBuildSlot* slot)
 {
     MutexLock lock(slotMutex_);
     slot->failed = false;
-    slot->workCounter = 0;
-    slot->numWorkloads = 0;
     slot->free = true;
+    slot->upload = false;
     slot->job = 0;
-    slot->workBuffer = 0;
     slot->backend = 0;
 }
 

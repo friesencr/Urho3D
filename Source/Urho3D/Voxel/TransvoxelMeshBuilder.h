@@ -8,38 +8,40 @@
 
 #include "VoxelMeshBuilder.h"
 
+
 namespace Urho3D
 {
 
-struct VoxelWorkload;
 struct VoxelBuildSlot;
+
+static const unsigned TRANSVOXEL_WORKER_VERTEX_BUFFER_SIZE = 100000 * (sizeof(Vector3) + sizeof(Vector3) + sizeof(unsigned));
+static const unsigned TRANSVOXEL_WORKER_INDEX_BUFFER_SIZE = 100000;
 
 struct TransvoxelWorkBuffer
 {
-    int fragmentTriangles[VOXEL_MAX_WORKERS];
-    int fragmentVertices[VOXEL_MAX_WORKERS];
-    BoundingBox box[VOXEL_MAX_WORKERS];
-    unsigned char workVertexBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_VERTEX_BUFFER_SIZE];
-    unsigned char workIndexBuffers[VOXEL_MAX_WORKERS][VOXEL_WORKER_FACE_BUFFER_SIZE];
     unsigned vertexMask;
+    BoundingBox box;
+    unsigned numTriangles;
+    unsigned numVerticies;
+    unsigned numIndicies;
+    unsigned char vertexBuffer[TRANSVOXEL_WORKER_VERTEX_BUFFER_SIZE];
+    unsigned unsigned indexBuffer[TRANSVOXEL_WORKER_INDEX_BUFFER_SIZE];
 };
 
 class TransvoxelMeshBuilder : public VoxelMeshBuilder
 {
-
+    OBJECT(TransvoxelMeshBuilder);
 public:
     TransvoxelMeshBuilder(Context* context);
     virtual ~TransvoxelMeshBuilder() {}
 
     virtual unsigned VoxelDataCompatibilityMask() const;
 
-    virtual bool BuildMesh(VoxelWorkload* workload);
-
-    virtual bool ProcessMeshFragment(VoxelWorkload* workload);
+    virtual bool BuildMesh(VoxelBuildSlot* workload);
 
     virtual bool ProcessMesh(VoxelBuildSlot* slot);
 
-    virtual bool UploadGpuData(VoxelJob* job);
+    virtual bool UploadGpuData(VoxelBuildSlot* slot);
 
     virtual bool UpdateMaterialParameters(Material* material);
 
@@ -48,7 +50,6 @@ public:
     virtual void FreeWork(VoxelBuildSlot* slot);
 
 protected:
-    bool ResizeIndexBuffer(unsigned numQuads);
     Vector<TransvoxelWorkBuffer> workBuffers_;
 };
 

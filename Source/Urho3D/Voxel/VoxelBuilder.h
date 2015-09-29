@@ -35,27 +35,16 @@ struct VoxelJob {
     StringHash backend;
 };
 
-struct VoxelWorkload 
-{
-    unsigned index;
-    VoxelBuildSlot* slot;
-    VoxelBuilder* builder;
-    VoxelRangeFragment range;
-    SharedPtr<WorkItem> workItem;
-};
-
 struct VoxelBuildSlot
 {
     unsigned index;
     VoxelJob* job;
+    VoxelBuilder* builder;
     bool failed;
+    bool upload;
     bool free;
-    int workCounter;
-    int numWorkloads;
     VoxelMeshBuilder* backend;
-    VoxelWorkload workloads[4];
-    Mutex slotMutex;
-    void* workBuffer;
+    SharedPtr<WorkItem> workItem;
     VoxelWriter writer;
 };
 
@@ -67,7 +56,7 @@ public:
     ~VoxelBuilder();
     VoxelJob* BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, bool async = false);
     // needs to be public for work item work method
-    void BuildWorkload(VoxelWorkload* workload);
+    void BuildWorkload(VoxelBuildSlot* slot);
     void CompleteWork(unsigned = M_MAX_UNSIGNED);
     void CancelJob(VoxelJob* job);
     void RegisterProcessor(String name, VoxelProcessorFunc function);
@@ -76,13 +65,12 @@ public:
 private:
     void AllocateWorkerBuffers();
     void FreeWorkerBuffers();
-    bool RunVoxelProcessor(VoxelWorkload* workload);
+    bool RunVoxelProcessor(VoxelBuildSlot* slot);
 
     //
     // slot management
     //
     int GetFreeBuildSlot();
-    unsigned DecrementBuildSlot(VoxelBuildSlot* slot);
     void FreeBuildSlot(VoxelBuildSlot* slot);
 
     //
@@ -97,12 +85,10 @@ private:
     // state
     //
     Vector<VoxelJob*> buildJobs_;
-    Vector<VoxelJob*> uploadJobs_;
     Vector<VoxelBuildSlot> slots_;
 
     // completed work 
     Mutex slotMutex_;
-    Mutex uploadJobMutex_;
     HashMap<StringHash, VoxelProcessorFunc> processors_;
 };
 

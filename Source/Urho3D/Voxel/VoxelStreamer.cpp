@@ -98,8 +98,10 @@ void VoxelStreamer::UnloadBestChunks()
         {
             unsigned radius = (unsigned)ceilf(viewDistance / Max(chunkSpacing.x_, chunkSpacing.z_)) + 2;
             unsigned startX = Clamp(indexX - radius, 0, voxelSet_->GetNumChunksX());
+            unsigned startY = Clamp(indexY - radius, 0, voxelSet_->GetNumChunksY());
             unsigned startZ = Clamp(indexZ - radius, 0, voxelSet_->GetNumChunksZ());
-            unsigned endX   = Clamp(indexX + radius + 1, 0, voxelSet_->GetNumChunksZ());
+            unsigned endX   = Clamp(indexX + radius + 1, 0, voxelSet_->GetNumChunksX());
+            unsigned endY   = Clamp(indexY + radius + 1, 0, voxelSet_->GetNumChunksY());
             unsigned endZ   = Clamp(indexZ + radius + 1, 0, voxelSet_->GetNumChunksZ());
 
             unsigned x = 0;
@@ -108,7 +110,7 @@ void VoxelStreamer::UnloadBestChunks()
             for (PODVector<Pair<unsigned, bool> >::Iterator i = loadedChunks_.Begin(); i != loadedChunks_.End(); ++i)
             {
                 voxelSet_->GetCoordinatesFromIndex(i->first_, x, y, z);
-                i->second_ = !(x >= startX && x <= endX && z >= startZ && z <= endZ);
+                i->second_ = !(x >= startX && x <= endX && y >= startY && y <= endY && z >= startZ && z <= endZ);
             }
         }
     }
@@ -144,17 +146,17 @@ void VoxelStreamer::BuildInternal()
         return;
 
     maxBuildsPerFrame_ = 0;
-    maxBuildFrameTime_ = 1;
-    maxPriorityBuildFrameTime_ = 0;
+    maxBuildFrameTime_ = 0;
+    maxPriorityBuildFrameTime_ = 1;
 
     // build voxels
     VoxelBuilder* voxelBuilder = GetSubsystem<VoxelBuilder>();
     {
         PROFILE(BuildStreamVoxels);
-        Timer buildTimer;
         CreateAndSortVisibleChunks();
         UnloadBestChunks();
 
+        Timer buildTimer;
         unsigned totalBuilds = 0;
         for (unsigned q = 0; q < 2; ++q)
         {
@@ -171,7 +173,7 @@ void VoxelStreamer::BuildInternal()
                 voxelSet_->GetCoordinatesFromIndex(buildItem, x, y, z);
                 voxelSet_->LoadChunk(x,y,z,true);
                 loadedChunks_.Push(Pair<unsigned, bool>(buildItem, false));
-                if (i % 2 == 1)
+                if (i % 8 == 7)
                     voxelBuilder->CompleteWork();
             }
         }
@@ -232,38 +234,43 @@ void VoxelStreamer::CreateAndSortVisibleChunks()
 void VoxelStreamer::CreateChunksWithGrid(int indexX, int indexY, int indexZ, unsigned size, Vector3 cameraPosition, Frustum frustrum, float viewDistance)
 {
     unsigned startX = Clamp(indexX - size, 0, voxelSet_->GetNumChunksX());
+    unsigned startY = Clamp(indexY - size, 0, voxelSet_->GetNumChunksY());
     unsigned startZ = Clamp(indexZ - size, 0, voxelSet_->GetNumChunksZ());
-    unsigned endX   = Clamp(indexX + size + 1, 0, voxelSet_->GetNumChunksZ());
+    unsigned endX   = Clamp(indexX + size + 1, 0, voxelSet_->GetNumChunksX());
+    unsigned endY   = Clamp(indexZ + size + 1, 0, voxelSet_->GetNumChunksY());
     unsigned endZ   = Clamp(indexZ + size + 1, 0, voxelSet_->GetNumChunksZ());
     
-    if (endX == 0 || endZ == 0)
+    if (endX == 0 || endZ == 0 || endY == 0)
         return;
 
     unsigned numBuilds = 0;
     Vector3 chunkSpacing = voxelSet_->GetChunkSpacing();
-    for (unsigned x = startX; x < endX; ++x)
+    for (unsigned y = startY; y < endY; ++y)
     {
-        for (unsigned z = startZ; z < endZ; ++z)
+        for (unsigned x = startX; x < endX; ++x)
         {
-            VoxelChunk* chunk = voxelSet_->GetVoxelChunk(x, 0, z);
-            if (!chunk)
+            for (unsigned z = startZ; z < endZ; ++z)
             {
-                numBuilds++;
-                BoundingBox chunkBox = BoundingBox(
-                    chunkSpacing * Vector3((float)x, 0.0, (float)z), 
-                    chunkSpacing * Vector3((float)(x+1), 1.0, (float)(z+1))
-                );
-                Vector3 position = chunkBox.Center();
-                bool visible = frustrum.IsInside(chunkBox) != OUTSIDE;
-                unsigned index = voxelSet_->GetChunkIndex(x, 0, z);
-                if (visible)
-                    priorityBuildQueue_.Push(index);
-                else
-                    buildQueue_.Push(index);
+                VoxelChunk* chunk = voxelSet_->GetVoxelChunk(x, y, z);
+                if (!chunk)
+                {
+                    numBuilds++;
+                    BoundingBox chunkBox = BoundingBox(
+                        chunkSpacing * Vector3((float)x, (float)y, (float)z),
+                        chunkSpacing * Vector3((float)(x + 1), (float)(y + 1), (float)(z + 1))
+                        );
+                    Vector3 position = chunkBox.Center();
+                    bool visible = frustrum.IsInside(chunkBox) != OUTSIDE;
+                    unsigned index = voxelSet_->GetChunkIndex(x, y, z);
+                    if (visible)
+                        priorityBuildQueue_.Push(index);
+                    else
+                        buildQueue_.Push(index);
 
-                if (maxBuildsPerFrame_ && priorityBuildQueue_.Size() > maxBuildsPerFrame_)
-                    return;
-                // TODO: Check build queue for existing item from different viewports
+                    if (maxBuildsPerFrame_ && priorityBuildQueue_.Size() > maxBuildsPerFrame_)
+                        return;
+                    // TODO: Check build queue for existing item from different viewports
+                }
             }
         }
     }

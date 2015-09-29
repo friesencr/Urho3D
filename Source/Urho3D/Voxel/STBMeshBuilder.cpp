@@ -175,16 +175,15 @@ unsigned STBMeshBuilder::VoxelDataCompatibilityMask() const {
     return 0xffffffff;
 }
 
-bool STBMeshBuilder::BuildMesh(VoxelWorkload* workload) 
+bool STBMeshBuilder::BuildMesh(VoxelBuildSlot* slot) 
 {
-    VoxelBuildSlot* slot = workload->slot;
     VoxelJob* job = slot->job;
     VoxelChunk* chunk = job->chunk;
     VoxelMap* voxelMap = job->voxelMap;
     VoxelBlocktypeMap* voxelBlocktypeMap = voxelMap->blocktypeMap;
-    STBWorkBuffer* workBuffer = (STBWorkBuffer*)slot->workBuffer;
+    STBWorkBuffer* workBuffer = (STBWorkBuffer*)&workBuffers_[slot->index];
 
-    stbvox_mesh_maker* mm = &workBuffer->meshMakers[workload->index];
+    stbvox_mesh_maker* mm = &workBuffer->meshMaker;
     stbvox_set_input_stride(mm, voxelMap->GetStrideX(), voxelMap->GetStrideZ());
 
     stbvox_input_description *stbvox_map;
@@ -229,7 +228,7 @@ bool STBMeshBuilder::BuildMesh(VoxelWorkload* workload)
     for (unsigned i = 0; i < VOXEL_DATA_NUM_BASIC_STREAMS; ++i)
         *stb_data[i] = ((1 << i) & voxelMap->GetDataMask()) ? &datas[i]->At(zero) : 0;
 
-#if 1
+#if 0
     VoxelRangeFragment processRange = workload->range;
     if (voxelMap->GetVoxelProcessors().Size() > 0 && voxelMap->GetProcessorDataMask())
     {
@@ -244,23 +243,23 @@ bool STBMeshBuilder::BuildMesh(VoxelWorkload* workload)
 #endif
 
     stbvox_reset_buffers(mm);
-    stbvox_set_buffer(mm, 0, 0, workBuffer->workVertexBuffers[workload->index], VOXEL_WORKER_VERTEX_BUFFER_SIZE);
-    stbvox_set_buffer(mm, 0, 1, workBuffer->workFaceBuffers[workload->index], VOXEL_WORKER_FACE_BUFFER_SIZE);
+    stbvox_set_buffer(mm, 0, 0, workBuffer->workVertexBuffer, VOXEL_STB_WORKER_VERTEX_BUFFER_SIZE);
+    stbvox_set_buffer(mm, 0, 1, workBuffer->workFaceBuffer, VOXEL_STB_WORKER_FACE_BUFFER_SIZE);
 
     stbvox_set_default_mesh(mm, 0);
 
     bool success = true;
-    for (unsigned y = 0; y < workload->range.endY; y += 16)
+    for (unsigned y = 0; y < VOXEL_CHUNK_SIZE_Y; y += 16)
     {
         stbvox_set_input_range(
-                mm,
-                workload->range.startX,
-                workload->range.startZ,
-                workload->range.startY + y,
-                workload->range.endX,
-                workload->range.endZ,
-                Min(y + 16, workload->range.endY)
-                );
+            mm,
+            0,
+            0,
+            y,
+            VOXEL_CHUNK_SIZE_X,
+            VOXEL_CHUNK_SIZE_Z,
+            y + 16
+        );
 
         if (stbvox_make_mesh(mm) == 0)
         {
@@ -270,45 +269,8 @@ bool STBMeshBuilder::BuildMesh(VoxelWorkload* workload)
             break;
         }
     }
-    workBuffer->fragmentQuads[workload->index] = stbvox_get_quad_count(mm, 0);
+    workBuffer->fragmentQuads = stbvox_get_quad_count(mm, 0);
     return success;
-}
-
-bool STBMeshBuilder::ProcessMeshFragment(VoxelWorkload* workload)
-{
-    STBWorkBuffer* workBuffer = (STBWorkBuffer*)workload->slot->workBuffer;
-    VoxelBuildSlot* slot = workload->slot;
-    VoxelChunk* chunk = slot->job->chunk;
-    VoxelMesh& mesh = chunk->GetVoxelMesh(0);
-
-    int numQuads = workBuffer->fragmentQuads[workload->index];
-    unsigned workloadIndex = workload->index;
-    unsigned numVertices = numQuads * 4; // 4 verts in a quad
-    {
-        BoundingBox box;
-        // vertex data
-        unsigned* sourceVertexData = (unsigned int*)workBuffer->workVertexBuffers[workloadIndex];
-        mesh.rawVertexData_[workloadIndex].Resize(numVertices * sizeof(unsigned));
-        unsigned* chunkVertexData = (unsigned*)&mesh.rawVertexData_[workloadIndex].Front();
-        for (int i = 0; i < numVertices; ++i)
-        {
-            unsigned v1 = sourceVertexData[i];
-            chunkVertexData[i] = v1;
-            Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0f, (float)((v1 >> 7u) & 127u));
-            box.Merge(position);
-        }
-        workBuffer->box[workload->index] = box;
-    }
-
-    {
-        // face data
-        unsigned* sourceFaceData = (unsigned*)workBuffer->workFaceBuffers[workloadIndex];
-        mesh.rawFaceData_[workloadIndex].Resize(numQuads * sizeof(unsigned));
-        unsigned* chunkFaceData = (unsigned*)&mesh.rawFaceData_[workloadIndex].Front();
-        for (int i = 0; i < numQuads; ++i)
-            chunkFaceData[i] = sourceFaceData[i];
-    }
-    return true;
 }
 
 bool STBMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
@@ -317,40 +279,40 @@ bool STBMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
         return false;
     else
     {
-        STBWorkBuffer* workBuffer = (STBWorkBuffer*)slot->workBuffer;
+        STBWorkBuffer* workBuffer = (STBWorkBuffer*)&workBuffers_[slot->index];
         VoxelChunk* chunk = slot->job->chunk;
         VoxelMesh& mesh = chunk->GetVoxelMesh(0);
-
-        unsigned totalQuads = 0;
+        unsigned numVertices = workBuffer->fragmentQuads * 4;
+        unsigned* verticies = (unsigned*)workBuffer->workVertexBuffer;
         BoundingBox box;
-        for (unsigned i = 0; i < slot->numWorkloads; ++i)
+        for (int i = 0; i < numVertices; ++i)
         {
-            totalQuads += workBuffer->fragmentQuads[i];
-            box.Merge(workBuffer->box[i]);
+            unsigned v1 = verticies[i];
+            Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0f, (float)((v1 >> 7u) & 127u));
+            box.Merge(position);
         }
-        mesh.numTris_ = totalQuads * 2;
+        mesh.numTriangles_ = workBuffer->fragmentQuads * 2;
         chunk->SetBoundingBox(box);
     }
 
     return true;
 }
 
-bool STBMeshBuilder::UploadGpuData(VoxelJob* job)
+bool STBMeshBuilder::UploadGpuData(VoxelBuildSlot* slot)
 {
     PROFILE(UploadGpuData);
 
-    VoxelChunk* chunk = job->chunk;
+    STBWorkBuffer* workBuffer = (STBWorkBuffer*)&workBuffers_[slot->index];
+    VoxelChunk* chunk = slot->job->chunk;
     chunk->SetNumberOfMeshes(1);
 
     VoxelMesh& mesh = chunk->GetVoxelMesh(0);
-    unsigned numQuads = mesh.numTris_ / 2;
+    unsigned numQuads = mesh.numTriangles_ / 2;
     if (numQuads == 0)
         return true;
 
     VertexBuffer* vb = new VertexBuffer(context_);
     IndexBuffer* faceData = new IndexBuffer(context_);
-    mesh.vertexBuffer_ = vb;
-    mesh.faceData_ = faceData;
 
     if (!vb->SetSize(numQuads * 4, MASK_DATA, false))
     {
@@ -364,29 +326,22 @@ bool STBMeshBuilder::UploadGpuData(VoxelJob* job)
         return false;
     }
 
-    unsigned quadPosition = 0;
-    for (unsigned i = 0; i < VOXEL_MAX_WORKERS; ++i)
+    if (!vb->SetData(&workBuffer->workVertexBuffer))
     {
-        unsigned quadCount = mesh.rawFaceData_[i].Size() / sizeof(unsigned);
-        if (!vb->SetDataRange(&mesh.rawVertexData_[i].Front(), quadPosition * 4, quadCount * 4))
-        {
-            LOGERROR("Error uploading voxel vertex data.");
-            return false;
-        }
+        LOGERROR("Error uploading voxel vertex data.");
+        return false;
+    }
 
-        if (!faceData->SetDataRange(&mesh.rawFaceData_[i].Front(), quadPosition, quadCount))
-        {
-            LOGERROR("Error uploading voxel face data.");
-            return false;
-        }
-        quadPosition += quadCount;
+    if (!faceData->SetData(&workBuffer->workFaceBuffer))
+    {
+        LOGERROR("Error uploading voxel face data.");
+        return false;
     }
 
     // face data
     Material* material = mesh.material_;
     {
         TextureBuffer* faceDataTexture = new TextureBuffer(context_);
-        mesh.faceBuffer_ = faceDataTexture;
         if (!faceDataTexture->SetSize(0))
         {
             LOGERROR("Error initializing voxel texture buffer");
@@ -489,18 +444,10 @@ void STBMeshBuilder::AssignWork(VoxelBuildSlot* slot)
         workBuffers_.Resize(slot->index + 1);
 
     for (unsigned i = oldSize; i < workBuffers_.Size(); ++i)
-    {
-        for (unsigned x = 0; x < VOXEL_MAX_WORKERS; ++x)
-            stbvox_init_mesh_maker(&workBuffers_[i].meshMakers[x]);
-    }
+        stbvox_init_mesh_maker(&workBuffers_[i].meshMaker);
 
     STBWorkBuffer* workBuffer = &workBuffers_[slot->index];
-    for (unsigned x = 0; x < VOXEL_MAX_WORKERS; ++x)
-    {
-        workBuffer->fragmentQuads[x] = 0;
-        workBuffer->box[x] = BoundingBox();
-    }
-    slot->workBuffer = workBuffer;
+    workBuffer->fragmentQuads = 0;
 }
 
 void STBMeshBuilder::FreeWork(VoxelBuildSlot* slot)

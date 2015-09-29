@@ -309,6 +309,9 @@ void VoxelChunk::UpdateMaterialParameters(unsigned slot, VoxelMap* voxelMap)
 
 void VoxelChunk::OnVoxelChunkCreated()
 {
+    if (!voxelJob_)
+        return;
+
     UpdateMaterialParameters(0, voxelJob_->voxelMap);
     voxelJob_ = 0;
     voxelMeshes_[0].dirtyShaderParameters_ = true;

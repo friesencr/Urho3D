@@ -108,9 +108,9 @@ void VoxelWorld::CreateScene()
     // illusion of the box planes being far away. Use just the ordinary Box model and a suitable material, whose shader will
     // generate the necessary 3D texture coordinates for cube mapping
     Node* skyNode = scene_->CreateChild("Sky");
-    //Skybox* skybox = skyNode->CreateComponent<Skybox>();
-    //skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
-    //skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
+    Skybox* skybox = skyNode->CreateComponent<Skybox>();
+    skybox->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
+    skybox->SetMaterial(cache->GetResource<Material>("Materials/Skybox.xml"));
 
     // Create a scene node for the camera, which we will move around
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
@@ -131,11 +131,11 @@ void VoxelWorld::CreateScene()
     Node* lightNode = skyNode->CreateChild("DirectionalLight");
     lightNode->SetDirection(Vector3(0.8f, -0.2f, 0.8f)); // The direction vector does not need to be normalized
 
-    Light* light = lightNode->CreateComponent<Light>();
-    light->SetLightType(LIGHT_DIRECTIONAL);
-    light->SetCastShadows(false);
-    light->SetBrightness(0.0);
-    light->SetEnabled(false);
+    //Light* light = lightNode->CreateComponent<Light>();
+    //light->SetLightType(LIGHT_DIRECTIONAL);
+    //light->SetCastShadows(false);
+    //light->SetBrightness(0.0);
+    //light->SetEnabled(false);
     //light->SetColor(Color(1.0, 1.0, 1.0));
     //   light->SetShadowBias(BiasParameters(0.00025f, 0.5f));
     // Set cascade splits at 10, 50 and 200 world units, fade shadows out at 80% of maximum shadow distance
@@ -154,7 +154,7 @@ void VoxelWorld::CreateScene()
     voxelNode_ = scene_->CreateChild("VoxelNode");
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     worldBuilder_ = new WorldBuilder(context_);
-    worldBuilder_->SetSize(4, 4);
+    worldBuilder_->SetSize(64, 64);
     worldBuilder_->SetVoxelSet(voxelSet);
     worldBuilder_->ConfigureParameters();
     worldBuilder_->CreateWorld();
@@ -215,7 +215,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 100.0f;
+    const float MOVE_SPEED = 600.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 
@@ -312,11 +312,11 @@ void VoxelWorld::HandlePostRenderUpdate(StringHash eventType, VariantMap& eventD
 {
     DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
 
-    PODVector<VoxelChunk*> voxelChunks;
-    scene_->GetComponents<VoxelChunk>(voxelChunks, true);
-    for (unsigned i = 0; i < voxelChunks.Size(); ++i)
-      voxelChunks[i]->DrawDebugGeometry(debug, true);
-    scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
+    //PODVector<VoxelChunk*> voxelChunks;
+    //scene_->GetComponents<VoxelChunk>(voxelChunks, true);
+    //for (unsigned i = 0; i < voxelChunks.Size(); ++i)
+    //  voxelChunks[i]->DrawDebugGeometry(debug, true);
+    //scene_->GetComponent<Octree>()->DrawDebugGeometry(true);
 
     //if (drawDebug_)
     //    scene_->GetComponent<PhysicsWorld>()->DrawDebugGeometry(true);

@@ -149,10 +149,10 @@ static void AOVoxelLighting(VoxelData* src, VoxelData* dest, const VoxelRangeFra
 #endif
 
 
-void FillTerrainPerlin(VoxelStore* voxelStore, VoxelMap* voxelMap, unsigned chunkX, unsigned chunkY, unsigned chunkZ)
+void FillTerrainPerlin(VoxelStore* voxelStore, VoxelMap* voxelMap, unsigned yOff, unsigned chunkX, unsigned chunkY, unsigned chunkZ)
 {
-    int heightMap[68][68];
-    float detailMap[68][68];
+    int heightMap[36][36];
+    float detailMap[36][36];
 
     const float noiseFactors[10] = {
         1.0, 1.0, 1.0, 0.3,
@@ -161,16 +161,16 @@ void FillTerrainPerlin(VoxelStore* voxelStore, VoxelMap* voxelMap, unsigned chun
     };
 
     // build the heightmap
-    for (int x = -2; x < 66; ++x)
+    for (int x = -2; x < 34; ++x)
     {
-        for (int z = -2; z < 66; ++z)
+        for (int z = -2; z < 34; ++z)
         {
             // detail noise
             float dt = 0.0;
             for (int o = 3; o < 5; ++o)
             {
                 float scale = (float)(1 << o);
-                float ns = stb_perlin_noise3((x + chunkX * 64) / scale, (z + chunkZ * 64) / scale, (float)-o, 256, 256, 256);
+                float ns = stb_perlin_noise3((x + chunkX * 32) / scale, (z + chunkZ * 32) / scale, (float)-o, 256, 256, 256);
                 dt += Abs(ns);
             }
 
@@ -179,7 +179,7 @@ void FillTerrainPerlin(VoxelStore* voxelStore, VoxelMap* voxelMap, unsigned chun
             for (int o = 3; o < 9; ++o)
             {
                 float scale = (float)(1 << o);
-                float ns = stb_perlin_noise3((x + chunkX * 64) / scale, (z + chunkZ * 64) / scale, (float)o, 256, 256, 256);
+                float ns = stb_perlin_noise3((x + chunkX * 32) / scale, (z + chunkZ * 32) / scale, (float)o, 256, 256, 256);
                 ht += ns * noiseFactors[o];
             }
 
@@ -187,7 +187,7 @@ void FillTerrainPerlin(VoxelStore* voxelStore, VoxelMap* voxelMap, unsigned chun
             //float biome = stb_perlin_noise3((x + chunkX) / 2048, (z + chunkZ) / 2048, 32.0, 256, 256, 256);
 
             int height = (int)((ht + 0.2) * 45.0) + 32;
-            heightMap[x + 2][z + 2] = Clamp(height, 1, 128); 
+            heightMap[x + 2][z + 2] = Clamp(height, 1, 128);
             detailMap[x + 2][z + 2] = dt;
         }
     }
@@ -213,21 +213,22 @@ void FillTerrainPerlin(VoxelStore* voxelStore, VoxelMap* voxelMap, unsigned chun
     const int WHITE_SNOW_HEIGHT = 128;
     const int WATER_HEIGHT = 30;
 
-    int blocks[8] = {FLOOR_BLOCK, SLATE_BLOCK, DIRT_BLOCK, DESERT_BLOCK, GRASS_BLOCK, SNOW_BLOCK, LIGHT_SNOW_BLOCK, WHITE_SNOW_BLOCK };
-    int heights[8] = {FLOOR_HEIGHT, SLATE_HEIGHT, DIRT_HEIGHT, DESERT_HEIGHT, GRASS_HEIGHT, SNOW_HEIGHT, LIGHT_SNOW_HEIGHT, WHITE_SNOW_HEIGHT };
+    int blocks[8] = { FLOOR_BLOCK, SLATE_BLOCK, DIRT_BLOCK, DESERT_BLOCK, GRASS_BLOCK, SNOW_BLOCK, LIGHT_SNOW_BLOCK, WHITE_SNOW_BLOCK };
+    int heights[8] = { FLOOR_HEIGHT, SLATE_HEIGHT, DIRT_HEIGHT, DESERT_HEIGHT, GRASS_HEIGHT, SNOW_HEIGHT, LIGHT_SNOW_HEIGHT, WHITE_SNOW_HEIGHT };
     int numBlocks = 8;
 
     // fill block type data based on heightmap
-   for (int x = -2; x < 66; ++x)
+    for (int x = -2; x < 34; ++x)
     {
-        for (int z = -2; z < 66; ++z)
+        for (int z = -2; z < 34; ++z)
         {
             int height = heightMap[x + 2][z + 2];
             float dt = detailMap[x + 2][z + 2];
 
-            for (unsigned i = 0; i < height; ++i)
+            int clampedHeight = Min(height, yOff + 32);
+            for (unsigned i = yOff; i < clampedHeight; ++i)
             {
-                int h = ((float)i * (dt/2.0 + 1.0));
+                int h = ((float)i * (dt / 2.0 + 1.0));
                 int b = 0;
                 for (int bh = 0; bh < numBlocks - 1; ++bh)
                 {
@@ -237,28 +238,28 @@ void FillTerrainPerlin(VoxelStore* voxelStore, VoxelMap* voxelMap, unsigned chun
                         break;
                     }
                 }
-                voxelMap->SetBlocktype(x, i, z, blocks[b] + (dt > 0.5 ? 1 : 0));
+                voxelMap->SetBlocktype(x, i - yOff, z, blocks[b] + (dt > 0.5 ? 1 : 0));
             }
 
-            if (height < WATER_HEIGHT)
+            if (clampedHeight < WATER_HEIGHT)
             {
-                for (unsigned i = 0; i < WATER_HEIGHT; ++i)
+                for (unsigned i = yOff; i < WATER_HEIGHT; ++i)
                 {
                     if (height > WATER_HEIGHT - 5 && i > WATER_HEIGHT - 5)
                         voxelMap->SetBlocktype(x, i, z, WATER_BLOCK);
                     else
-                        voxelMap->SetBlocktype(x, i, z, DEEP_WATER_BLOCK +(dt > 0.7 ? 1 : 0));
+                        voxelMap->SetBlocktype(x, i, z, DEEP_WATER_BLOCK + (dt > 0.7 ? 1 : 0));
                 }
             }
         }
     }
-   voxelStore->UpdateVoxelMap(chunkX, chunkY, chunkZ, voxelMap, false);
+    voxelStore->UpdateVoxelMap(chunkX, chunkY, chunkZ, voxelMap, false);
 }
 
 void BuildWorldWorkloadHandler(const WorkItem* workItem, unsigned thread)
 {
     VoxelBuildWorldWorkload* workload = (VoxelBuildWorldWorkload*)workItem->aux_;
-    FillTerrainPerlin( workload->voxelStore, workload->voxelMap, workload->chunkX, workload->chunkY, workload->chunkZ );
+    //FillTerrainPerlin( workload->voxelStore, workload->voxelMap, workload->chunkX, workload->chunkY, workload->chunkZ );
     workload->voxelMap = 0;
     delete workItem->aux_;
 }
@@ -295,36 +296,60 @@ void WorldBuilder::ConfigureParameters()
     //voxelStore_->AddVoxelProcessor("AOVoxelLighting");
     //voxelStore_->AddVoxelProcessor("DancingWorld");
     //voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
-    voxelStore_->SetSize(width_, 1, depth_);
+    voxelStore_->SetSize(width_, 4, depth_);
     voxelSet_->SetVoxelStore(voxelStore_);
 }
 
 void WorldBuilder::CreateWorld()
 {
+    //SharedPtr<VoxelMap> voxelMap = voxelStore_->GetVoxelMap(0, 0, 0);
+    //voxelMap->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
+    //voxelMap->SetSize(64, 128, 64);
+    //for (unsigned x = 0; x < 64; ++x)
+    //{
+    //    for (unsigned y = 0; y < 64; ++y)
+    //    {
+    //        for (unsigned z = 0; z < 64; ++z)
+    //        {
+    //            if (x >= 15 && x < 18 && y >= 15 && y < 18 && z >= 15 && z < 18)
+    //            {
+    //                voxelMap->SetBlocktype(x, y, z, 25);
+    //            }
+    //        }
+    //    }
+    //}
+    //voxelStore_->UpdateVoxelMap(0, 0, 0, voxelMap, false);
+    //return;
+
     WorkQueue* queue = GetSubsystem<WorkQueue>();
     for (int x = 0; x < width_; ++x)
     {
         for (int z = 0; z < depth_; ++z)
         {
-            SharedPtr<VoxelMap> voxelMap = voxelStore_->GetVoxelMap(x, 0, z);
-            voxelMap->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
-            voxelMap->SetSize(64, 128, 64);
-            FillTerrainPerlin(voxelStore_, voxelMap, x, 0, z);
+            for (int y = 0; y < 4; ++y)
+            {
+                SharedPtr<VoxelMap> voxelMap = voxelStore_->GetVoxelMap(x, y, z);
+                voxelMap->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
+                voxelMap->SetSize(32, 32, 32);
+                FillTerrainPerlin(voxelStore_, voxelMap, y * 32, x, y, z);
+                voxelStore_->UpdateVoxelMap(x, y, z, voxelMap, false);
 
 #if 0
-            VoxelBuildWorldWorkload* workload = new VoxelBuildWorldWorkload();
-            workload->chunkX = x;
-            workload->chunkY = 0;
-            workload->chunkZ = z;
-            workload->voxelMap = voxelMap;
-            workload->voxelStore = voxelStore_;
+                VoxelBuildWorldWorkload* workload = new VoxelBuildWorldWorkload();
+                workload->chunkX = x;
+                workload->chunkY = 0;
+                workload->chunkZ = z;
+                workload->voxelMap = voxelMap;
+                workload->voxelStore = voxelStore_;
 
-            SharedPtr<WorkItem> workItem(new WorkItem());
-            workItem->aux_ = workload;
+                SharedPtr<WorkItem> workItem(new WorkItem());
+                workItem->aux_ = workload;
 
-            workItem->workFunction_ = BuildWorldWorkloadHandler;
-            queue->AddWorkItem(workItem);
+                workItem->workFunction_ = BuildWorldWorkloadHandler;
+                queue->AddWorkItem(workItem);
 #endif
+
+            }
         }
     }
 }
