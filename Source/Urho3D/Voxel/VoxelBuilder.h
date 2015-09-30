@@ -41,7 +41,7 @@ struct VoxelBuildSlot
     VoxelJob* job;
     VoxelBuilder* builder;
     bool failed;
-    bool upload;
+    int upload;
     bool free;
     VoxelMeshBuilder* backend;
     SharedPtr<WorkItem> workItem;
@@ -86,9 +86,10 @@ private:
     //
     Vector<VoxelJob*> buildJobs_;
     Vector<VoxelBuildSlot> slots_;
+    int completedJobCount_;
+    int uploadedJobCount_;
 
     // completed work 
-    Mutex slotMutex_;
     HashMap<StringHash, VoxelProcessorFunc> processors_;
 };
 

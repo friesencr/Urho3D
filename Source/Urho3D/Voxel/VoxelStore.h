@@ -70,15 +70,6 @@ public:
     unsigned GetNumChunksX() const { return numChunksX_; }
     unsigned GetNumChunksY() const { return numChunksY_; }
     unsigned GetNumChunksZ() const { return numChunksZ_; }
-    void SetVoxelBlocktypeMap(VoxelBlocktypeMap* voxelBlocktypeMap) { voxelBlocktypeMap_ = voxelBlocktypeMap; }
-    VoxelBlocktypeMap* GetVoxelBlocktypeMap() { return voxelBlocktypeMap_; }
-
-    unsigned GetProcessorDataMask() const { return processorDataMask_; }
-    void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
-    const PODVector<StringHash>& GetVoxelProcessors();
-    void SetVoxelProcessors(PODVector<StringHash>& voxelProcessors);
-    void AddVoxelProcessor(StringHash voxelProcessorName);
-    void RemoveVoxelProcessor(const StringHash& voxelProcessorName);
     void ApplyBrushStroke(VoxelBrush* brush, unsigned positionX, unsigned positionY, unsigned positionZ);
     unsigned GetCompressionMask() const;
     void SetCompressionMask(unsigned compressionMask);
@@ -86,13 +77,10 @@ public:
 
 private:
     void SetSizeInternal();
-    SharedPtr<VoxelBlocktypeMap> voxelBlocktypeMap_;
     VoxelMapPage* GetVoxelMapPageByChunkIndex(unsigned x, unsigned y, unsigned z);
     inline unsigned GetVoxelMapIndexInPage(unsigned x, unsigned y, unsigned z);
-    PODVector<StringHash> voxelProcessors_;
 
     unsigned dataMask_;
-    unsigned processorDataMask_;
     unsigned numChunks_;
     unsigned numChunksX_;
     unsigned numChunksY_;

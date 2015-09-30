@@ -291,13 +291,13 @@ void WorldBuilder::ConfigureParameters()
 
     voxelStore_ = new VoxelStore(context_);
     voxelStore_->SetCompressionMask(VOXEL_COMPRESSION_RLE);
-    voxelStore_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
     voxelStore_->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
     //voxelStore_->AddVoxelProcessor("AOVoxelLighting");
     //voxelStore_->AddVoxelProcessor("DancingWorld");
     //voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
     voxelStore_->SetSize(width_, 4, depth_);
     voxelSet_->SetVoxelStore(voxelStore_);
+    voxelSet_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
 }
 
 void WorldBuilder::CreateWorld()
@@ -373,8 +373,8 @@ void WorldBuilder::LoadWorld()
     voxelStore_ = cache->GetResource<VoxelStore>("VoxelWorldMap/VoxelWorld.vox");
     VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
     builder->RegisterProcessor("AOVoxelLighting", AOVoxelLighting);
-    voxelStore_->AddVoxelProcessor("AOVoxelLighting");
-    voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+    //voxelSet_->AddVoxelProcessor("AOVoxelLighting");
+    //voxelSet_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
     voxelSet_->SetVoxelStore(voxelStore_);
 }
 

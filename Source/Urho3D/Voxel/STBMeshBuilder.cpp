@@ -311,8 +311,8 @@ bool STBMeshBuilder::UploadGpuData(VoxelBuildSlot* slot)
     if (numQuads == 0)
         return true;
 
-    VertexBuffer* vb = new VertexBuffer(context_);
-    IndexBuffer* faceData = new IndexBuffer(context_);
+    VertexBuffer* vb = mesh.vertexBuffer_;
+    IndexBuffer* faceData = mesh.indexBuffer_;
 
     if (!vb->SetSize(numQuads * 4, MASK_DATA, false))
     {

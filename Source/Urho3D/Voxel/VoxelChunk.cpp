@@ -17,12 +17,12 @@ VoxelChunk::VoxelChunk(Context* context) :
 
 VoxelChunk::~VoxelChunk()
 {
-    SetNumberOfMeshes(0);
-    if (voxelJob_)
-    {
-        GetSubsystem<VoxelBuilder>()->CancelJob(voxelJob_);
-        voxelJob_ = 0;
-    }
+    //SetNumberOfMeshes(0);
+    //if (voxelJob_)
+    //{
+    //    GetSubsystem<VoxelBuilder>()->CancelJob(voxelJob_);
+    //    voxelJob_ = 0;
+    //}
 }
 
 void VoxelChunk::RegisterObject(Context* context)
@@ -40,18 +40,30 @@ UpdateGeometryType VoxelChunk::GetUpdateGeometryType()
     return UPDATE_MAIN_THREAD;
 }
 
-bool VoxelChunk::Build(VoxelMap* voxelMap)
+//bool VoxelChunk::Build(VoxelMap* voxelMap)
+//{
+//    if (!voxelMap)
+//        return false;
+//
+//    VoxelBuilder* voxelBuilder = GetSubsystem<VoxelBuilder>();
+//    if (voxelJob_)
+//    {
+//        voxelBuilder->CancelJob(voxelJob_);
+//    }
+//    voxelJob_ = voxelBuilder->BuildVoxelChunk(this, voxelMap, false);
+//    return true;
+//}
+SharedPtr<VoxelMap> VoxelChunk::GetVoxelMap()
 {
-    if (!voxelMap)
-        return false;
-
-    VoxelBuilder* voxelBuilder = GetSubsystem<VoxelBuilder>();
-    if (voxelJob_)
+    if (voxelMap_)
+        return voxelMap_;
+    else if (voxelSet_)
     {
-        voxelBuilder->CancelJob(voxelJob_);
+        VoxelStore* voxelStore = voxelSet_->GetVoxelStore();
+        if (voxelStore)
+            return voxelStore->GetVoxelMap(index_[0], index_[1], index_[2]);
     }
-    voxelJob_ = voxelBuilder->BuildVoxelChunk(this, voxelMap, false);
-    return true;
+    return SharedPtr<VoxelMap>();
 }
 
 unsigned VoxelChunk::GetNumOccluderTriangles()
@@ -183,6 +195,8 @@ void VoxelChunk::SetNumberOfMeshes(unsigned count)
         mesh.dirtyShaderParameters_ = false;
         mesh.material_ = new Material(context_);
         mesh.geometry_ = new Geometry(context_);
+        mesh.vertexBuffer_ = new VertexBuffer(context_);
+        mesh.indexBuffer_ = new IndexBuffer(context_);
 
         batches_[i].material_ = mesh.material_;
         batches_[i].geometry_ = mesh.geometry_;
@@ -271,7 +285,7 @@ Geometry* VoxelChunk::GetLodGeometry(unsigned batchIndex, unsigned level)
     return batches_[batchIndex].geometry_;
 }
 
-void VoxelChunk::UpdateMaterialParameters(unsigned slot, VoxelMap* voxelMap)
+void VoxelChunk::UpdateMaterialParameters(unsigned slot, SharedPtr<VoxelMap> voxelMap)
 {
     Material* material = GetMaterial(slot);
     if (!material)

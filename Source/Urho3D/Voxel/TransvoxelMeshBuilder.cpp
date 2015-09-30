@@ -204,8 +204,6 @@ bool TransvoxelMeshBuilder::UploadGpuData(VoxelBuildSlot* slot)
     chunk->SetNumberOfMeshes(1);
 
     VoxelMesh& mesh = chunk->GetVoxelMesh(0);
-    VoxelMap* voxelMap = slot->job->voxelMap;
-
     VertexBuffer* vb = new VertexBuffer(context_);
     vb->SetShadowed(false);
     IndexBuffer* ib = new IndexBuffer(context_);

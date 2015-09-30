@@ -12,15 +12,20 @@
 #include "VoxelMap.h"
 #include "VoxelBuilder.h"
 #include "VoxelSet.h"
+#include "VoxelStore.h"
 
 namespace Urho3D
 {
 class VoxelMap;
+class VoxelSet;
+class VoxelStore;
 struct VoxelJob;
 
 struct URHO3D_API VoxelMesh
 {
     SharedPtr<Geometry> geometry_;
+    SharedPtr<VertexBuffer> vertexBuffer_;
+    SharedPtr<IndexBuffer> indexBuffer_;
     SharedPtr<Material> material_;
     unsigned numTriangles_;
     unsigned numVertices_;
@@ -82,20 +87,20 @@ class URHO3D_API VoxelChunk : public Drawable
     unsigned char GetSizeZ() const { return VOXEL_CHUNK_SIZE_Z; }
     VoxelMesh& GetVoxelMesh(unsigned index) { return voxelMeshes_[index]; }
     void SetIndex(unsigned char x, unsigned char y, unsigned char z);
-    bool Build(VoxelMap* voxelMap);
+    SharedPtr<VoxelMap> GetVoxelMap();
 
 protected:
     /// Recalculate the world-space bounding box.
     virtual void OnWorldBoundingBoxUpdate();
 
 private:
-    void UpdateMaterialParameters(unsigned slot, VoxelMap* voxelMap);
+    void UpdateMaterialParameters(unsigned slot, SharedPtr<VoxelMap> voxelMap);
     void OnVoxelChunkCreated();
     unsigned char index_[3];
     VoxelJob* voxelJob_;
-    WeakPtr<VoxelMap> voxelMap_;
+    SharedPtr<VoxelMap> voxelMap_;
     Vector<VoxelMesh> voxelMeshes_;
-
+    WeakPtr<VoxelSet> voxelSet_;
 };
 
 }

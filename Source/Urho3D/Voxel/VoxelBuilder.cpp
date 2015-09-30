@@ -1,6 +1,7 @@
 #include "../IO/Log.h"
 #include "../Core/Profiler.h"
 #include "../Resource/ResourceCache.h"
+#include "../Core/Atomic.h"
 
 #include "VoxelWriter.h"
 #include "VoxelBuilder.h"
@@ -11,7 +12,9 @@ namespace Urho3D
 {
 
 VoxelBuilder::VoxelBuilder(Context* context)
-    : Object(context)
+    : Object(context),
+    completedJobCount_(0),
+    uploadedJobCount_(0)
 {
 
 }
@@ -60,8 +63,6 @@ void VoxelBuilder::CompleteWork(unsigned priority)
         bool upload = UploadCompletedWork();
         if (!(runJobs || upload || IsBuilding()))
             return;
-
-        Time::Sleep(0);
     }
 }
 
@@ -86,11 +87,10 @@ VoxelJob* VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, VoxelMap* voxelMap, b
     job->chunk = chunk;
     chunk->voxelJob_ = job;
     job->slot = 0;
-    job->voxelMap = voxelMap;
-    job->backend = TransvoxelMeshBuilder::GetTypeStatic();
-    //job->backend = STBMeshBuilder::GetTypeStatic();
+    job->voxelMap.Reset();
+    //job->backend = TransvoxelMeshBuilder::GetTypeStatic();
+    job->backend = STBMeshBuilder::GetTypeStatic();
     buildJobs_.Push(job);
-
     RunJobs();
     if (!async)
         CompleteWork();
@@ -127,11 +127,13 @@ bool VoxelBuilder::RunJobs()
 
 bool VoxelBuilder::UploadCompletedWork()
 {
+    if (completedJobCount_ == uploadedJobCount_)
+        return false;
+
     for (;;)
     {
         VoxelBuildSlot* slot = 0;
         {
-            MutexLock lock(slotMutex_);
             for (unsigned i = 0; i < slots_.Size(); ++i)
             {
                 if (slots_[i].upload == true)
@@ -153,6 +155,7 @@ bool VoxelBuilder::UploadCompletedWork()
         backend->FreeWork(slot);
         delete slot->job;
         FreeBuildSlot(slot);
+        AtomicAdd(&uploadedJobCount_, 1);
     }
     return false;
 }
@@ -237,7 +240,9 @@ bool VoxelBuilder::RunVoxelProcessor(VoxelBuildSlot* slot)
 void VoxelBuilder::BuildWorkload(VoxelBuildSlot* slot)
 {
     VoxelMeshBuilder* builder = slot->backend;
-    if (!(RunVoxelProcessor(slot) && builder->BuildMesh(slot) && builder->ProcessMesh(slot)))
+    SharedPtr<VoxelMap> voxelMap(slot->job->chunk->GetVoxelMap());
+    slot->job->voxelMap = voxelMap;
+    if (!(voxelMap && RunVoxelProcessor(slot) && builder->BuildMesh(slot) && builder->ProcessMesh(slot)))
     {
         slot->failed = true;
         slot->backend->FreeWork(slot);
@@ -245,8 +250,8 @@ void VoxelBuilder::BuildWorkload(VoxelBuildSlot* slot)
     }
     else
     {
-        MutexLock lock(slotMutex_);
-        slot->upload = true;
+        AtomicAdd(&slot->upload, 1);
+        AtomicAdd(&completedJobCount_, 1);
     }
 }
 
@@ -258,7 +263,6 @@ void VoxelBuilder::CancelJob(VoxelJob* job)
 
 bool VoxelBuilder::IsBuilding()
 {
-    MutexLock lock(slotMutex_);
     for (unsigned i = 0; i < slots_.Size(); ++i)
     {
         if (!slots_[i].free)
@@ -269,17 +273,17 @@ bool VoxelBuilder::IsBuilding()
 
 void VoxelBuilder::FreeBuildSlot(VoxelBuildSlot* slot)
 {
-    MutexLock lock(slotMutex_);
     slot->failed = false;
-    slot->free = true;
-    slot->upload = false;
+    slot->upload = 0;
     slot->job = 0;
     slot->backend = 0;
+    BASE_MEMORYBARRIER_ACQUIRE();
+    slot->free = true;
+    BASE_MEMORYBARRIER_RELEASE();
 }
 
 int VoxelBuilder::GetFreeBuildSlot()
 {
-    MutexLock lock(slotMutex_);
     for (unsigned i = 0; i < slots_.Size(); ++i)
     {
         if (slots_[i].free)

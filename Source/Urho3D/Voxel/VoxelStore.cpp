@@ -124,7 +124,6 @@ SharedPtr<VoxelMap> VoxelMapPage::GetVoxelMap(unsigned index)
 
 VoxelStore::VoxelStore(Context* context) : Resource(context)
     , dataMask_(0)
-    , processorDataMask_(0)
     , numChunks_(0)
     , numChunksX_(0)
     , numChunksY_(0)
@@ -135,7 +134,6 @@ VoxelStore::VoxelStore(Context* context) : Resource(context)
     , numPagesY_(0)
     , numPagesZ_(0)
     , numPages_(0)
-    , voxelBlocktypeMap_(0)
     , compressionMask_(0)
 {
 
@@ -159,10 +157,7 @@ bool VoxelStore::BeginLoad(Deserializer& source)
 
     SetCompressionMask(source.ReadUByte());
     SetDataMask(source.ReadUInt());
-    SetProcessorDataMask(source.ReadUInt());
     SetSize(source.ReadUInt(), source.ReadUInt(), source.ReadUInt());
-    ResourceRef blocktypeMap = source.ReadResourceRef();
-    SetVoxelBlocktypeMap(cache->GetResource<VoxelBlocktypeMap>(blocktypeMap.name_));
 
     for (unsigned i = 0; i < numPages_; ++i)
     {
@@ -185,14 +180,9 @@ bool VoxelStore::Save(Serializer& dest)
 
     dest.WriteUByte(compressionMask_);
     dest.WriteUInt(dataMask_);
-    dest.WriteUInt(processorDataMask_);
     dest.WriteUInt(numChunksX_);
     dest.WriteUInt(numChunksY_);
     dest.WriteUInt(numChunksZ_);
-    if (voxelBlocktypeMap_)
-        dest.WriteResourceRef(ResourceRef(VoxelBlocktypeMap::GetTypeNameStatic(), voxelBlocktypeMap_->GetName()));
-    else
-        dest.WriteResourceRef(Variant::emptyResourceRef);
 
     for (unsigned i = 0; i < numPages_; ++i)
     {
@@ -318,10 +308,7 @@ SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
     }
 
     SharedPtr<VoxelMap> voxelMap(page->GetVoxelMap(GetVoxelMapIndexInPage(x, y, z)));
-    voxelMap->SetBlocktypeMap(GetVoxelBlocktypeMap());
     voxelMap->SetDataMask(GetDataMask());
-    voxelMap->SetProcessorDataMask(GetProcessorDataMask());
-    voxelMap->SetVoxelProcessors(voxelProcessors_);
     return voxelMap;
 
 #if VOXEL_MAP_CACHE
@@ -391,26 +378,6 @@ void VoxelStore::SetCompressionMask(unsigned compressionMask)
 unsigned VoxelStore::GetCompressionMask() const
 {
     return compressionMask_;
-}
-
-const PODVector<StringHash>& VoxelStore::GetVoxelProcessors()
-{
-    return voxelProcessors_;
-}
-
-void VoxelStore::SetVoxelProcessors(PODVector<StringHash>& voxelProcessors)
-{
-    voxelProcessors_ = voxelProcessors;
-}
-
-void VoxelStore::AddVoxelProcessor(StringHash voxelProcessorHash)
-{
-    voxelProcessors_.Push(voxelProcessorHash);
-}
-
-void VoxelStore::RemoveVoxelProcessor(const StringHash& voxelProcessorHash)
-{
-    voxelProcessors_.Remove(voxelProcessorHash);
 }
 
 void VoxelStore::ApplyBrushStroke(VoxelBrush* brush, unsigned positionX, unsigned positionY, unsigned positionZ)

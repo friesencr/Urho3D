@@ -17,8 +17,8 @@ extern const char* GEOMETRY_CATEGORY;
 
 VoxelStreamer::VoxelStreamer(Context* context) 
     : Component(context),
-    maxInMemoryMeshPeak_(1000),
-    maxInMemoryMesh_(1000),
+    maxInMemoryMeshPeak_(2000),
+    maxInMemoryMesh_(1500),
     maxBuildsPerFrame_(0),
     maxBuildFrameTime_(0)
 {
@@ -152,34 +152,34 @@ void VoxelStreamer::BuildInternal()
     // build voxels
     VoxelBuilder* voxelBuilder = GetSubsystem<VoxelBuilder>();
     {
-        PROFILE(BuildStreamVoxels);
         CreateAndSortVisibleChunks();
         UnloadBestChunks();
 
-        Timer buildTimer;
-        unsigned totalBuilds = 0;
-        for (unsigned q = 0; q < 2; ++q)
         {
-            const PODVector<unsigned>& queue = q ? buildQueue_ : priorityBuildQueue_;
-            unsigned i = 0;
-            unsigned maxBuildTime = q ? maxBuildFrameTime_ : maxPriorityBuildFrameTime_;
-            while (i < queue.Size() && (!maxBuildTime || buildTimer.GetMSec(false) < maxBuildTime) && (!maxBuildsPerFrame_ || totalBuilds < maxBuildsPerFrame_))
+            PROFILE(BuildStreamedChunks);
+            Timer buildTimer;
+            unsigned totalBuilds = 0;
+            for (unsigned q = 0; q < 2; ++q)
             {
-                totalBuilds++;
-                unsigned buildItem = queue[i++];
-                unsigned x = 0;
-                unsigned y = 0;
-                unsigned z = 0;
-                voxelSet_->GetCoordinatesFromIndex(buildItem, x, y, z);
-                voxelSet_->LoadChunk(x,y,z,true);
-                loadedChunks_.Push(Pair<unsigned, bool>(buildItem, false));
-                if (i % 8 == 7)
-                    voxelBuilder->CompleteWork();
+                const PODVector<unsigned>& queue = q ? buildQueue_ : priorityBuildQueue_;
+                unsigned i = 0;
+                unsigned maxBuildTime = q ? maxBuildFrameTime_ : maxPriorityBuildFrameTime_;
+                while (i < queue.Size() && (!maxBuildTime || buildTimer.GetMSec(false) < maxBuildTime) && (!maxBuildsPerFrame_ || totalBuilds < maxBuildsPerFrame_))
+                {
+                    totalBuilds++;
+                    unsigned buildItem = queue[i++];
+                    unsigned x = 0;
+                    unsigned y = 0;
+                    unsigned z = 0;
+                    voxelSet_->GetCoordinatesFromIndex(buildItem, x, y, z);
+                    voxelSet_->LoadChunk(x, y, z, true);
+                    loadedChunks_.Push(Pair<unsigned, bool>(buildItem, false));
+                }
             }
+            voxelBuilder->CompleteWork();
+            priorityBuildQueue_.Clear();
+            buildQueue_.Clear();
         }
-        voxelBuilder->CompleteWork();
-        priorityBuildQueue_.Clear();
-        buildQueue_.Clear();
     }
     // cleanup
 }
@@ -193,7 +193,7 @@ void VoxelStreamer::SortLoadedChunks()
 
 void VoxelStreamer::CreateAndSortVisibleChunks()
 {
-    PROFILE(StreamNewChunk);
+    PROFILE(CreateAndSortVisibleChunks);
     Renderer* renderer = GetSubsystem<Renderer>();
     unsigned viewports = renderer->GetNumViewports();
 

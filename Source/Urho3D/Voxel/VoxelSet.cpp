@@ -15,7 +15,9 @@ VoxelSet::VoxelSet(Context* context) :
     numChunksY_(0),
     numChunksZ_(0),
     chunkXStride_(0),
-    chunkZStride_(0)
+    chunkZStride_(0),
+    processorDataMask_(0),
+    voxelBlocktypeMap_(0)
 {
 
 }
@@ -205,13 +207,35 @@ VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z)
     Node* chunkNode = GetNode()->CreateChild();
     chunkNode->SetPosition(Vector3((float)x, (float)y, (float)z) * chunkSpacing_);
     chunk = chunkNode->CreateComponent<VoxelChunk>();
+    chunk->SetNumberOfMeshes(1);
     chunk->SetIndex(x, y, z);
+    chunk->voxelSet_ = this;
     //chunk->SetSize((unsigned char)chunkSpacing_.x_, (unsigned char)chunkSpacing_.y_, (unsigned char)chunkSpacing_.z_);
     //chunk->SetCastShadows(false);
 	//CollisionShape* cs = chunkNode->CreateComponent<CollisionShape>();
 	//cs->SetVoxelTriangleMesh(true);
     chunks_[index] = chunk;
     return chunk;
+}
+
+const PODVector<StringHash>& VoxelSet::GetVoxelProcessors()
+{
+    return voxelProcessors_;
+}
+
+void VoxelSet::SetVoxelProcessors(PODVector<StringHash>& voxelProcessors)
+{
+    voxelProcessors_ = voxelProcessors;
+}
+
+void VoxelSet::AddVoxelProcessor(StringHash voxelProcessorHash)
+{
+    voxelProcessors_.Push(voxelProcessorHash);
+}
+
+void VoxelSet::RemoveVoxelProcessor(const StringHash& voxelProcessorHash)
+{
+    voxelProcessors_.Remove(voxelProcessorHash);
 }
 
 }

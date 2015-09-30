@@ -92,6 +92,16 @@ public:
     //void SetOccludee(bool enable);
     void Build();
 
+    void SetVoxelBlocktypeMap(VoxelBlocktypeMap* voxelBlocktypeMap) { voxelBlocktypeMap_ = voxelBlocktypeMap; }
+    VoxelBlocktypeMap* GetVoxelBlocktypeMap() { return voxelBlocktypeMap_; }
+
+    unsigned GetProcessorDataMask() const { return processorDataMask_; }
+    void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
+    const PODVector<StringHash>& GetVoxelProcessors();
+    void SetVoxelProcessors(PODVector<StringHash>& voxelProcessors);
+    void AddVoxelProcessor(StringHash voxelProcessorName);
+    void RemoveVoxelProcessor(const StringHash& voxelProcessorName);
+
 private:
     void BuildInternal();
     void SetVoxelStoreInternal();
@@ -101,6 +111,7 @@ private:
     // Voxel chunks.
     Vector<WeakPtr<VoxelChunk> > chunks_;
     BoundingBox setBox;
+    unsigned processorDataMask_;
     unsigned numChunksX_;
     unsigned numChunksY_;
     unsigned numChunksZ_;
@@ -109,6 +120,8 @@ private:
     unsigned numChunks_;
     Vector3 chunkSpacing_;
     SharedPtr<VoxelStore> voxelStore_;
+    SharedPtr<VoxelBlocktypeMap> voxelBlocktypeMap_;
+    PODVector<StringHash> voxelProcessors_;
 };
 
 }
