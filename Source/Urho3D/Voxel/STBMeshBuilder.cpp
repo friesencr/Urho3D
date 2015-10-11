@@ -296,15 +296,28 @@ bool STBMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
     mesh.numTriangles_ = workBuffer->fragmentQuads * 2;
     chunk->SetBoundingBox(box);
 
+    VoxelJob* job = slot->job;
+    Geometry* geometry = chunk->GetGeometry(0);
+
+    // sets 
+    unsigned vertexBufferSize = workBuffer->fragmentQuads * 4 * sizeof(unsigned);
+    job->vertexBuffer = new unsigned char[vertexBufferSize];
+    memcpy(job->vertexBuffer.Get(), workBuffer->workVertexBuffer, vertexBufferSize);
+    geometry->SetRawVertexData(job->vertexBuffer, numVertices, MASK_DATA);
+    
+    // face data not index buffer
+    unsigned indexBufferSize = workBuffer->fragmentQuads * sizeof(unsigned);
+    job->indexBuffer = new  unsigned char[workBuffer->fragmentQuads * sizeof(unsigned)];
+    memcpy(job->indexBuffer.Get(), workBuffer->workFaceBuffer, indexBufferSize);
+
     return true;
 }
 
-bool STBMeshBuilder::UploadGpuData(VoxelBuildSlot* slot)
+bool STBMeshBuilder::UploadGpuData(VoxelJob* job)
 {
     PROFILE(UploadGpuData);
 
-    STBWorkBuffer* workBuffer = (STBWorkBuffer*)&workBuffers_[slot->index];
-    VoxelChunk* chunk = slot->job->chunk;
+    VoxelChunk* chunk = job->chunk;
     chunk->SetNumberOfMeshes(1);
 
     VoxelMesh& mesh = chunk->GetVoxelMesh(0);
@@ -327,13 +340,13 @@ bool STBMeshBuilder::UploadGpuData(VoxelBuildSlot* slot)
         return false;
     }
 
-    if (!vb->SetData(&workBuffer->workVertexBuffer))
+    if (!vb->SetData(job->vertexBuffer.Get()))
     {
         LOGERROR("Error uploading voxel vertex data.");
         return false;
     }
 
-    if (!faceData->SetData(&workBuffer->workFaceBuffer))
+    if (!faceData->SetData(job->indexBuffer.Get()))
     {
         LOGERROR("Error uploading voxel face data.");
         return false;

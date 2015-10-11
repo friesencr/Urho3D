@@ -14,6 +14,7 @@ namespace Urho3D
 {
 
 struct VoxelBuildSlot;
+struct VoxelJob;
 
 const unsigned VOXEL_STB_WORKER_MAX_QUADS          = 100000;
 const unsigned VOXEL_STB_WORKER_VERTEX_BUFFER_SIZE = VOXEL_STB_WORKER_MAX_QUADS * 4 * 4; // 4 uint vertices
@@ -40,7 +41,7 @@ public:
 
     virtual bool ProcessMesh(VoxelBuildSlot* slot);
 
-    virtual bool UploadGpuData(VoxelBuildSlot* slot);
+    virtual bool UploadGpuData(VoxelJob* job);
 
     virtual bool UpdateMaterialParameters(Material* material);
 

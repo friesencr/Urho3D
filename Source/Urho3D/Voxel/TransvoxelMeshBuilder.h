@@ -41,7 +41,7 @@ public:
 
     virtual bool ProcessMesh(VoxelBuildSlot* slot);
 
-    virtual bool UploadGpuData(VoxelBuildSlot* slot);
+    virtual bool UploadGpuData(VoxelJob* job);
 
     virtual bool UpdateMaterialParameters(Material* material);
 

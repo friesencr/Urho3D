@@ -94,7 +94,7 @@ protected:
     virtual void OnWorldBoundingBoxUpdate();
 
 private:
-    void UpdateMaterialParameters(unsigned slot, SharedPtr<VoxelMap> voxelMap);
+    void UpdateMaterialParameters(unsigned slot);
     void OnVoxelChunkCreated();
     unsigned char index_[3];
     VoxelJob* voxelJob_;

@@ -190,10 +190,11 @@ bool TransvoxelMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
     return true;
 }
 
-bool TransvoxelMeshBuilder::UploadGpuData(VoxelBuildSlot* slot)
+bool TransvoxelMeshBuilder::UploadGpuData(VoxelJob* job)
 {
     PROFILE(UploadGpuData);
 
+#if 0
     TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)&workBuffers_[slot->index];
     VoxelChunk* chunk = slot->job->chunk;
     chunk->SetNumberOfMeshes(1);
@@ -247,6 +248,9 @@ bool TransvoxelMeshBuilder::UploadGpuData(VoxelBuildSlot* slot)
     }
 
     return true;
+#endif
+    assert(false);
+    return false;
 }
 
 bool TransvoxelMeshBuilder::UpdateMaterialParameters(Material* material)

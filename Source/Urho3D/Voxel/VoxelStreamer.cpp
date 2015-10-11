@@ -115,6 +115,7 @@ void VoxelStreamer::UnloadBestChunks()
         }
     }
 
+    tmpUnload_.Clear();
     for (PODVector<Pair<unsigned, bool> >::Iterator i = loadedChunks_.End(); i != loadedChunks_.Begin(); --i)
     {
         if (i->second_)
@@ -123,10 +124,12 @@ void VoxelStreamer::UnloadBestChunks()
             unsigned y = 0;
             unsigned z = 0;
             voxelSet_->GetCoordinatesFromIndex(i->first_, x, y, z);
-            voxelSet_->UnloadChunk(x,y,z);
-            loadedChunks_.Erase(i);
+            voxelSet_->UnloadChunk(x, y, z);
         }
+        else
+            tmpUnload_.Push(*i);
     }
+    loadedChunks_ = tmpUnload_;
 }
 
 void VoxelStreamer::BuildChunks()

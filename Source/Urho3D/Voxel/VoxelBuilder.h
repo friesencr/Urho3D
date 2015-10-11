@@ -1,5 +1,4 @@
 #pragma once
-#include <SDL/SDL_mutex.h>
 
 #include "../Core/Context.h"
 #include "../Core/Variant.h"
@@ -10,6 +9,7 @@
 #include "../Graphics/Material.h"
 #include "../Core/ProcessUtils.h"
 #include "../Core/Thread.h"
+#include "../Core/WorkQueue.h"
 
 #include "VoxelDefs.h"
 #include "VoxelUtils.h"
@@ -39,26 +39,13 @@ typedef void(*VoxelProcessorFunc)(VoxelData* source, VoxelData* dest, const Voxe
 
 struct VoxelJob {
     SharedPtr<VoxelChunk> chunk;
-    SharedPtr<VoxelMap> voxelMap;
+    WeakPtr<VoxelMap> voxelMap;
     VoxelBuildSlot* slot;
+    VoxelBuilder* builder;
     StringHash backend;
-};
-
-/// Worker thread managed by the work queue.
-class VoxelWorker : public Thread, public RefCounted
-{
-public:
-    /// Construct.
-    VoxelWorker(VoxelBuilder* voxelBuilder, unsigned index);
-
-    /// Process work items until stopped.
-    virtual void ThreadFunction();
-
-private:
-    /// Work queue.
-    VoxelBuilder* voxelBuilder_;
-    /// Thread index.
-    unsigned index_;
+    SharedArrayPtr<unsigned char> vertexBuffer;
+    SharedArrayPtr<unsigned char> indexBuffer;
+    void* extra;
 };
 
 struct VoxelBuildSlot
@@ -70,7 +57,6 @@ struct VoxelBuildSlot
 };
 
 class URHO3D_API VoxelBuilder : public Object {
-    friend class VoxelWorker;
     OBJECT(VoxelBuilder);
 
 public:
@@ -79,15 +65,15 @@ public:
     VoxelJob* BuildVoxelChunk(VoxelChunk* chunk, bool async = false);
     // needs to be public for work item work method
     void CompleteWork(unsigned = M_MAX_UNSIGNED);
-    void CancelJob(VoxelJob* job);
+    //void CancelJob(VoxelJob* job);
     void RegisterProcessor(String name, VoxelProcessorFunc function);
     bool UnregisterProcessor(String name);
+    void BuildWorkload(VoxelJob* job, unsigned slotIndex);
 
 private:
     void AllocateWorkerBuffers();
     void FreeWorkerBuffers();
     bool RunVoxelProcessor(VoxelBuildSlot* slot);
-    void BuildWorkload(unsigned slotIndex);
     
     /// Handle frame start event. Purge completed work from the main thread queue, and perform work if no threads at all.
     void HandleBeginFrame(StringHash eventType, VariantMap& eventData);
@@ -109,18 +95,10 @@ private:
     // 
     // state
     //
-    Vector<VoxelJob*> buildJobs_;
+    Vector<VoxelJob*> completedJobs_;
     Vector<VoxelBuildSlot> slots_;
-    Vector<SharedPtr<VoxelWorker> > workers_;
-    int jobCount_;
-    int assignedJobCount_;
-    int builtJobCount_;
-    int uploadedJobCount_;
-    Mutex jobMutex_;
-
-    /// Flag to shutdown workers.
-    bool shutdown_;
-    SDL_sem* workerSempaphore_;
+    SharedPtr<WorkQueue> workQueue_;
+    Mutex completedWorkMutex_;
 
     // completed work 
     HashMap<StringHash, VoxelProcessorFunc> processors_;

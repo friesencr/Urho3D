@@ -285,7 +285,7 @@ Geometry* VoxelChunk::GetLodGeometry(unsigned batchIndex, unsigned level)
     return batches_[batchIndex].geometry_;
 }
 
-void VoxelChunk::UpdateMaterialParameters(unsigned slot, SharedPtr<VoxelMap> voxelMap)
+void VoxelChunk::UpdateMaterialParameters(unsigned slot)
 {
     Material* material = GetMaterial(slot);
     if (!material)
@@ -296,6 +296,7 @@ void VoxelChunk::UpdateMaterialParameters(unsigned slot, SharedPtr<VoxelMap> vox
     VoxelMeshBuilder* meshBuilder = GetSubsystem<STBMeshBuilder>();
     meshBuilder->UpdateMaterialParameters(material);
 
+#if 0
     if (voxelMap)
     {
         VoxelTextureMap* textureMap = voxelMap->textureMap;
@@ -317,6 +318,7 @@ void VoxelChunk::UpdateMaterialParameters(unsigned slot, SharedPtr<VoxelMap> vox
             material->SetShaderParameter("ColorTable", colorPalette->GetColors());
         }
     }
+#endif
 
     voxelMeshes_[slot].dirtyShaderParameters_ = false;
 }
@@ -326,7 +328,7 @@ void VoxelChunk::OnVoxelChunkCreated()
     if (!voxelJob_)
         return;
 
-    UpdateMaterialParameters(0, voxelJob_->voxelMap);
+    UpdateMaterialParameters(0);
     voxelJob_ = 0;
     voxelMeshes_[0].dirtyShaderParameters_ = true;
     if (!node_)
