@@ -44,6 +44,7 @@ private:
     void CreateAndSortVisibleChunks();
     void SortLoadedChunks();
     void UnloadBestChunks();
+    void BuildChunks();
     void HandleSceneUpdate(StringHash eventType, VariantMap& eventData);
     void UpdateSubscriptions();
     //unsigned ChunkInCameraGrid(int x, int y, int z, unsigned viewport);

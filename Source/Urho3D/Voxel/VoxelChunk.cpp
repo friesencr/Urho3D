@@ -332,6 +332,9 @@ void VoxelChunk::OnVoxelChunkCreated()
     if (!node_)
         return;
 
+    if (!voxelMeshes_[0].numTriangles_)
+        node_->SetEnabled(false);
+
     using namespace VoxelChunkCreated;
     VariantMap& eventData = GetEventDataMap();
     eventData[P_NODE] = node_;

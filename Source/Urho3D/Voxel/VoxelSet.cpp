@@ -123,22 +123,22 @@ void VoxelSet::Build()
 
 void VoxelSet::LoadChunk(unsigned x, unsigned y, unsigned z, bool async)
 {
-    SharedPtr<VoxelMap> map;
-    {
-        PROFILE(LoadChunk);
-        map = voxelStore_->GetVoxelMap(x, y, z);
-        if (!map)
-        {
-            LOGERROR("Could not load chunk.  Missing voxel map");
-            return;
-        }
-    }
+    //SharedPtr<VoxelMap> map;
+    //{
+    //    PROFILE(LoadChunk);
+    //    map = voxelStore_->GetVoxelMap(x, y, z);
+    //    if (!map)
+    //    {
+    //        LOGERROR("Could not load chunk.  Missing voxel map");
+    //        return;
+    //    }
+    //}
 
     {
         PROFILE(BuildChunk);
         VoxelChunk* chunk = FindOrCreateVoxelChunk(x, y, z);
         VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
-        builder->BuildVoxelChunk(chunk, map, async);
+        builder->BuildVoxelChunk(chunk, async);
     }
 }
 

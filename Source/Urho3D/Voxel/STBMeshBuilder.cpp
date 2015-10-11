@@ -169,6 +169,11 @@ STBMeshBuilder::STBMeshBuilder(Context* context) : VoxelMeshBuilder(context),
 
     for (unsigned i = 0; i < 64; ++i)
         defaultColorTable_[i] = Vector4(URHO3D_default_palette[i]);
+
+
+    workBuffers_.Resize(16);
+    for (unsigned i = 0; i < workBuffers_.Size(); ++i)
+        stbvox_init_mesh_maker(&workBuffers_[i].meshMaker);
 }
 
 unsigned STBMeshBuilder::VoxelDataCompatibilityMask() const {
@@ -179,7 +184,7 @@ bool STBMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
 {
     VoxelJob* job = slot->job;
     VoxelChunk* chunk = job->chunk;
-    VoxelMap* voxelMap = job->voxelMap;
+    SharedPtr<VoxelMap> voxelMap(job->voxelMap);
     VoxelBlocktypeMap* voxelBlocktypeMap = voxelMap->blocktypeMap;
     STBWorkBuffer* workBuffer = (STBWorkBuffer*)&workBuffers_[slot->index];
 
@@ -269,31 +274,27 @@ bool STBMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
             break;
         }
     }
-    workBuffer->fragmentQuads = stbvox_get_quad_count(mm, 0);
+    if (success)
+        workBuffer->fragmentQuads = stbvox_get_quad_count(mm, 0);
     return success;
 }
 
 bool STBMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
 {
-    if (slot->failed)
-        return false;
-    else
+    STBWorkBuffer* workBuffer = (STBWorkBuffer*)&workBuffers_[slot->index];
+    VoxelChunk* chunk = slot->job->chunk;
+    VoxelMesh& mesh = chunk->GetVoxelMesh(0);
+    BoundingBox box;
+    unsigned numVertices = workBuffer->fragmentQuads * 4;
+    unsigned* verticies = (unsigned*)workBuffer->workVertexBuffer;
+    for (int i = 0; i < numVertices; ++i)
     {
-        STBWorkBuffer* workBuffer = (STBWorkBuffer*)&workBuffers_[slot->index];
-        VoxelChunk* chunk = slot->job->chunk;
-        VoxelMesh& mesh = chunk->GetVoxelMesh(0);
-        unsigned numVertices = workBuffer->fragmentQuads * 4;
-        unsigned* verticies = (unsigned*)workBuffer->workVertexBuffer;
-        BoundingBox box;
-        for (int i = 0; i < numVertices; ++i)
-        {
-            unsigned v1 = verticies[i];
-            Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0f, (float)((v1 >> 7u) & 127u));
-            box.Merge(position);
-        }
-        mesh.numTriangles_ = workBuffer->fragmentQuads * 2;
-        chunk->SetBoundingBox(box);
+        unsigned v1 = verticies[i];
+        Vector3 position((float)(v1 & 127u), (float)((v1 >> 14u) & 511u) / 2.0f, (float)((v1 >> 7u) & 127u));
+        box.Merge(position);
     }
+    mesh.numTriangles_ = workBuffer->fragmentQuads * 2;
+    chunk->SetBoundingBox(box);
 
     return true;
 }
@@ -439,13 +440,6 @@ bool STBMeshBuilder::ResizeIndexBuffer(unsigned numQuads)
 
 void STBMeshBuilder::AssignWork(VoxelBuildSlot* slot)
 {
-    unsigned oldSize = workBuffers_.Size();
-    if (workBuffers_.Size() <= slot->index)
-        workBuffers_.Resize(slot->index + 1);
-
-    for (unsigned i = oldSize; i < workBuffers_.Size(); ++i)
-        stbvox_init_mesh_maker(&workBuffers_[i].meshMaker);
-
     STBWorkBuffer* workBuffer = &workBuffers_[slot->index];
     workBuffer->fragmentQuads = 0;
 }

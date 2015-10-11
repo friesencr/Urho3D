@@ -154,7 +154,7 @@ void VoxelWorld::CreateScene()
     voxelNode_ = scene_->CreateChild("VoxelNode");
     VoxelSet* voxelSet = voxelNode_->CreateComponent<VoxelSet>();
     worldBuilder_ = new WorldBuilder(context_);
-    worldBuilder_->SetSize(64, 64);
+    worldBuilder_->SetSize(128, 128);
     worldBuilder_->SetVoxelSet(voxelSet);
     worldBuilder_->ConfigureParameters();
     worldBuilder_->CreateWorld();
@@ -215,7 +215,7 @@ void VoxelWorld::MoveCamera(float timeStep)
     Input* input = GetSubsystem<Input>();
 
     // Movement speed as world units per second
-    const float MOVE_SPEED = 600.0f;
+    const float MOVE_SPEED = 1600.0f;
     // Mouse sensitivity as degrees per pixel
     const float MOUSE_SENSITIVITY = 0.1f;
 

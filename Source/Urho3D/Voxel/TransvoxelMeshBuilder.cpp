@@ -179,18 +179,13 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
 
 bool TransvoxelMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
 {
-    if (slot->failed)
-        return false;
-    else
-    {
-        TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)&workBuffers_[slot->index];
-        VoxelChunk* chunk = slot->job->chunk;
-        VoxelMesh& mesh = chunk->GetVoxelMesh(0);
+    TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)&workBuffers_[slot->index];
+    VoxelChunk* chunk = slot->job->chunk;
+    VoxelMesh& mesh = chunk->GetVoxelMesh(0);
 
-        mesh.numVertices_ = workBuffer->numVerticies;
-        mesh.numTriangles_ = workBuffer->numTriangles;
-        chunk->SetBoundingBox(workBuffer->box);
-    }
+    mesh.numVertices_ = workBuffer->numVerticies;
+    mesh.numTriangles_ = workBuffer->numTriangles;
+    chunk->SetBoundingBox(workBuffer->box);
 
     return true;
 }

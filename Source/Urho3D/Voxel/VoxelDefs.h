@@ -27,12 +27,12 @@ static const unsigned VOXEL_NEIGHBOR_EAST  = 0x4;
 static const unsigned VOXEL_NEIGHBOR_WEST  = 0x8;
 
 static const unsigned VOXEL_WORKER_SIZE_X             = 32;
-static const unsigned VOXEL_WORKER_SIZE_Y             = 32;
+static const unsigned VOXEL_WORKER_SIZE_Y             = 128;
 static const unsigned VOXEL_WORKER_SIZE_Z             = 32;
 static const unsigned VOXEL_MAX_WORKERS               = 1; // chunk size / worker size
 
 static const unsigned VOXEL_CHUNK_SIZE_X              = 32;
-static const unsigned VOXEL_CHUNK_SIZE_Y              = 32;
+static const unsigned VOXEL_CHUNK_SIZE_Y              = 128;
 static const unsigned VOXEL_CHUNK_SIZE_Z              = 32;
 static const unsigned VOXEL_CHUNK_SIZE                = VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Y * VOXEL_CHUNK_SIZE_Z;
 

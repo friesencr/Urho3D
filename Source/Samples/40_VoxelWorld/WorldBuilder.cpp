@@ -225,7 +225,7 @@ void FillTerrainPerlin(VoxelStore* voxelStore, VoxelMap* voxelMap, unsigned yOff
             int height = heightMap[x + 2][z + 2];
             float dt = detailMap[x + 2][z + 2];
 
-            int clampedHeight = Min(height, yOff + 32);
+            int clampedHeight = Min(height, yOff + VOXEL_CHUNK_SIZE_Y);
             for (unsigned i = yOff; i < clampedHeight; ++i)
             {
                 int h = ((float)i * (dt / 2.0 + 1.0));
@@ -295,7 +295,7 @@ void WorldBuilder::ConfigureParameters()
     //voxelStore_->AddVoxelProcessor("AOVoxelLighting");
     //voxelStore_->AddVoxelProcessor("DancingWorld");
     //voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
-    voxelStore_->SetSize(width_, 4, depth_);
+    voxelStore_->SetSize(width_, 1, depth_);
     voxelSet_->SetVoxelStore(voxelStore_);
     voxelSet_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
 }
@@ -326,12 +326,12 @@ void WorldBuilder::CreateWorld()
     {
         for (int z = 0; z < depth_; ++z)
         {
-            for (int y = 0; y < 4; ++y)
+            for (int y = 0; y < 1; ++y)
             {
                 SharedPtr<VoxelMap> voxelMap = voxelStore_->GetVoxelMap(x, y, z);
                 voxelMap->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
-                voxelMap->SetSize(32, 32, 32);
-                FillTerrainPerlin(voxelStore_, voxelMap, y * 32, x, y, z);
+                voxelMap->SetSize(VOXEL_CHUNK_SIZE_X, VOXEL_CHUNK_SIZE_Y, VOXEL_CHUNK_SIZE_Z);
+                FillTerrainPerlin(voxelStore_, voxelMap, y * VOXEL_CHUNK_SIZE_Y, x, y, z);
                 voxelStore_->UpdateVoxelMap(x, y, z, voxelMap, false);
 
 #if 0
