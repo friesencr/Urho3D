@@ -136,7 +136,7 @@ void VoxelStreamer::BuildChunks()
 {
     maxBuildsPerFrame_ = 0;
     maxBuildFrameTime_ = 0;
-    maxPriorityBuildFrameTime_ = 1;
+    maxPriorityBuildFrameTime_ = 0;
 
     PROFILE(BuildStreamedChunks);
     // build voxels
@@ -159,6 +159,7 @@ void VoxelStreamer::BuildChunks()
             voxelSet_->LoadChunk(x, y, z, true);
             loadedChunks_.Push(Pair<unsigned, bool>(buildItem, false));
         }
+        break;
     }
     voxelBuilder->CompleteWork();
     priorityBuildQueue_.Clear();

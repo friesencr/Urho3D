@@ -57,7 +57,6 @@ protected:
     Vector<Variant> ambientTable_;
     Vector<Variant> texscaleTable_;
     Vector<Variant> texgenTable_;
-    Vector<Variant> defaultColorTable_;
     Vector<STBWorkBuffer> workBuffers_;
 };
 

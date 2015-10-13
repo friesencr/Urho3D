@@ -16,8 +16,7 @@ VoxelSet::VoxelSet(Context* context) :
     numChunksZ_(0),
     chunkXStride_(0),
     chunkZStride_(0),
-    processorDataMask_(0),
-    voxelBlocktypeMap_(0)
+    processorDataMask_(0)
 {
 
 }
@@ -210,6 +209,11 @@ VoxelChunk* VoxelSet::FindOrCreateVoxelChunk(unsigned x, unsigned y, unsigned z)
     chunk->SetNumberOfMeshes(1);
     chunk->SetIndex(x, y, z);
     chunk->voxelSet_ = this;
+    chunk->colorPalette_ = colorPalette_;
+    chunk->overlayMap_ = overlayMap_;
+    chunk->textureMap_ = textureMap_;
+    chunk->SetProcessorDataMask(processorDataMask_);
+    chunk->voxelProcessors_ = voxelProcessors_;
     //chunk->SetSize((unsigned char)chunkSpacing_.x_, (unsigned char)chunkSpacing_.y_, (unsigned char)chunkSpacing_.z_);
     //chunk->SetCastShadows(false);
 	//CollisionShape* cs = chunkNode->CreateComponent<CollisionShape>();
@@ -236,6 +240,39 @@ void VoxelSet::AddVoxelProcessor(StringHash voxelProcessorHash)
 void VoxelSet::RemoveVoxelProcessor(const StringHash& voxelProcessorHash)
 {
     voxelProcessors_.Remove(voxelProcessorHash);
+}
+
+void VoxelSet::SetVoxelTextureMap(VoxelTextureMap* voxelTextureMap)
+{
+    textureMap_ = voxelTextureMap;
+    for (unsigned i = 0; i < chunks_.Size(); ++i)
+    {
+        VoxelChunk* chunk = chunks_[i];
+        if (chunk)
+            chunk->textureMap_ = textureMap_;
+    }
+}
+
+void VoxelSet::SetVoxelColorPalette(VoxelColorPalette* voxelColorPalette)
+{
+    colorPalette_ = voxelColorPalette;
+    for (unsigned i = 0; i < chunks_.Size(); ++i)
+    {
+        VoxelChunk* chunk = chunks_[i];
+        if (chunk)
+            chunk->colorPalette_ = colorPalette_;
+    }
+}
+
+void VoxelSet::SetVoxelOverlayMap(VoxelOverlayMap* voxelOverlayMap)
+{
+    overlayMap_ = voxelOverlayMap;
+    for (unsigned i = 0; i < chunks_.Size(); ++i)
+    {
+        VoxelChunk* chunk = chunks_[i];
+        if (chunk)
+            chunk->overlayMap_ = overlayMap_;
+    }
 }
 
 }

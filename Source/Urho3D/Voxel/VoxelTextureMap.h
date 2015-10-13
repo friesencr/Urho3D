@@ -17,13 +17,9 @@ public:
     /// Register object factory.
     static void RegisterObject(Context* context);
 
-    Texture* GetDiffuse1Texture() const { return diffuse1Texture; }
+    Texture* GetDiffuseTexture() const { return diffuseTexture; }
 
-    Texture* GetDiffuse2Texture() const { return diffuse2Texture; }
-
-    void SetDiffuse1Texture(Texture* texture);
-
-    void SetDiffuse2Texture(Texture* texture);
+    void SetDiffuseTexture(Texture* texture);
 
     /// Load resource from stream. May be called from a worker thread. Return true if successful.
     virtual bool BeginLoad(Deserializer& source);
@@ -32,9 +28,8 @@ public:
     //virtual bool Save(Serializer& dest);
 
 private:
-    SharedPtr<Texture> diffuse1Texture;
-    SharedPtr<Texture> diffuse2Texture;
-    PODVector<unsigned char> defaultTexture2Map;
+    SharedPtr<Texture> diffuseTexture;
+    PODVector<unsigned char> defaultTextureMap;
     void SetDiffuse1TextureArrayAttr(const ResourceRef& value);
     void SetDiffuse2TextureArrayAttr(const ResourceRef& value);
 };

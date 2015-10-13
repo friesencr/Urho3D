@@ -10,7 +10,8 @@ namespace Urho3D {
 VoxelChunk::VoxelChunk(Context* context) :
     Drawable(context, DRAWABLE_GEOMETRY),
     voxelJob_(0),
-    voxelMap_(0)
+    voxelMap_(0),
+    processorDataMask_(0)
 {
     index_[0] = 0; index_[1] = 0; index_[2] = 0;
 }
@@ -291,34 +292,18 @@ void VoxelChunk::UpdateMaterialParameters(unsigned slot)
     if (!material)
         return;
 
-    bool setColor = true;
+    if (meshBuilder_)
+        meshBuilder_->UpdateMaterialParameters(material);
 
-    VoxelMeshBuilder* meshBuilder = GetSubsystem<STBMeshBuilder>();
-    meshBuilder->UpdateMaterialParameters(material);
-
-#if 0
-    if (voxelMap)
+    if (textureMap_)
     {
-        VoxelTextureMap* textureMap = voxelMap->textureMap;
-        if (textureMap)
-        {
-            Texture* diffuse1 = textureMap->GetDiffuse1Texture();
-            if (diffuse1)
-                material->SetTexture(TU_DIFFUSE, diffuse1);
-
-            Texture* diffuse2 = textureMap->GetDiffuse2Texture();
-            if (diffuse2)
-                material->SetTexture(TU_NORMAL, diffuse2);
-        }
-
-        VoxelColorPalette* colorPalette = voxelMap->colorPalette;
-        if (colorPalette)
-        {
-            setColor = false;
-            material->SetShaderParameter("ColorTable", colorPalette->GetColors());
-        }
+        Texture* diffuse = textureMap_->GetDiffuseTexture();
+        if (diffuse)
+            material->SetTexture(TU_DIFFUSE, diffuse);
     }
-#endif
+
+    if (colorPalette_)
+        material->SetShaderParameter("ColorTable", colorPalette_->GetColors());
 
     voxelMeshes_[slot].dirtyShaderParameters_ = false;
 }
@@ -341,6 +326,26 @@ void VoxelChunk::OnVoxelChunkCreated()
     VariantMap& eventData = GetEventDataMap();
     eventData[P_NODE] = node_;
     node_->SendEvent(E_VOXELCHUNKCREATED, eventData);
+}
+
+const PODVector<StringHash>& VoxelChunk::GetVoxelProcessors()
+{
+    return voxelProcessors_;
+}
+
+void VoxelChunk::SetVoxelProcessors(PODVector<StringHash>& voxelProcessors)
+{
+    voxelProcessors_ = voxelProcessors;
+}
+
+void VoxelChunk::AddVoxelProcessor(StringHash voxelProcessorHash)
+{
+    voxelProcessors_.Push(voxelProcessorHash);
+}
+
+void VoxelChunk::RemoveVoxelProcessor(const StringHash& voxelProcessorHash)
+{
+    voxelProcessors_.Remove(voxelProcessorHash);
 }
 
 }

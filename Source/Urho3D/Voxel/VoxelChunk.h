@@ -88,6 +88,15 @@ class URHO3D_API VoxelChunk : public Drawable
     VoxelMesh& GetVoxelMesh(unsigned index) { return voxelMeshes_[index]; }
     void SetIndex(unsigned char x, unsigned char y, unsigned char z);
     SharedPtr<VoxelMap> GetVoxelMap();
+    SharedPtr<VoxelTextureMap> textureMap_;
+    SharedPtr<VoxelOverlayMap> overlayMap_;
+    SharedPtr<VoxelColorPalette> colorPalette_;
+    unsigned GetProcessorDataMask() const { return processorDataMask_; }
+    void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
+    const PODVector<StringHash>& GetVoxelProcessors();
+    void SetVoxelProcessors(PODVector<StringHash>& voxelProcessors);
+    void AddVoxelProcessor(StringHash voxelProcessorName);
+    void RemoveVoxelProcessor(const StringHash& voxelProcessorName);
 
 protected:
     /// Recalculate the world-space bounding box.
@@ -97,10 +106,13 @@ private:
     void UpdateMaterialParameters(unsigned slot);
     void OnVoxelChunkCreated();
     unsigned char index_[3];
+    unsigned processorDataMask_;
     VoxelJob* voxelJob_;
+    SharedPtr<VoxelMeshBuilder> meshBuilder_;
     SharedPtr<VoxelMap> voxelMap_;
     Vector<VoxelMesh> voxelMeshes_;
     WeakPtr<VoxelSet> voxelSet_;
+    PODVector<StringHash> voxelProcessors_;
 };
 
 }

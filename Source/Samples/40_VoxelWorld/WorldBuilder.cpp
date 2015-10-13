@@ -276,15 +276,6 @@ WorldBuilder::~WorldBuilder()
 
 void WorldBuilder::ConfigureParameters()
 {
-    voxelBlocktypeMap_ = new VoxelBlocktypeMap(context_);
-    voxelBlocktypeMap_->blockColor.Push(0);
-    for (unsigned i = 1; i < 64; ++i)
-        voxelBlocktypeMap_->blockColor.Push(i);
-
-    voxelBlocktypeMap_->SetName("ColorVoxelBlocktypeMap");
-    ResourceCache* cache = GetSubsystem<ResourceCache>();
-    cache->AddManualResource(voxelBlocktypeMap_);
-
     VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
     //builder->RegisterProcessor("DancingWorld", DancingWorld);
     builder->RegisterProcessor("AOVoxelLighting", AOVoxelLighting);
@@ -292,12 +283,23 @@ void WorldBuilder::ConfigureParameters()
     voxelStore_ = new VoxelStore(context_);
     voxelStore_->SetCompressionMask(VOXEL_COMPRESSION_RLE);
     voxelStore_->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
-    //voxelStore_->AddVoxelProcessor("AOVoxelLighting");
-    //voxelStore_->AddVoxelProcessor("DancingWorld");
-    //voxelStore_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
     voxelStore_->SetSize(width_, 1, depth_);
+
+    voxelBlocktypeMap_ = new VoxelBlocktypeMap(context_);
+    voxelBlocktypeMap_->blockColor.Push(0);
+    for (unsigned i = 1; i < 64; ++i)
+        voxelBlocktypeMap_->blockColor.Push(i);
+    voxelStore_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
+
+    voxelBlocktypeMap_->SetName("ColorVoxelBlocktypeMap");
+    ResourceCache* cache = GetSubsystem<ResourceCache>();
+    cache->AddManualResource(voxelBlocktypeMap_);
+
+    voxelSet_->AddVoxelProcessor("AOVoxelLighting");
+    //voxelSet->AddVoxelProcessor("DancingWorld");
+    voxelSet_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
     voxelSet_->SetVoxelStore(voxelStore_);
-    voxelSet_->SetVoxelBlocktypeMap(voxelBlocktypeMap_);
+    voxelSet_->SetVoxelColorPalette(new VoxelColorPalette(context_));
 }
 
 void WorldBuilder::CreateWorld()
@@ -374,7 +376,7 @@ void WorldBuilder::LoadWorld()
     VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
     builder->RegisterProcessor("AOVoxelLighting", AOVoxelLighting);
     //voxelSet_->AddVoxelProcessor("AOVoxelLighting");
-    //voxelSet_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+    voxelSet_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
     voxelSet_->SetVoxelStore(voxelStore_);
 }
 

@@ -60,6 +60,9 @@ public:
 
     bool Save(Serializer& dest);
 
+    void SetVoxelBlocktypeMap(VoxelBlocktypeMap* voxelBlocktypeMap) { blocktypeMap_ = voxelBlocktypeMap; }
+    VoxelBlocktypeMap* GetVoxelBlocktypeMap() { return blocktypeMap_; }
+
     void UpdateVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap, bool updateNeighbors = true);
     SharedPtr<VoxelMap> GetVoxelMap(unsigned x, unsigned y, unsigned z);
     void SetSize(unsigned numChunksX, unsigned numChunksY, unsigned numChunksZ);
@@ -95,6 +98,7 @@ private:
     unsigned char compressionMask_;
     LinkedList<VoxelMapCacheNode> voxelMapCache_;
     Vector<SharedPtr<VoxelMapPage> > voxelMapPages_;
+    SharedPtr<VoxelBlocktypeMap> blocktypeMap_;
 };
 
 }

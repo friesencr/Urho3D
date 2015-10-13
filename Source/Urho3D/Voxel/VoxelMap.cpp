@@ -12,8 +12,7 @@ namespace Urho3D
 
 VoxelMap::VoxelMap(Context* context) : 
     Resource(context),
-    blocktypeMap(0),
-    processorDataMask_(0)
+    blocktypeMap(0)
 {
 
 }
@@ -187,26 +186,6 @@ void VoxelMap::TransferAdjacentDataDirection(VoxelMap* source, int direction)
                         dstPtr[this->GetIndex(p, y, z)] = srcPtr[source->GetIndex(source->width_ - p, y, z)];
         }
     }
-}
-
-const PODVector<StringHash>& VoxelMap::GetVoxelProcessors()
-{ 
-    return voxelProcessors_;
-}
-
-void VoxelMap::SetVoxelProcessors(PODVector<StringHash>& voxelProcessors) 
-{ 
-    voxelProcessors_ = voxelProcessors; 
-}
-
-void VoxelMap::AddVoxelProcessor(StringHash voxelProcessorHash)
-{ 
-    voxelProcessors_.Push(voxelProcessorHash); 
-}
-
-void VoxelMap::RemoveVoxelProcessor(const StringHash& voxelProcessorHash) 
-{ 
-    voxelProcessors_.Remove(voxelProcessorHash);
 }
 
 }

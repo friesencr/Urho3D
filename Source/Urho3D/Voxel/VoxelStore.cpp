@@ -309,6 +309,7 @@ SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
 
     SharedPtr<VoxelMap> voxelMap(page->GetVoxelMap(GetVoxelMapIndexInPage(x, y, z)));
     voxelMap->SetDataMask(GetDataMask());
+    voxelMap->SetBlocktypeMap(blocktypeMap_);
     return voxelMap;
 
 #if VOXEL_MAP_CACHE

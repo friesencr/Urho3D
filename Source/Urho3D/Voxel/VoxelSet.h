@@ -92,8 +92,17 @@ public:
     //void SetOccludee(bool enable);
     void Build();
 
-    void SetVoxelBlocktypeMap(VoxelBlocktypeMap* voxelBlocktypeMap) { voxelBlocktypeMap_ = voxelBlocktypeMap; }
-    VoxelBlocktypeMap* GetVoxelBlocktypeMap() { return voxelBlocktypeMap_; }
+    //void SetVoxelBlocktypeMap(VoxelBlocktypeMap* voxelBlocktypeMap) { voxelBlocktypeMap_ = voxelBlocktypeMap; }
+    //VoxelBlocktypeMap* GetVoxelBlocktypeMap() { return voxelBlocktypeMap_; }
+
+    void SetVoxelTextureMap(VoxelTextureMap* voxelTextureMap);
+    VoxelTextureMap* GetVoxelTextureMap() const { return textureMap_; }
+
+    void SetVoxelOverlayMap(VoxelOverlayMap* voxelOverlayMap);
+    VoxelOverlayMap* GetVoxelOverlayMap() const { return overlayMap_; }
+
+    void SetVoxelColorPalette(VoxelColorPalette* voxelColorPalette);
+    VoxelColorPalette* GetVoxelColorPalette() const { return colorPalette_; }
 
     unsigned GetProcessorDataMask() const { return processorDataMask_; }
     void SetProcessorDataMask(unsigned processorDataMask) { processorDataMask_ = processorDataMask; }
@@ -120,7 +129,10 @@ private:
     unsigned numChunks_;
     Vector3 chunkSpacing_;
     SharedPtr<VoxelStore> voxelStore_;
-    SharedPtr<VoxelBlocktypeMap> voxelBlocktypeMap_;
+    //SharedPtr<VoxelBlocktypeMap> voxelBlocktypeMap_;
+    SharedPtr<VoxelTextureMap> textureMap_;
+    SharedPtr<VoxelOverlayMap> overlayMap_;
+    SharedPtr<VoxelColorPalette> colorPalette_;
     PODVector<StringHash> voxelProcessors_;
 };
 

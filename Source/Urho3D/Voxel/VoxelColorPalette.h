@@ -22,7 +22,7 @@ private:
 
 public:
     /// Gets the colors.
-    const VariantVector& GetColors() { return colors_; }
+    const VariantVector& GetColors();
 
     /// Sets the colors.
     void SetColors(const VariantVector colors) { colors_ = colors; }
