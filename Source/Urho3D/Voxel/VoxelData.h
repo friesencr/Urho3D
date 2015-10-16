@@ -45,7 +45,7 @@ public:
 
     unsigned GetStrideZ() const { return strideZ_; }
 
-    virtual inline unsigned GetPadding() const = 0;
+    virtual unsigned GetPadding() const = 0;
 
     virtual inline unsigned GetIndex(int x, int y, int z) const { return (y + GetPadding()) + ((z + GetPadding()) * strideZ_) + ((x + GetPadding()) * strideX_); }
 

@@ -25,7 +25,7 @@ struct TransvoxelWorkBuffer
     unsigned numVerticies;
     unsigned numIndicies;
     unsigned char vertexBuffer[TRANSVOXEL_WORKER_VERTEX_BUFFER_SIZE];
-    unsigned unsigned indexBuffer[TRANSVOXEL_WORKER_INDEX_BUFFER_SIZE];
+    unsigned indexBuffer[TRANSVOXEL_WORKER_INDEX_BUFFER_SIZE];
 };
 
 class TransvoxelMeshBuilder : public VoxelMeshBuilder

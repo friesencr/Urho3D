@@ -116,7 +116,7 @@ void VoxelWorld::CreateScene()
     // The camera will use default settings (1000 far clip distance, 45 degrees FOV, set aspect ratio automatically)
     cameraNode_ = scene_->CreateChild("Camera");
     Camera* camera = cameraNode_->CreateComponent<Camera>();
-    camera->SetFarClip(900.0);
+    camera->SetFarClip(600.0);
 
     // Set an initial position for the camera scene node above the plane
     //cameraNode_->SetPosition(Vector3(1024.0, 128.0, 1024.0));
