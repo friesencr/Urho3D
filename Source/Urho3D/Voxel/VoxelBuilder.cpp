@@ -1,5 +1,3 @@
-#include <SDL/SDL_atomic.h>
-
 #include "../IO/Log.h"
 #include "../Core/Profiler.h"
 #include "../Resource/ResourceCache.h"
@@ -37,13 +35,10 @@ VoxelBuilder::~VoxelBuilder()
 
 void VoxelBuilder::AllocateWorkerBuffers()
 {
-    unsigned numWorkers = 8;
+    unsigned numWorkers = GetNumLogicalCPUs();
     unsigned numSlots = numWorkers * SLOTS_PER_THREAD + 2;
     if (numSlots == slots_.Size())
         return;
-
-
-    //workerSempaphore_ = SDL_CreateSemaphore(0);
 
     slots_.Resize(numSlots);
     for (unsigned i = 0; i < slots_.Size(); ++i)
@@ -53,7 +48,7 @@ void VoxelBuilder::AllocateWorkerBuffers()
     }
 
     workQueue_ = new WorkQueue(context_);
-    workQueue_->CreateThreads(8);
+    workQueue_->CreateThreads(numWorkers);
 }
 
 void VoxelBuilder::RegisterProcessor(String name, VoxelProcessorFunc func)
@@ -110,7 +105,7 @@ void VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, bool async)
         return;
     }
 
-    async = false;
+    //async = false;
     if (async) {
         workQueue_->Resume();
         SharedPtr<WorkItem> workItem(new WorkItem());
