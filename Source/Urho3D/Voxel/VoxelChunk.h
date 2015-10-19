@@ -87,7 +87,8 @@ class URHO3D_API VoxelChunk : public Drawable
     unsigned char GetSizeZ() const { return VOXEL_CHUNK_SIZE_Z; }
     VoxelMesh& GetVoxelMesh(unsigned index) { return voxelMeshes_[index]; }
     void SetIndex(unsigned char x, unsigned char y, unsigned char z);
-    SharedPtr<VoxelMap> GetVoxelMap();
+    SharedPtr<VoxelMap> GetVoxelMap(bool filled = true);
+    bool FillVoxelMap(VoxelMap* voxelMap);
     SharedPtr<VoxelTextureMap> textureMap_;
     SharedPtr<VoxelOverlayMap> overlayMap_;
     SharedPtr<VoxelColorPalette> colorPalette_;

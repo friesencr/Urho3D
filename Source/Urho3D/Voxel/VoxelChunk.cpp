@@ -54,7 +54,7 @@ UpdateGeometryType VoxelChunk::GetUpdateGeometryType()
 //    voxelJob_ = voxelBuilder->BuildVoxelChunk(this, voxelMap, false);
 //    return true;
 //}
-SharedPtr<VoxelMap> VoxelChunk::GetVoxelMap()
+SharedPtr<VoxelMap> VoxelChunk::GetVoxelMap(bool filled)
 {
     if (voxelMap_)
         return voxelMap_;
@@ -62,9 +62,25 @@ SharedPtr<VoxelMap> VoxelChunk::GetVoxelMap()
     {
         VoxelStore* voxelStore = voxelSet_->GetVoxelStore();
         if (voxelStore)
-            return voxelStore->GetVoxelMap(index_[0], index_[1], index_[2]);
+            return voxelStore->GetVoxelMap(index_[0], index_[1], index_[2], filled);
     }
     return SharedPtr<VoxelMap>();
+}
+
+bool VoxelChunk::FillVoxelMap(VoxelMap* voxelMap)
+{
+    if (voxelMap_)
+    {
+        voxelMap = voxelMap_;
+        return voxelMap_->IsFilled();
+    }
+    else if (voxelSet_)
+    {
+        VoxelStore* voxelStore = voxelSet_->GetVoxelStore();
+        if (voxelStore)
+            return voxelStore->FillVoxelMap(voxelMap, index_[0], index_[1], index_[2]);
+    }
+    return false;
 }
 
 unsigned VoxelChunk::GetNumOccluderTriangles()

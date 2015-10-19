@@ -95,13 +95,20 @@ SharedPtr<VoxelMap> VoxelMapPage::GetVoxelMap(unsigned index)
     if (index >= VOXEL_STORE_PAGE_SIZE_3D)
         return voxelMap;
 
+    voxelMap = new VoxelMap(context_);
+    voxelMap->SetDataMask(dataMask_);
+    return voxelMap;
+}
+
+bool VoxelMapPage::FillData(VoxelMap* voxelMap, unsigned index)
+{
+    if (index >= VOXEL_STORE_PAGE_SIZE_3D)
+        return false;
+
     VectorBuffer source(buffers_[index]);
     if (source.GetSize())
     {
-        voxelMap = new VoxelMap(context_);
-        voxelMap->SetDataMask(dataMask_);
         voxelMap->SetSize(VOXEL_CHUNK_SIZE_X, VOXEL_CHUNK_SIZE_Y, VOXEL_CHUNK_SIZE_Z);
-
         if (compressionMask_ & VOXEL_COMPRESSION_LZ4)
             source = DecompressVectorBuffer(source);
 
@@ -110,17 +117,10 @@ SharedPtr<VoxelMap> VoxelMapPage::GetVoxelMap(unsigned index)
         else
             VoxelData::RawDecode(voxelMap, source);
 
-        return voxelMap;
+        return true;
     }
-    else
-    {
-        voxelMap = new VoxelMap(context_);
-        voxelMap->SetDataMask(dataMask_);
-        voxelMap->SetSize(VOXEL_CHUNK_SIZE_X, VOXEL_CHUNK_SIZE_Y, VOXEL_CHUNK_SIZE_Z);
-        return voxelMap;
-    }
+    return false;
 }
-
 
 VoxelStore::VoxelStore(Context* context) : Resource(context)
     , dataMask_(0)
@@ -274,7 +274,23 @@ unsigned VoxelStore::GetVoxelMapIndexInPage(unsigned x, unsigned y, unsigned z)
         ((x & VOXEL_STORE_PAGE_MASK_1D) << VOXEL_STORE_PAGE_STRIDE_X);
 }
 
-SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
+bool VoxelStore::FillVoxelMap(VoxelMap* voxelMap, unsigned x, unsigned y, unsigned z)
+{
+    if (x >= numChunksX_ || y >= numChunksY_ || z >= numChunksZ_)
+        return false;
+
+    VoxelMapPage* page = GetVoxelMapPageByChunkIndex(x, y, z);
+    if (!page)
+    {
+        LOGERROR("Could not retrieve voxel page for requested voxel map index");
+        return SharedPtr<VoxelMap>();
+    }
+
+    unsigned index = GetVoxelMapIndexInPage(x, y, z);
+    return page->FillData(voxelMap, index);
+}
+
+SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z, bool fill)
 {
     if (x >= numChunksX_ || y >= numChunksY_ || z >= numChunksZ_)
         return SharedPtr<VoxelMap>();
@@ -307,7 +323,11 @@ SharedPtr<VoxelMap> VoxelStore::GetVoxelMap(unsigned x, unsigned y, unsigned z)
         return SharedPtr<VoxelMap>();
     }
 
-    SharedPtr<VoxelMap> voxelMap(page->GetVoxelMap(GetVoxelMapIndexInPage(x, y, z)));
+    unsigned index = GetVoxelMapIndexInPage(x, y, z);
+    SharedPtr<VoxelMap> voxelMap(page->GetVoxelMap(index));
+    if (fill)
+        page->FillData(voxelMap, index);
+
     voxelMap->SetDataMask(GetDataMask());
     voxelMap->SetBlocktypeMap(blocktypeMap_);
     return voxelMap;

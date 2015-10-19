@@ -35,6 +35,7 @@ public:
     bool Save(Serializer& dest);
     void SetVoxelMap(unsigned index, VoxelMap* voxelMap);
     SharedPtr<VoxelMap> GetVoxelMap(unsigned index);
+    bool FillData(VoxelMap* voxelMap, unsigned index);
 
 private:
     bool dirtySave_;
@@ -64,7 +65,8 @@ public:
     VoxelBlocktypeMap* GetVoxelBlocktypeMap() { return blocktypeMap_; }
 
     void UpdateVoxelMap(unsigned x, unsigned y, unsigned z, VoxelMap* voxelMap, bool updateNeighbors = true);
-    SharedPtr<VoxelMap> GetVoxelMap(unsigned x, unsigned y, unsigned z);
+    SharedPtr<VoxelMap> GetVoxelMap(unsigned x, unsigned y, unsigned z, bool fill = true);
+    bool FillVoxelMap(VoxelMap* voxelMap, unsigned x, unsigned y, unsigned z);
     void SetSize(unsigned numChunksX, unsigned numChunksY, unsigned numChunksZ);
     void SetDataMask(unsigned dataMask) { dataMask_ = dataMask; }
     unsigned GetDataMask() const { return dataMask_; }

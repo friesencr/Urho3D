@@ -10,6 +10,8 @@
 
 #include "../DebugNew.h"
 
+#include <stdio.h>
+
 namespace Urho3D
 {
   
@@ -92,12 +94,24 @@ void VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, bool async)
     job->chunk = chunk;
     job->slot = 0;
     job->builder = this;
+    job->voxelMap = chunk->GetVoxelMap(false);
+
+    if (!job->voxelMap)
+    {
+        LOGERROR("Cannot build chunk.  Missing voxel map.");
+        return;
+    }
+
     //job->backend = TransvoxelMeshBuilder::GetTypeStatic();
     chunk->meshBuilder_ = (VoxelMeshBuilder*)GetSubsystem(STBMeshBuilder::GetTypeStatic());
-    //async = false;
-
-    if (async)
+    if (!chunk->meshBuilder_)
     {
+        LOGERROR("Cannot build chunk.  Missing mesh builder.");
+        return;
+    }
+
+    async = false;
+    if (async) {
         workQueue_->Resume();
         SharedPtr<WorkItem> workItem(new WorkItem());
         workItem->workFunction_ = VoxelBuildWorkHandler;
@@ -149,9 +163,6 @@ void VoxelBuilder::ProcessJob(VoxelJob* job)
 {
     VoxelChunk* chunk = job->chunk;
     chunk->SetNumberOfMeshes(1);
-
-#if 1
-#endif
 }
 
 bool VoxelBuilder::RunVoxelProcessor(VoxelBuildSlot* slot)
@@ -212,28 +223,26 @@ bool VoxelBuilder::BuildWorkload(VoxelJob* job, unsigned slotIndex, bool async)
     job->slot = slot;
 
     VoxelMeshBuilder* backend = job->chunk->meshBuilder_;
-    bool success = false;
-    if (backend)
+    VoxelChunk* chunk = job->chunk;
+    VoxelMap* voxelMap = job->voxelMap;
+
+    bool success = voxelMap->IsFilled() || chunk->FillVoxelMap(voxelMap);
+    if (success)
     {
-        SharedPtr<VoxelMap> voxelMap(job->chunk->GetVoxelMap());
-        job->voxelMap = voxelMap;
-        if (voxelMap)
-        {
-            backend->AssignWork(slot);
-            success = RunVoxelProcessor(slot) && backend->BuildMesh(slot) && backend->ProcessMesh(slot);
-        }
-        backend->FreeWork(slot);
+        backend->AssignWork(slot);
+        success = RunVoxelProcessor(slot) && backend->BuildMesh(slot) && backend->ProcessMesh(slot);
     }
-    if (success && async)
+
+    backend->FreeWork(slot);
+
+    if (!success)
+        FreeJob(job);
+    else if (async)
     {
         completedWorkMutex_.Acquire();
         completedJobs_.Push(job);
         completedWorkMutex_.Release();
     }
-
-    if (!success)
-        FreeJob(job);
-
     FreeBuildSlot(slot);
     return success;
 }

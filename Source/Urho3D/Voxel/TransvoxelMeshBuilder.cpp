@@ -11,14 +11,14 @@ namespace Urho3D
 {
 
 static const Vector3 CORNER_TABLE[8] = {
-    { -0.5f, -0.5f, -0.5f },
-    {  0.5f, -0.5f, -0.5f },
-    { -0.5f, -0.5f,  0.5f },
-    {  0.5f, -0.5f,  0.5f },
-    { -0.5f,  0.5f, -0.5f },
-    {  0.5f,  0.5f, -0.5f },
-    { -0.5f,  0.5f,  0.5f },
-    {  0.5f,  0.5f,  0.5f }
+    Vector3( -0.5f, -0.5f, -0.5f ),
+    Vector3(  0.5f, -0.5f, -0.5f ),
+    Vector3( -0.5f, -0.5f,  0.5f ),
+    Vector3(  0.5f, -0.5f,  0.5f ),
+    Vector3( -0.5f,  0.5f, -0.5f ),
+    Vector3(  0.5f,  0.5f, -0.5f ),
+    Vector3( -0.5f,  0.5f,  0.5f ),
+    Vector3(  0.5f,  0.5f,  0.5f )
 };
 
 TransvoxelMeshBuilder::TransvoxelMeshBuilder(Context* context) : VoxelMeshBuilder(context) 

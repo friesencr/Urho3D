@@ -56,6 +56,8 @@ public:
     void TransferAdjacentWestData(VoxelMap* source);
     void TransferAdjacentDataDirection(VoxelMap* source, int direction);
 
+    bool IsFilled() const { return size_ > 0; }
+
 private:
     String loadVoxelBlocktypeMap_;
 };

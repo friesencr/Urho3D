@@ -38,7 +38,7 @@ typedef void(*VoxelProcessorFunc)(VoxelData* source, VoxelData* dest, const Voxe
 
 struct VoxelJob {
     SharedPtr<VoxelChunk> chunk;
-    WeakPtr<VoxelMap> voxelMap;
+    SharedPtr<VoxelMap> voxelMap;
     VoxelBuildSlot* slot;
     VoxelBuilder* builder;
     SharedArrayPtr<unsigned char> vertexBuffer;
