@@ -278,7 +278,7 @@ void WorldBuilder::ConfigureParameters()
 {
     VoxelBuilder* builder = GetSubsystem<VoxelBuilder>();
     //builder->RegisterProcessor("DancingWorld", DancingWorld);
-    builder->RegisterProcessor("AOVoxelLighting", AOVoxelLighting);
+    /* builder->RegisterProcessor("AOVoxelLighting", AOVoxelLighting); */
 
     voxelStore_ = new VoxelStore(context_);
     voxelStore_->SetCompressionMask(VOXEL_COMPRESSION_RLE);
@@ -295,9 +295,9 @@ void WorldBuilder::ConfigureParameters()
     ResourceCache* cache = GetSubsystem<ResourceCache>();
     cache->AddManualResource(voxelBlocktypeMap_);
 
-    voxelSet_->AddVoxelProcessor("AOVoxelLighting");
+    /* voxelSet_->AddVoxelProcessor("AOVoxelLighting"); */
     //voxelSet->AddVoxelProcessor("DancingWorld");
-    voxelSet_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING);
+    /* voxelSet_->SetProcessorDataMask(VOXEL_BLOCK_LIGHTING); */
     voxelSet_->SetVoxelStore(voxelStore_);
     voxelSet_->SetVoxelColorPalette(new VoxelColorPalette(context_));
 }
@@ -333,6 +333,17 @@ void WorldBuilder::CreateWorld()
                 SharedPtr<VoxelMap> voxelMap = voxelStore_->GetVoxelMap(x, y, z);
                 voxelMap->SetDataMask(VOXEL_BLOCK_BLOCKTYPE);
                 voxelMap->SetSize(VOXEL_CHUNK_SIZE_X, VOXEL_CHUNK_SIZE_Y, VOXEL_CHUNK_SIZE_Z);
+
+                /* for (unsigned x1 = 6; x1 < 10; ++x1) */
+                /* { */
+                /*     for (unsigned z1 = 6; z1 < 10; ++z1) */
+                /*     { */
+                /*         for (unsigned y1 = 6; y1 < 10; ++y1) */
+                /*         { */
+                /*             voxelMap->SetBlocktype(x1, y1, z1, 28); */
+                /*         } */
+                /*     } */
+                /* } */
                 FillTerrainPerlin(voxelStore_, voxelMap, y * VOXEL_CHUNK_SIZE_Y, x, y, z);
                 voxelStore_->UpdateVoxelMap(x, y, z, voxelMap, false);
 

@@ -23,7 +23,7 @@ static const Vector3 CORNER_TABLE[8] = {
 
 TransvoxelMeshBuilder::TransvoxelMeshBuilder(Context* context) : VoxelMeshBuilder(context) 
 {
-
+    workBuffers_.Resize(16);
 }
 
 unsigned TransvoxelMeshBuilder::VoxelDataCompatibilityMask() const {
@@ -42,11 +42,13 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
     unsigned xStride = voxelMap->GetStrideX();
     unsigned zStride = voxelMap->GetStrideZ();
     unsigned numVertices = 0;
+    unsigned vertexSize = sizeof(Vector3) + sizeof(unsigned);
     bool success = true;
     BoundingBox box;
     unsigned vertexMask = MASK_POSITION | MASK_COLOR; // | MASK_NORMAL;
 
     // voxel data index offests per direction
+    // TODO offset by -1
     const int lsw = 0;
     const int lse = xStride;
     const int lnw = zStride;
@@ -57,31 +59,43 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
     const int hne = xStride + zStride + 1;
 
     // holds the index of previous built indexes
-    unsigned deckCache[32*32*2*4]; // 32 * 32 is max size, use 2 Y layers and swap between per Y, max 4 verts reuse per cell
-    unsigned deckSize = 32 * 32;
+    const unsigned deckSize = VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z;
+    const unsigned deckCacheSize = deckSize * 2 * 4; // 32 * 32 is max size, use 2 Y layers and swap between per Y, max 4 verts reuse per cell
+    unsigned deckCache[deckCacheSize]; 
+    
 
     // offset to position in deckCache x,y,z | 1,2,4 bits -1 to position per coord respectivly
+//     const int reuseOffsets[8] = {
+//         0,
+//         -VOXEL_CHUNK_SIZE_Z,
+//         -(VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
+//         -VOXEL_CHUNK_SIZE_Z - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
+//         - 1,
+//         -VOXEL_CHUNK_SIZE_Z - 1,
+//         -1  - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
+//         -1 - VOXEL_CHUNK_SIZE_Z - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
+//     };
+    
     const int reuseOffsets[8] = {
         0,
-        -VOXEL_CHUNK_SIZE_Z,
-        -(VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
-        -VOXEL_CHUNK_SIZE_Z - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
-        - 1,
-        -VOXEL_CHUNK_SIZE_Z - 1,
-        -1  - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
-        -1 - VOXEL_CHUNK_SIZE_Z - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
+        -1,
+        -(VOXEL_CHUNK_SIZE_X),
+        -1 - (VOXEL_CHUNK_SIZE_X),
+        0,
+        -1,
+        -(VOXEL_CHUNK_SIZE_X),
+        -1 - (VOXEL_CHUNK_SIZE_X),
     };
     
     unsigned char* blocktype = &voxelMap->GetBlocktypeData().Front();
 
     for (unsigned y = 0; y < VOXEL_CHUNK_SIZE_Y; ++y)
     { 
-        for (unsigned x = 0; x < VOXEL_CHUNK_SIZE_X; ++x)
+        for (unsigned z = 0; z < VOXEL_CHUNK_SIZE_Z; ++z)
         {
-            unsigned index = voxelMap->GetIndex(x, y, 0);
+            unsigned index = voxelMap->GetIndex(0, y, z);
             unsigned char* bt = &blocktype[index];
-
-            for (unsigned z = 0; z < VOXEL_CHUNK_SIZE_Z; ++z)
+            for (unsigned x = 0; x < VOXEL_CHUNK_SIZE_X; ++x)
             {
                 unsigned char bt_lsw = bt[lsw];
                 unsigned char bt_lse = bt[lse];
@@ -92,7 +106,7 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
                 unsigned char bt_hnw = bt[hnw];
                 unsigned char bt_hne = bt[hne];
 
-                bt += zStride;
+                bt += xStride;
 
                 unsigned char caseCode =
                     (bt_lsw > 0)
@@ -126,12 +140,15 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
                         unsigned short v1 = edgeCode & 0x0F;
                         unsigned char t = 0x7F; // half way for now
 
-                        if (reusePos == 8)
+                        if (reusePos == 8 || y == 0 || x == 0 || z == 0)
                         {
                             *ib++ = numVertices;
-                            unsigned deckIndex = ((y % 2) * deckSize) + (x * 32) + z + reuseTri;
+                            int deckIndex = ((
+                                ((y % 2) * deckSize) + 
+                                x + 
+                                (z * VOXEL_CHUNK_SIZE_X)) * 4
+                            ) + reuseTri;
                             deckCache[deckIndex] = numVertices;
-                            numVertices++;
 
                             if (vertexMask & MASK_POSITION)
                             {
@@ -140,6 +157,7 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
                                 Vector3 position = Vector3((float)x, (float)y, (float)z) + p1.Lerp(p2, 0.5);
                                 *(Vector3*)vb = position;
                                 vb += sizeof(Vector3);
+                                
                             }
 
                             if (vertexMask & MASK_COLOR)
@@ -159,11 +177,45 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
 
                                 vb += sizeof(Vector3);
                             }
+                                
+                            /* LOGINFO(String("NEW  - ") + */ 
+                            /*     String(x) */
+                            /*     + " - " + String(y) */
+                            /*     + " - " + String(z) */
+                            /*     + " - " + String(reuseTri) */ 
+                            /*     + " - " + String(deckIndex) */
+                            /*     + " - " + String(numVertices) */
+                            /*     //+ " - " + (*(Vector3*)workBuffer->vertexBuffer[numVertices * vertexSize]).ToString() */
+                            /* ); */
+                            
+                            numVertices++;
                         }
                         else
                         {
-                            unsigned deckIndex = ((((reuseTri & 0x2) + y) % 2) * deckSize) + (x * 32) + z + reuseTri;
-                            *ib++ = deckCache[deckIndex];
+                            assert(reuseTri < 5);
+                            int offset = reuseOffsets[reusePos];
+                            int deckIndex = 
+                                (((
+                                    (((y + ((reusePos & 4) ? 1 : 0)) % 2) * deckSize) +  // y
+                                    x + // x
+                                    (z * VOXEL_CHUNK_SIZE_X) // z
+                                   ) + offset) * 4) +
+                                reuseTri;  // tri
+                                
+                            assert(deckIndex >= 0 && deckIndex < deckCacheSize);
+                            unsigned vertexId = deckCache[deckIndex];
+                            /* LOGINFO(String("USED - ") + */ 
+                            /*     String(x) */
+                            /*     + " - " + String(y) */
+                            /*     + " - " + String(z) */
+                            /*     + " - " + String(reuseTri) */
+                            /*     + " - " + String(deckIndex) */
+                            /*     + " - " + String(vertexId) */
+                            /*     + " - " + String(reusePos) */
+                            /*     + " - " + String(offset) */
+                            /*     //+ " - " + (*(Vector3*)workBuffer->vertexBuffer[vertexId * vertexSize]).ToString() */
+                            /* ); */
+                            *ib++ = vertexId;
                         }
                     }
                 }
@@ -182,10 +234,34 @@ bool TransvoxelMeshBuilder::ProcessMesh(VoxelBuildSlot* slot)
     TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)&workBuffers_[slot->index];
     VoxelChunk* chunk = slot->job->chunk;
     VoxelMesh& mesh = chunk->GetVoxelMesh(0);
+    VoxelJob* job = slot->job;
 
     mesh.numVertices_ = workBuffer->numVerticies;
     mesh.numTriangles_ = workBuffer->numTriangles;
+    mesh.numIndicies_ = workBuffer->numIndicies;
     chunk->SetBoundingBox(workBuffer->box);
+
+    Geometry* geometry = chunk->GetGeometry(0);
+
+    unsigned vertexSize = 0;
+    unsigned vertexMask = MASK_POSITION | MASK_COLOR; // | MASK_NORMAL;
+    for (unsigned i = 0; i < MAX_VERTEX_ELEMENTS; ++i)
+    {
+        if (vertexMask & (1 << i))
+            vertexSize += VertexBuffer::elementSize[i];
+    }
+
+    // sets 
+    unsigned vertexBufferSize = workBuffer->numVerticies * vertexSize;
+    job->vertexBuffer = new unsigned char[vertexBufferSize];
+    memcpy(job->vertexBuffer.Get(), workBuffer->vertexBuffer, vertexBufferSize);
+    geometry->SetRawVertexData(job->vertexBuffer, workBuffer->numVerticies, MASK_DATA);
+    
+    // index buffer
+    unsigned indexBufferSize = workBuffer->numIndicies * sizeof(unsigned);
+    job->indexBuffer = new unsigned char[indexBufferSize];
+    memcpy(job->indexBuffer.Get(), workBuffer->indexBuffer, indexBufferSize);
+    geometry->SetRawIndexData(job->indexBuffer, sizeof(unsigned));
 
     return true;
 }
@@ -194,16 +270,14 @@ bool TransvoxelMeshBuilder::UploadGpuData(VoxelJob* job)
 {
     PROFILE(UploadGpuData);
 
-#if 0
-    TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)&workBuffers_[slot->index];
-    VoxelChunk* chunk = slot->job->chunk;
-    chunk->SetNumberOfMeshes(1);
-
+    VoxelChunk* chunk = job->chunk;
     VoxelMesh& mesh = chunk->GetVoxelMesh(0);
-    VertexBuffer* vb = new VertexBuffer(context_);
-    vb->SetShadowed(false);
-    IndexBuffer* ib = new IndexBuffer(context_);
-    ib->SetShadowed(false);
+    unsigned numTriangles = mesh.numTriangles_;
+    if (numTriangles == 0)
+        return true;
+
+    VertexBuffer* vb = mesh.vertexBuffer_;
+    IndexBuffer* ib = mesh.indexBuffer_;
 
     unsigned vertexSize = 0;
     unsigned vertexMask = MASK_POSITION | MASK_COLOR; // | MASK_NORMAL;
@@ -225,14 +299,13 @@ bool TransvoxelMeshBuilder::UploadGpuData(VoxelJob* job)
         return false;
     }
 
-    unsigned vertexCount = 0;
-    if (!vb->SetData(&workBuffer->vertexBuffer))
+    if (!vb->SetData(job->vertexBuffer.Get()))
     {
         LOGERROR("Error uploading voxel vertex data.");
         return false;
     }
 
-    if (!ib->SetData(&workBuffer->indexBuffer))
+    if (!ib->SetData(job->indexBuffer.Get()))
     {
         LOGERROR("Error uploading voxel face data.");
         return false;
@@ -248,9 +321,6 @@ bool TransvoxelMeshBuilder::UploadGpuData(VoxelJob* job)
     }
 
     return true;
-#endif
-    assert(false);
-    return false;
 }
 
 bool TransvoxelMeshBuilder::UpdateMaterialParameters(Material* material)
@@ -263,10 +333,6 @@ bool TransvoxelMeshBuilder::UpdateMaterialParameters(Material* material)
 
 void TransvoxelMeshBuilder::AssignWork(VoxelBuildSlot* slot)
 {
-    unsigned oldSize = workBuffers_.Size();
-    if (workBuffers_.Size() <= slot->index)
-        workBuffers_.Resize(slot->index + 1);
-
     TransvoxelWorkBuffer* workBuffer = &workBuffers_[slot->index];
     workBuffer->numTriangles = 0;
     workBuffer->numIndicies = 0;

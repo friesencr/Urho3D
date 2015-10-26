@@ -97,15 +97,14 @@ void VoxelBuilder::BuildVoxelChunk(VoxelChunk* chunk, bool async)
         return;
     }
 
-    //job->backend = TransvoxelMeshBuilder::GetTypeStatic();
-    chunk->meshBuilder_ = (VoxelMeshBuilder*)GetSubsystem(STBMeshBuilder::GetTypeStatic());
+    chunk->meshBuilder_ = (VoxelMeshBuilder*)GetSubsystem(TransvoxelMeshBuilder::GetTypeStatic());
     if (!chunk->meshBuilder_)
     {
         LOGERROR("Cannot build chunk.  Missing mesh builder.");
         return;
     }
 
-    //async = false;
+    async = false;
     if (async) {
         workQueue_->Resume();
         SharedPtr<WorkItem> workItem(new WorkItem());
