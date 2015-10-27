@@ -10,17 +10,6 @@
 namespace Urho3D
 {
 
-static const Vector3 CORNER_TABLE[8] = {
-    Vector3( -0.5f, -0.5f, -0.5f ),
-    Vector3(  0.5f, -0.5f, -0.5f ),
-    Vector3( -0.5f, -0.5f,  0.5f ),
-    Vector3(  0.5f, -0.5f,  0.5f ),
-    Vector3( -0.5f,  0.5f, -0.5f ),
-    Vector3(  0.5f,  0.5f, -0.5f ),
-    Vector3( -0.5f,  0.5f,  0.5f ),
-    Vector3(  0.5f,  0.5f,  0.5f )
-};
-
 TransvoxelMeshBuilder::TransvoxelMeshBuilder(Context* context) : VoxelMeshBuilder(context) 
 {
     workBuffers_.Resize(16);
@@ -39,63 +28,70 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
     TransvoxelWorkBuffer* workBuffer = (TransvoxelWorkBuffer*)&workBuffers_[slot->index];
     unsigned char* vb = workBuffer->vertexBuffer;
     unsigned * ib = workBuffer->indexBuffer;
-    unsigned xStride = voxelMap->GetStrideX();
-    unsigned zStride = voxelMap->GetStrideZ();
     unsigned numVertices = 0;
     unsigned vertexSize = sizeof(Vector3) + sizeof(unsigned);
     bool success = true;
     BoundingBox box;
     unsigned vertexMask = MASK_POSITION | MASK_COLOR; // | MASK_NORMAL;
 
+    int lod = 3;
+    int lodOffset = 1 << lod;
+    const unsigned yStride = 1 * lodOffset;
+    const unsigned xStride = voxelMap->GetStrideX() * lodOffset;
+    const unsigned zStride = voxelMap->GetStrideZ() * lodOffset;
+
     // voxel data index offests per direction
     // TODO offset by -1
-    const int lsw = 0;
-    const int lse = xStride;
-    const int lnw = zStride;
-    const int lne = xStride  +  zStride;
-    const int hsw = 1;
-    const int hse = xStride + 1;
-    const int hnw = zStride + 1;
-    const int hne = xStride + zStride + 1;
+    const int lsw = (-yStride);
+    const int lse = (xStride - yStride);
+    const int lnw = (zStride - yStride);
+    const int lne = (xStride  +  zStride - yStride);
+    const int hsw = (0);
+    const int hse = (xStride);
+    const int hnw = (zStride);
+    const int hne = (xStride + zStride);
 
     // holds the index of previous built indexes
     const unsigned deckSize = VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z;
     const unsigned deckCacheSize = deckSize * 2 * 4; // 32 * 32 is max size, use 2 Y layers and swap between per Y, max 4 verts reuse per cell
     unsigned deckCache[deckCacheSize]; 
-    
 
-    // offset to position in deckCache x,y,z | 1,2,4 bits -1 to position per coord respectivly
-//     const int reuseOffsets[8] = {
-//         0,
-//         -VOXEL_CHUNK_SIZE_Z,
-//         -(VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
-//         -VOXEL_CHUNK_SIZE_Z - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
-//         - 1,
-//         -VOXEL_CHUNK_SIZE_Z - 1,
-//         -1  - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
-//         -1 - VOXEL_CHUNK_SIZE_Z - (VOXEL_CHUNK_SIZE_X * VOXEL_CHUNK_SIZE_Z),
-//     };
-    
+    const int reuseXStride = lodOffset;
+    const int reuseZStride = VOXEL_CHUNK_SIZE_X * lodOffset;
+
     const int reuseOffsets[8] = {
         0,
-        -1,
-        -(VOXEL_CHUNK_SIZE_X),
-        -1 - (VOXEL_CHUNK_SIZE_X),
+        -reuseXStride,
+        -reuseZStride,
+        -reuseXStride - reuseZStride,
         0,
-        -1,
-        -(VOXEL_CHUNK_SIZE_X),
-        -1 - (VOXEL_CHUNK_SIZE_X),
+        -reuseXStride,
+        -reuseZStride,
+        -reuseXStride - reuseZStride,
     };
+
+    float vertexSpacing = (float)lodOffset / 2.0;
+    const Vector3 CORNER_TABLE[8] = {
+        Vector3( -vertexSpacing, -vertexSpacing, -vertexSpacing ),
+        Vector3(  vertexSpacing, -vertexSpacing, -vertexSpacing ),
+        Vector3( -vertexSpacing, -vertexSpacing,  vertexSpacing ),
+        Vector3(  vertexSpacing, -vertexSpacing,  vertexSpacing ),
+        Vector3( -vertexSpacing,  vertexSpacing, -vertexSpacing ),
+        Vector3(  vertexSpacing,  vertexSpacing, -vertexSpacing ),
+        Vector3( -vertexSpacing,  vertexSpacing,  vertexSpacing ),
+        Vector3(  vertexSpacing,  vertexSpacing,  vertexSpacing )
+    };
+
     
     unsigned char* blocktype = &voxelMap->GetBlocktypeData().Front();
 
-    for (unsigned y = 0; y < VOXEL_CHUNK_SIZE_Y; ++y)
+    for (unsigned y = 0; y < VOXEL_CHUNK_SIZE_Y; y+=lodOffset)
     { 
-        for (unsigned z = 0; z < VOXEL_CHUNK_SIZE_Z; ++z)
+        for (unsigned z = 0; z < VOXEL_CHUNK_SIZE_Z; z+=lodOffset)
         {
             unsigned index = voxelMap->GetIndex(0, y, z);
             unsigned char* bt = &blocktype[index];
-            for (unsigned x = 0; x < VOXEL_CHUNK_SIZE_X; ++x)
+            for (unsigned x = 0; x < VOXEL_CHUNK_SIZE_X; x+=lodOffset)
             {
                 unsigned char bt_lsw = bt[lsw];
                 unsigned char bt_lse = bt[lse];
@@ -144,7 +140,7 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
                         {
                             *ib++ = numVertices;
                             int deckIndex = ((
-                                ((y % 2) * deckSize) + 
+                                ((y/lodOffset % 2) * deckSize) + 
                                 x + 
                                 (z * VOXEL_CHUNK_SIZE_X)) * 4
                             ) + reuseTri;
@@ -196,7 +192,7 @@ bool TransvoxelMeshBuilder::BuildMesh(VoxelBuildSlot* slot)
                             int offset = reuseOffsets[reusePos];
                             int deckIndex = 
                                 (((
-                                    (((y + ((reusePos & 4) ? 1 : 0)) % 2) * deckSize) +  // y
+                                    (((y/lodOffset + ((reusePos & 4) ? 1 : 0)) % 2) * deckSize) +  // y
                                     x + // x
                                     (z * VOXEL_CHUNK_SIZE_X) // z
                                    ) + offset) * 4) +
